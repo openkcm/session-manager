@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/openkcm/session-manager/internal/openapi"
-	"github.com/openkcm/session-manager/internal/session"
+	"github.com/openkcm/session-manager/pkg/session"
 )
 
 // openAPIServer is an implementation of the OpenAPI interface.

@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/dbtest/postgrestest"
+	"github.com/openkcm/session-manager/internal/dbtest/valkeytest"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
@@ -22,6 +24,7 @@ type closeFunc func(ctx context.Context)
 
 type infraStat struct {
 	PostgresPort   nat.Port
+	ValKeyPort     nat.Port
 	ConfigFilePath string
 	Procdir        string
 	Cfg            config.Config
@@ -79,6 +82,20 @@ func (istat *infraStat) PreparePostgres(t *testing.T) {
 	istat.Cfg.Database.Host = commoncfg.SourceRef{Source: "embedded", Value: "localhost"}
 	istat.Cfg.Database.Port = pgPort.Port()
 	istat.Cfg.Migrate.Source = "file://" + filepath.Join(wd, "../sql")
+}
+
+func (istat *infraStat) PrepareValKey(t *testing.T) {
+	t.Helper()
+
+	vkClient, vkPort, vkTerminate := valkeytest.Start(t.Context())
+	vkClient.Close()
+
+	istat.ValKeyPort = vkPort
+	istat.closeFuncs = append(istat.closeFuncs, vkTerminate)
+
+	istat.Cfg.ValKey.Host = commoncfg.SourceRef{Source: "embedded", Value: net.JoinHostPort("localhost", vkPort.Port())}
+	istat.Cfg.ValKey.User = commoncfg.SourceRef{Source: "embedded", Value: ""}
+	istat.Cfg.ValKey.Password = commoncfg.SourceRef{Source: "embedded", Value: ""}
 }
 
 // PrepareConfig writes a config file for running the test into the ConfigFilePath.

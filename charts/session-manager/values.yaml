@@ -276,6 +276,18 @@ config:
       source: embedded
       value: secret
 
+  valkey:
+    host:
+      source: embedded
+      value: host.ns.svc.cluster.local
+    user:
+      source: embedded
+      value: ""
+    password:
+      source: embedded
+      value: secret
+    prefix: session-manager
+
   sessionManager:
     sessionDuration: 12h
     redirectURI: http://localhost:9092/callback

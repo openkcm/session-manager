@@ -18,7 +18,8 @@ import (
 )
 
 func TestMigrate(t *testing.T) {
-	const configFilePath = "./migrate_test/config.yaml"
+	const exeName = "migrate"
+	const configFilePath = "./" + exeName + "-test/config.yaml"
 	const dbuser = "postgres"
 	const dbpass = "secret"
 	const dbname = "session_manager"
@@ -26,7 +27,7 @@ func TestMigrate(t *testing.T) {
 	ctx := t.Context()
 	testdir := filepath.Dir(configFilePath)
 
-	// Prepare an empty DB
+	// This test doesn't utilise infraStat like the others because it needs an empty DB
 	pgContainer, err := postgres.Run(
 		ctx,
 		"postgres:17-alpine",
@@ -89,8 +90,19 @@ func TestMigrate(t *testing.T) {
 	defer os.Chdir(currdir)
 
 	// Run the migrations
-	cmd := exec.CommandContext(ctx, filepath.Join(currdir, "./migrate"))
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("failed to execute migrate: %s\nOutput: %s", err, out)
+	cmd := exec.CommandContext(ctx, filepath.Join(currdir, "./"+exeName))
+
+	cmdOutPath := filepath.Join(currdir, exeName+".log")
+	cmdOut, err := os.Create(cmdOutPath)
+	if err != nil {
+		t.Fatalf("failed to create an log file")
+	}
+	defer cmdOut.Close()
+
+	cmd.Stdout = cmdOut
+	cmd.Stderr = cmdOut
+	t.Logf("starting an app process. Logs will be saved into %s", cmdOutPath)
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("process exited abnormally: %s", err)
 	}
 }
