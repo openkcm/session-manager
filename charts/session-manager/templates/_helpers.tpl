@@ -60,7 +60,6 @@ Selector labels
 {{- define "session-manager.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "session-manager.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
-app.kubernetes.io/component: {{ .Chart.Name }}
 {{- end }}
 
 {{/*

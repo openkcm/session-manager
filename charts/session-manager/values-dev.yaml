@@ -21,7 +21,7 @@ image:
   apiPub:
     # The container registry to pull the image from.
     # +docs:property
-    registry: kms.common.repositories.cloud.sap
+    registry: kms20
 
     # The container image
     # +docs:property
@@ -35,7 +35,7 @@ image:
   migrate:
     # The container registry to pull the image from.
     # +docs:property
-    registry: kms.common.repositories.cloud.sap
+    registry: kms20
 
     # The container image
     # +docs:property
@@ -46,12 +46,13 @@ image:
     # +docs:property
     tag: latest
 
+    command: /bin/migrate
+
   # Kubernetes imagePullPolicy.
   pullPolicy: IfNotPresent
 
 # This is for the secretes for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
 imagePullSecrets:
-  - name: "registry-access"
 
 # This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
 serviceAccount:
@@ -169,7 +170,7 @@ config:
   isImmutable: false
 
   # Environment where the application is running
-  environment: production
+  environment: dev
   # Labels associated to metrics, traces and logs
   labels: {}
 
@@ -268,7 +269,7 @@ config:
     port: 5432
     host:
       source: embedded
-      value: host.ns.svc.cluster.local
+      value: postgresql.session-manager.svc.cluster.local
     user:
       source: embedded
       value: postgres

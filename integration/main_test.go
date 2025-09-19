@@ -6,13 +6,12 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"strings"
 	"testing"
 )
 
 var binaries = []string{"api-pub", "api-int", "migrate"}
 
-var validConfig, buildVersion string
+var validConfig string
 
 func init() {
 	// read config file
@@ -20,14 +19,8 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	validConfig = string(dat)
 
-	// read build_version.json file
-	dat, err = os.ReadFile("../build_version.json")
-	if err != nil {
-		panic(err)
-	}
-	buildVersion = strings.TrimSpace(string(dat))
+	validConfig = string(dat)
 }
 
 func buildCommandsAndRunTests(m *testing.M, cmds ...string) int {

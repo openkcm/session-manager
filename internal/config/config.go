@@ -25,7 +25,7 @@ type HTTPServer struct {
 }
 
 type GRPCServer struct {
-	commoncfg.GRPCServer `yaml:",inline"`
+	commoncfg.GRPCServer `mapstructure:",squash" yaml:",inline"`
 
 	ShutdownTimeout time.Duration `yaml:"shutdownTimeout" default:"5s"`
 }

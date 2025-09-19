@@ -1,17 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "session-manager.fullname" . }}
-  namespace: {{ include "session-manager.namespace" . }}
+  name: {{ include "session-manager.fullname" . }}-api-pub
   labels:
     {{- include "session-manager.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api-pub
 spec:
-  {{- if .Values.hpa.enabled }}
-  replicas: {{ .Values.hpa.minReplicas }}
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
       {{- include "session-manager.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api-pub
   template:
     metadata:
       {{- with .Values.pod.annotations }}
@@ -23,35 +24,43 @@ spec:
         {{- with .Values.pod.labels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+        app.kubernetes.io/component: api-pub
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "session-manager.serviceAccountName" . }}
+      serviceAccountName: {{ include "session-manager.serviceAccountName" . }}-api-pub
       {{- with .Values.pod.securityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      initContainers:
+      {{- with .Values.extraInitContainers }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
-        {{- with .Values.extraContainers }}
-          {{- toYaml . | nindent 10 }}
-        {{- end }}
+      {{- with .Values.extraContainers }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
         - name: {{ include "session-manager.name" . }}
           {{- with .Values.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          image: "{{ template "session-manager.image" (tuple .Values.image $.Chart.AppVersion) }}"
+          image: "{{ template "session-manager.image" (tuple .Values.image.apiPub $.Chart.AppVersion) }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- with .Values.image.args }}
+          {{- with .Values.image.apiPub.command }}
+          command: ["{{- toYaml . }}"]
+          {{- end }}
+          {{- with .Values.image.apiPub.args }}
           args:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          {{- with .Values.ports }}
           ports:
-            {{- with .Values.extraPorts }}
-              {{- toYaml . | nindent 12 }}
-            {{- end }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           env:
             - name: MY_POD_IP
               valueFrom:
@@ -73,8 +82,8 @@ spec:
           envFrom:
           {{- . | toYaml | nindent 12 }}
           {{- end }}
-          livenessProbe:
           {{- with .Values.livenessProbe }}
+          livenessProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           {{- with .Values.readinessProbe }}
@@ -87,31 +96,29 @@ spec:
           {{- end }}
           volumeMounts:
             - name: {{ include "session-manager.name" . }}-config-volume
-              mountPath: /etc/session-manager
+              mountPath: /etc/{{ include "session-manager.name" . }}
               readOnly: true
           {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
           {{- end }}
       volumes:
         - name: {{ include "session-manager.name" . }}-config-volume
-          configMap:
-            name: {{ include "session-manager.name" . }}-config
+          projected:
+            sources:
+              - configMap:
+                  name: {{ include "session-manager.name" . }}-api-pub-config
       {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.pod.nodeSelector }}
+      {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.pod.affinity }}
+      {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.pod.topologySpreadConstraints }}
-      topologySpreadConstraints:
-        {{- toYaml . | nindent 6 }}
-      {{- end }}
-      {{- with .Values.pod.tolerations }}
+      {{- with .Values.tolerations }}
       tolerations:
-        {{- toYaml . | nindent 6 }}
+        {{- toYaml . | nindent 8 }}
       {{- end }}

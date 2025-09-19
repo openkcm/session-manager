@@ -8,7 +8,21 @@ KCM Session Manager, implementing the OIDC authorization code flow.
 
 ## Requirements and Setup
 
-*Insert a short description what is required to get your project running...*
+### Pre-requisites
+
+For the local development, the service requires some tools installed locally:
+
+- [k3d](https://k3d.io)
+
+### Running in a local k3d cluster
+
+To start the service, execute the following command:
+
+``` sh
+$ make start
+```
+
+This will start a local k3d cluster, deploy PostgreSQL, perform the database migrations, and deploy the service.
 
 ## Support, Feedback, Contributing
 
