@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mcuadros/go-defaults"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/openkcm/common-sdk/pkg/health"
 	"github.com/openkcm/common-sdk/pkg/logger"
@@ -17,10 +18,16 @@ import (
 	"github.com/openkcm/common-sdk/pkg/utils"
 	"github.com/samber/oops"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
+
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/session-manager/internal/business"
 	"github.com/openkcm/session-manager/internal/config"
+)
+
+const (
+	healthStatusTimeoutS = 5 * time.Second
 )
 
 var (
@@ -38,15 +45,10 @@ var (
 //   - Start the business logic and eventually return the error from it
 func run(ctx context.Context) error {
 	// Load Configuration
-	defaults := map[string]any{}
-	cfg := &config.Config{}
+	defaultValues := map[string]any{}
+	cfg := new(config.Config)
 
-	err := commoncfg.LoadConfig(cfg,
-		defaults,
-		"/etc/session-manager",
-		"$HOME/.session-manager",
-		".",
-	)
+	err := commoncfg.LoadConfig(cfg, defaultValues, "/etc/session-manager", "$HOME/.session-manager", ".")
 	if err != nil {
 		return oops.In("main").
 			Wrapf(err, "Failed to load the configuration")
@@ -58,7 +60,7 @@ func run(ctx context.Context) error {
 			Wrapf(err, "Failed to update the version configuration")
 	}
 
-	// Logger initialisation
+	// LoggerConfig initialisation
 	err = logger.InitAsDefault(cfg.Logger, cfg.Application)
 	if err != nil {
 		return oops.In("main").
@@ -72,6 +74,11 @@ func run(ctx context.Context) error {
 			Wrapf(err, "Failed to load the telemetry")
 	}
 
+	connStr, err := config.MakeConnStr(cfg.Database)
+	if err != nil {
+		return fmt.Errorf("making connection string from config: %w", err)
+	}
+
 	// Status Server Initialisation
 	go func() {
 		liveness := status.WithLiveness(
@@ -80,19 +87,14 @@ func run(ctx context.Context) error {
 			),
 		)
 
-		healthOptions := make([]health.Option, 0)
-		healthOptions = append(healthOptions,
+		healthOptions := []health.Option{
 			health.WithDisabledAutostart(),
-			health.WithTimeout(5*time.Second),
+			health.WithTimeout(healthStatusTimeoutS),
+			health.WithDatabaseChecker("pgx", connStr),
 			health.WithStatusListener(func(ctx context.Context, state health.State) {
 				slogctx.Info(ctx, "readiness status changed", "status", state.Status)
 			}),
-		)
-
-		cfg.GRPCServer.Client.Address = cfg.GRPCServer.Address
-		healthOptions = append(healthOptions,
-			health.WithGRPCServerChecker(cfg.GRPCServer.Client),
-		)
+		}
 
 		readiness := status.WithReadiness(
 			health.NewHandler(
@@ -109,7 +111,7 @@ func run(ctx context.Context) error {
 	}()
 
 	// Business Logic
-	err = business.Main(ctx, cfg)
+	err = business.PublicMain(ctx, cfg)
 	if err != nil {
 		return oops.In("main").
 			Wrapf(err, "Failed to start the main business application")
@@ -130,8 +132,7 @@ func runFuncWithSignalHandling(f func(context.Context) error) int {
 
 	exitCode := 0
 
-	err := f(ctx)
-	if err != nil {
+	if err := f(ctx); err != nil {
 		slogctx.Error(ctx, "Failed to start the application", "error", err)
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		exitCode = 1
