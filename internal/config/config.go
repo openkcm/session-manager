@@ -20,6 +20,7 @@ type HTTPServer struct {
 
 type GRPCServer struct {
 	commoncfg.GRPCServer `mapstructure:",squash"`
+
 	// also embed client attributes for the gRPC health check client
 	Client commoncfg.GRPCClient
 }
