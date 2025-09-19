@@ -18,6 +18,9 @@ data:
         {{- toYaml . | nindent 8 }}
       {{- end}}
 
+    audit:
+      {{- toYaml .audit | nindent 6 }}
+
     http:
       address: :{{ .http.port }}
 

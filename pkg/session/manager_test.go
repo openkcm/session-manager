@@ -7,8 +7,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 
 	"github.com/openkcm/session-manager/internal/oidc"
 	oidcmock "github.com/openkcm/session-manager/internal/oidc/mock"
@@ -98,7 +101,10 @@ func TestManager_Auth(t *testing.T) {
 				kRedirectURI         = "redirect_uri"
 			)
 
-			m := session.NewManager(tt.oidc, tt.sessions, time.Hour, tt.redirectURI, tt.clientID)
+			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: "http://localhost:4043/logs"})
+			require.NoError(t, err)
+
+			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.redirectURI, tt.clientID)
 			got, err := m.Auth(t.Context(), tt.tenantID, tt.fingerprint, tt.requestURI)
 			t.Logf("Got Auth URL %s", got)
 
