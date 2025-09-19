@@ -9,8 +9,8 @@ import (
 type Config struct {
 	commoncfg.BaseConfig `mapstructure:",squash"`
 
-	HTTP       HTTPServer `yaml:"http"`
-	GRPCServer GRPCServer `yaml:"grpc"`
+	HTTP HTTPServer `yaml:"http"`
+	GRPC GRPCServer `yaml:"grpc"`
 }
 
 type HTTPServer struct {
@@ -19,8 +19,7 @@ type HTTPServer struct {
 }
 
 type GRPCServer struct {
-	commoncfg.GRPCServer `mapstructure:",squash"`
-
-	// also embed client attributes for the gRPC health check client
-	Client commoncfg.GRPCClient
+	Address          string                         `yaml:"address" default:":9092"`
+	ShutdownTimeout  time.Duration                  `yaml:"shutdownTimeout" default:"5s"`
+	ClientAttributes commoncfg.GRPCClientAttributes `yaml:"clientAttributes"`
 }
