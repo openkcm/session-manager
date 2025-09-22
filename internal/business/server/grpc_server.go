@@ -4,10 +4,9 @@ import (
 	"context"
 	"net"
 
+	"github.com/openkcm/common-sdk/pkg/commongrpc"
 	"github.com/openkcm/common-sdk/pkg/health"
-	"github.com/openkcm/common-sdk/pkg/otlp"
 	"github.com/samber/oops"
-	"google.golang.org/grpc"
 
 	slogctx "github.com/veqryn/slog-context"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
@@ -15,23 +14,8 @@ import (
 	"github.com/openkcm/session-manager/internal/config"
 )
 
-func createGRPCServer(_ context.Context, _ *config.Config) (*grpc.Server, error) {
-	var opts []grpc.ServerOption
-
-	opts = append(opts, grpc.StatsHandler(otlp.NewServerHandler()))
-
-	grpcServer := grpc.NewServer(opts...)
-
-	return grpcServer, nil
-}
-
 func StartGRPCServer(ctx context.Context, cfg *config.Config) error {
-	grpcServer, err := createGRPCServer(ctx, cfg)
-	if err != nil {
-		return oops.In("gRPC Server").
-			WithContext(ctx).
-			Wrapf(err, "gRPC server creation")
-	}
+	grpcServer := commongrpc.NewServer(ctx, &cfg.GRPC.GRPCServer)
 
 	healthpb.RegisterHealthServer(grpcServer, &health.GRPCServer{})
 

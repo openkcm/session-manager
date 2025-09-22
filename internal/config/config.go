@@ -25,9 +25,9 @@ type HTTPServer struct {
 }
 
 type GRPCServer struct {
-	Address          string                         `yaml:"address" default:":9092"`
-	ShutdownTimeout  time.Duration                  `yaml:"shutdownTimeout" default:"5s"`
-	ClientAttributes commoncfg.GRPCClientAttributes `yaml:"clientAttributes"`
+	commoncfg.GRPCServer `yaml:",inline"`
+
+	ShutdownTimeout time.Duration `yaml:"shutdownTimeout" default:"5s"`
 }
 
 type Database struct {

@@ -7,9 +7,6 @@ http:
 
 grpc:
     address: :9091
-    clientAttributes:
-        keepaliveTime: 1
-        keepaliveTimeout: 1
 
 status:
     enabled: true
