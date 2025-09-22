@@ -9,7 +9,7 @@ import (
 )
 
 type Config struct {
-	commoncfg.BaseConfig `mapstructure:",squash"`
+	commoncfg.BaseConfig `mapstructure:",squash" yaml:",inline"`
 
 	HTTP HTTPServer `yaml:"http"`
 	GRPC GRPCServer `yaml:"grpc"`

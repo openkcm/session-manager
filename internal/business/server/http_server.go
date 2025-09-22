@@ -68,7 +68,6 @@ func StartHTTPServer(ctx context.Context, cfg *config.Config, sManager *session.
 
 	go func() {
 		slogctx.Info(ctx, "Serving an HTTP server", "address", listener.Addr().String())
-
 		err := server.Serve(listener)
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slogctx.Error(ctx, "Failed to serve an HTTP server", "error", err)

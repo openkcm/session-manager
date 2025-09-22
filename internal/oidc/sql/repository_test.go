@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/openkcm/session-manager/internal/dbtest"
+	"github.com/openkcm/session-manager/internal/dbtest/postgrestest"
 	"github.com/openkcm/session-manager/internal/oidc"
 	oidcsql "github.com/openkcm/session-manager/internal/oidc/sql"
 	"github.com/openkcm/session-manager/internal/serviceerr"
@@ -22,7 +22,7 @@ var dbPool *pgxpool.Pool
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 
-	pool, _, terminate := dbtest.Start(ctx)
+	pool, _, terminate := postgrestest.Start(ctx)
 	defer terminate(ctx)
 
 	dbPool = pool
