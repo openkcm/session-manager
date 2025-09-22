@@ -1,0 +1,55 @@
+openapi: 3.0.4
+info:
+    title: Session Manager
+    description:
+    version: 1.0.0
+servers:
+    - url: "https://localhost:8080"
+paths:
+    /auth:
+        get:
+            description: |
+                The CMK UI can't directly initiate the authorization code flow with the OIDC provider because it does not know the the provider for the CMK tenant. Instead, using this endpoint, the CMK UI can indirectly initiate the flow. Steps:
+
+                - for the given CMK tenant ID, look up the authorize and token endpoint of the related OIDC provider
+                - generate:
+                  - a state ID for the state parameter of the OIDC authorize endpoint
+                  - a PKCE verifier and the related PKCE challenge (S256)
+                - create a fingerprint according to the selected method (see below)
+                - based on the state ID, persist the PKCE verifier, fingerprint, CMK tenant ID and the given request URI
+                - build the authorize URI and return it with a 302 response.
+
+                With this the CMK UI initiated the flow and the browser is redirected to the correct OIDC provider. Based on the embedded redirect_uri the Session Manager will directly receive the auth code from the OIDC provider on the /callback endpoint to continue the flow.
+            operationId: auth
+            parameters:
+                - name: tenant_id
+                  in: query
+                  schema:
+                      type: string
+                - name: request_uri
+                  in: query
+                  schema:
+                      type: string
+            responses:
+                "302":
+                    description: Redirect to the OIDC provider
+                    headers:
+                        Location:
+                            schema:
+                                type: string
+                default:
+                    description: Unexpected error
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorModel"
+
+components:
+    schemas:
+        ErrorModel:
+            type: object
+            properties:
+                error_code:
+                    type: integer
+                error_msg:
+                    type: string
