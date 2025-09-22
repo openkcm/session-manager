@@ -23,7 +23,7 @@ type ErrorModel struct {
 
 // AuthParams defines parameters for Auth.
 type AuthParams struct {
-	TenantID   *string `form:"tenantID,omitempty" json:"tenantID,omitempty"`
+	TenantID   *string `form:"tenant_id,omitempty" json:"tenant_id,omitempty"`
 	RequestURI *string `form:"request_uri,omitempty" json:"request_uri,omitempty"`
 }
 
@@ -51,11 +51,11 @@ func (siw *ServerInterfaceWrapper) Auth(w http.ResponseWriter, r *http.Request) 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params AuthParams
 
-	// ------------- Optional query parameter "tenantID" -------------
+	// ------------- Optional query parameter "tenant_id" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "tenantID", r.URL.Query(), &params.TenantID)
+	err = runtime.BindQueryParameter("form", true, false, "tenant_id", r.URL.Query(), &params.TenantID)
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tenantID", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tenant_id", Err: err})
 		return
 	}
 

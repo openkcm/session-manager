@@ -22,7 +22,7 @@ paths:
                 With this the CMK UI initiated the flow and the browser is redirected to the correct OIDC provider. Based on the embedded redirect_uri the Session Manager will directly receive the auth code from the OIDC provider on the /callback endpoint to continue the flow.
             operationId: auth
             parameters:
-                - name: tenantID
+                - name: tenant_id
                   in: query
                   schema:
                       type: string
