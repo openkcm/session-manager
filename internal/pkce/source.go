@@ -48,5 +48,5 @@ func (p Source) PKCE() PKCE {
 }
 
 func (p Source) State() string {
-	return p.randString(15)
+	return p.randString(64)
 }
