@@ -38,7 +38,7 @@ func (p Source) PKCE() PKCE {
 
 	challengeSHA := sha256.Sum256(verifierBuf)
 	challengeBuf := make([]byte, base64.RawURLEncoding.EncodedLen(len(challengeSHA)))
-	base64.RawStdEncoding.Encode(challengeBuf, challengeSHA[:])
+	base64.RawURLEncoding.Encode(challengeBuf, challengeSHA[:])
 
 	return PKCE{
 		Verifier:  string(verifierBuf),
