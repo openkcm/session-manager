@@ -46,10 +46,11 @@ func StartHTTPServer(ctx context.Context, cfg *config.Config, sManager *session.
 
 	slogctx.Info(ctx, "Starting a listener", "address", server.Addr)
 
-	// Parse network if the address if provided in the format of network://address. Otherwise use tcp network by default.
-	// Some integration tests are easier to implement by binding a listener to a unix socket rather then a TCP port,
-	// since we don't need
-	// to look up for a free port or scan /proc/net on Linux or call sysctl on macOS do discover which port the process is bound to.
+	// Parse network if the address if provided in the format of network://address.
+	// Otherwise use tcp network by default. Some integration tests are easier to implement
+	// by binding a listener to a unix socket rather than a TCP port,
+	// since we don't need to look up for a free port or scan /proc/net on Linux or call sysctl on macOS
+	// to discover which port the process is bound to.
 	network := "tcp"
 	if idx := strings.IndexRune(server.Addr, ':'); idx != -1 && len(server.Addr) > idx+3 && server.Addr[idx:idx+3] == "://" {
 		network = server.Addr[:idx]
