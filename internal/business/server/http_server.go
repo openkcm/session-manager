@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"strings"
 
 	"github.com/samber/oops"
 
@@ -43,24 +44,36 @@ func StartHTTPServer(ctx context.Context, cfg *config.Config, sManager *session.
 
 	server := createHTTPServer(ctx, cfg, sManager)
 
-	slogctx.Info(ctx, "Starting HTTP listener", "address", server.Addr)
+	slogctx.Info(ctx, "Starting a listener", "address", server.Addr)
 
-	listener, err := new(net.ListenConfig).Listen(ctx, "tcp", server.Addr)
+	// Parse network if the address if provided in the format of network://address. Otherwise use tcp network by default.
+	// Some integration tests are easier to implement by binding a listener to a unix socket rather then a TCP port,
+	// since we don't need
+	// to look up for a free port or scan /proc/net on Linux or call sysctl on macOS do discover which port the process is bound to.
+	network := "tcp"
+	if idx := strings.IndexRune(server.Addr, ':'); idx != -1 && len(server.Addr) > idx+3 && server.Addr[idx:idx+3] == "://" {
+		network = server.Addr[:idx]
+		server.Addr = server.Addr[idx+3:]
+	}
+
+	listener, err := new(net.ListenConfig).Listen(ctx, network, server.Addr)
 	if err != nil {
 		return oops.In("HTTP Server").
 			WithContext(ctx).
-			Wrapf(err, "Failed creating HTTP listener")
+			Wrapf(err, "Failed to create a listener")
 	}
 
+	slogctx.Info(ctx, "A listener started", "address", listener.Addr().String())
+
 	go func() {
-		slogctx.Info(ctx, "Starting HTTP server", "address", server.Addr)
+		slogctx.Info(ctx, "Serving an HTTP server", "address", listener.Addr().String())
 
 		err := server.Serve(listener)
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slogctx.Error(ctx, "ErrorField serving HTTP endpoint", "error", err)
+			slogctx.Error(ctx, "Failed to serve an HTTP server", "error", err)
 		}
 
-		slogctx.Info(ctx, "Stopped HTTP server")
+		slogctx.Info(ctx, "Stopped an HTTP server")
 	}()
 
 	<-ctx.Done()
