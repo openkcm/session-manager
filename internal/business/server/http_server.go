@@ -15,13 +15,8 @@ import (
 	"github.com/openkcm/session-manager/internal/session"
 )
 
-// registerHandlers registers the default http handlers for the status server
-func registerHandlers(mux *http.ServeMux, cfg *config.Config) {
-	mux.HandleFunc("/ping", pingHandlerFunc(cfg))
-}
-
-// createStatusServer creates a status http server using the given config
-func createHTTPServer(ctx context.Context, cfg *config.Config, sManager *session.Manager) *http.Server {
+// createStatusServer creates an API http server using the given config
+func createHTTPServer(_ context.Context, cfg *config.Config, sManager *session.Manager) *http.Server {
 	mux := http.NewServeMux()
 	openAPIServer := newOpenAPIServer(sManager)
 	strictHandler := openapi.NewStrictHandler(
@@ -31,14 +26,12 @@ func createHTTPServer(ctx context.Context, cfg *config.Config, sManager *session
 		},
 	)
 
-	registerHandlers(mux, cfg)
-	handler := openapi.HandlerFromMux(strictHandler, mux)
-
-	slogctx.Info(ctx, "Creating HTTP server", "address", cfg.HTTP.Address)
+	smHandler := openapi.Handler(strictHandler)
+	mux.Handle("/sm", smHandler)
 
 	return &http.Server{
 		Addr:    cfg.HTTP.Address,
-		Handler: handler,
+		Handler: mux,
 	}
 }
 
