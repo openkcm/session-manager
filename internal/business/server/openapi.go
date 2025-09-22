@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/openkcm/session-manager/internal/openapi"
@@ -26,18 +25,10 @@ func newOpenAPIServer(sManager *session.Manager) *openAPIServer {
 
 // Auth implements openapi.StrictServerInterface.
 func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObject) (openapi.AuthResponseObject, error) {
-	if request.Params.TenantID == nil {
-		return nil, errors.New("missing tenant_id parameter")
-	}
-
-	if request.Params.RequestURI == nil {
-		return nil, errors.New("missing request_uri parameter")
-	}
-
 	// TODO(Danylo): Make fingerprint
-	url, err := s.sManager.Auth(ctx, *request.Params.TenantID, "fingerprint", *request.Params.RequestURI)
+	url, err := s.sManager.Auth(ctx, request.Params.TenantID, "fingerprint", request.Params.RequestURI)
 	if err != nil {
-		return nil, fmt.Errorf("authenticating with session manaager: %w", err)
+		return nil, fmt.Errorf("authenticating with session manager: %w", err)
 	}
 
 	return openapi.Auth302Response{
