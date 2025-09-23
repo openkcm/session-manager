@@ -54,7 +54,7 @@ func TestRepository_LoadState(t *testing.T) {
 		{
 			name:      "Error does not exist",
 			tenantID:  "does-not-exist",
-			stateID:   "stateid-one",
+			stateID:   "does-not-exist",
 			assertErr: assert.Error,
 		},
 	}
@@ -140,16 +140,16 @@ func TestRepository_LoadSession(t *testing.T) {
 	tests := []struct {
 		name        string
 		tenantID    string
-		stateID     string
+		sessionID   string
 		wantSession session.Session
 		assertErr   assert.ErrorAssertionFunc
 	}{
 		{
-			name:     "Select existing session",
-			tenantID: "tenant1-id",
-			stateID:  "stateid-one",
+			name:      "Select existing session",
+			tenantID:  "tenant1-id",
+			sessionID: "sessionid-one",
 			wantSession: session.Session{
-				StateID:     "stateid-one",
+				ID:          "sessionid-one",
 				TenantID:    "tenant1-id",
 				Fingerprint: "fingerprint-one",
 				Token:       "token-one",
@@ -160,7 +160,7 @@ func TestRepository_LoadSession(t *testing.T) {
 		{
 			name:      "Error does not exist",
 			tenantID:  "does-not-exist",
-			stateID:   "stateid-one",
+			sessionID: "does-not-exist",
 			assertErr: assert.Error,
 		},
 	}
@@ -168,7 +168,7 @@ func TestRepository_LoadSession(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := sessionsql.NewRepository(dbPool)
 
-			gotSession, err := r.LoadSession(t.Context(), tt.tenantID, tt.stateID)
+			gotSession, err := r.LoadSession(t.Context(), tt.tenantID, tt.sessionID)
 			if !tt.assertErr(t, err, fmt.Sprintf("Repository.LoadSession() error %v", err)) || err != nil {
 				return
 			}
@@ -182,7 +182,7 @@ func TestRepository_StoreSession(t *testing.T) {
 	const upsertTenantID = "tenant-id-upsert"
 
 	upsertSession := session.Session{
-		StateID:     "stateid-to-upsert",
+		ID:          "sessionid-to-upsert",
 		TenantID:    upsertTenantID,
 		Fingerprint: "fingerprint-upsert",
 		Token:       "token-upsert",
@@ -203,7 +203,7 @@ func TestRepository_StoreSession(t *testing.T) {
 			name:     "Success",
 			tenantID: "tenant-id-store-session-success",
 			session: session.Session{
-				StateID:     "state-id-store-session-success",
+				ID:          "state-id-store-session-success",
 				TenantID:    "tenant-id-store-session-success",
 				Fingerprint: "fingerprint-one",
 				Token:       "token-one",
@@ -215,7 +215,7 @@ func TestRepository_StoreSession(t *testing.T) {
 			name:     "Upsert successfully",
 			tenantID: upsertTenantID,
 			session: session.Session{
-				StateID:     upsertSession.StateID,
+				ID:          upsertSession.ID,
 				TenantID:    upsertSession.TenantID,
 				Fingerprint: "fingerprint-upsert-new",
 				Token:       "token-upsert-new",
@@ -231,7 +231,7 @@ func TestRepository_StoreSession(t *testing.T) {
 				return
 			}
 
-			session, err := r.LoadSession(t.Context(), tt.tenantID, tt.session.StateID)
+			session, err := r.LoadSession(t.Context(), tt.tenantID, tt.session.ID)
 			require.NoError(t, err)
 
 			assert.Equal(t, tt.session, session, "Inserted session is not equal")

@@ -3,7 +3,7 @@ package session
 import "time"
 
 type Session struct {
-	StateID     string
+	ID          string
 	TenantID    string
 	Fingerprint string
 	Token       string

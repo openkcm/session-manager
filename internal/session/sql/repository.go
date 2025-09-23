@@ -95,7 +95,7 @@ func (r *Repository) StoreState(ctx context.Context, tenantID string, state sess
 	return nil
 }
 
-func (r *Repository) LoadSession(ctx context.Context, tenantID, stateID string) (s session.Session, _ error) {
+func (r *Repository) LoadSession(ctx context.Context, tenantID, sessionID string) (s session.Session, _ error) {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return s, fmt.Errorf("starting transaction: %w", err)
@@ -111,9 +111,9 @@ func (r *Repository) LoadSession(ctx context.Context, tenantID, stateID string) 
 FROM sessions
 WHERE state_id = $1
 	AND tenant_id = current_setting('app.tenant_id');`,
-		stateID,
+		sessionID,
 	).
-		Scan(&s.StateID, &s.TenantID, &s.Fingerprint, &s.Token, &s.Expiry); err != nil {
+		Scan(&s.ID, &s.TenantID, &s.Fingerprint, &s.Token, &s.Expiry); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return s, serviceerr.ErrNotFound
 		}
@@ -145,7 +145,7 @@ VALUES ($1, current_setting('app.tenant_id'), $2, $3, $4)
 	ON CONFLICT (state_id)
 	DO UPDATE SET (tenant_id, fingerprint, token, expiry) =
 		(EXCLUDED.tenant_id, EXCLUDED.fingerprint, EXCLUDED.token, EXCLUDED.expiry);`,
-		session.StateID, session.Fingerprint, session.Token, session.Expiry,
+		session.ID, session.Fingerprint, session.Token, session.Expiry,
 	); err != nil {
 		if err, ok := handlePgError(err); ok {
 			return err

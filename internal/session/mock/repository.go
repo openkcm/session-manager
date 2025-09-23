@@ -49,12 +49,12 @@ func (r *Repository) StoreState(ctx context.Context, tenantID string, state sess
 	return nil
 }
 
-func (r *Repository) LoadSession(ctx context.Context, tenantID, stateID string) (session.Session, error) {
+func (r *Repository) LoadSession(ctx context.Context, tenantID, sessionID string) (session.Session, error) {
 	if r.loadSessionErr != nil {
 		return session.Session{}, r.loadSessionErr
 	}
 
-	if s, ok := r.Sessions[stateID]; ok {
+	if s, ok := r.Sessions[sessionID]; ok {
 		return s, nil
 	}
 
@@ -66,7 +66,7 @@ func (r *Repository) StoreSession(ctx context.Context, tenantID string, session 
 		return r.storeSessionErr
 	}
 
-	if _, ok := r.Sessions[session.StateID]; ok {
+	if _, ok := r.Sessions[session.ID]; ok {
 		return serviceerr.ErrConflict
 	}
 
