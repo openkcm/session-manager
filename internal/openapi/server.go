@@ -23,8 +23,8 @@ type ErrorModel struct {
 
 // AuthParams defines parameters for Auth.
 type AuthParams struct {
-	TenantID   *string `form:"tenant_id,omitempty" json:"tenant_id,omitempty"`
-	RequestURI *string `form:"request_uri,omitempty" json:"request_uri,omitempty"`
+	TenantID   string `form:"tenant_id" json:"tenant_id"`
+	RequestURI string `form:"request_uri" json:"request_uri"`
 }
 
 // ServerInterface represents all server handlers.
@@ -51,17 +51,31 @@ func (siw *ServerInterfaceWrapper) Auth(w http.ResponseWriter, r *http.Request) 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params AuthParams
 
-	// ------------- Optional query parameter "tenant_id" -------------
+	// ------------- Required query parameter "tenant_id" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "tenant_id", r.URL.Query(), &params.TenantID)
+	if paramValue := r.URL.Query().Get("tenant_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "tenant_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "tenant_id", r.URL.Query(), &params.TenantID)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tenant_id", Err: err})
 		return
 	}
 
-	// ------------- Optional query parameter "request_uri" -------------
+	// ------------- Required query parameter "request_uri" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "request_uri", r.URL.Query(), &params.RequestURI)
+	if paramValue := r.URL.Query().Get("request_uri"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "request_uri"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "request_uri", r.URL.Query(), &params.RequestURI)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "request_uri", Err: err})
 		return
@@ -223,6 +237,15 @@ func (response Auth302Response) VisitAuthResponse(w http.ResponseWriter) error {
 	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
 	w.WriteHeader(302)
 	return nil
+}
+
+type Auth400JSONResponse ErrorModel
+
+func (response Auth400JSONResponse) VisitAuthResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type AuthdefaultJSONResponse struct {

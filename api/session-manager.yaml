@@ -24,10 +24,12 @@ paths:
             parameters:
                 - name: tenant_id
                   in: query
+                  required: true
                   schema:
                       type: string
                 - name: request_uri
                   in: query
+                  required: true
                   schema:
                       type: string
             responses:
