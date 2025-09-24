@@ -9,7 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mcuadros/go-defaults"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/openkcm/common-sdk/pkg/health"
 	"github.com/openkcm/common-sdk/pkg/logger"
