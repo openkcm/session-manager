@@ -3,6 +3,7 @@ KUBECTL_CONFIG=${HOME}/.config/k3d/kubeconfig-$(CLUSTER_NAME).yaml
 CLUSTER_NAME=session-manager
 NAMESPACE=session-manager
 PSQL_RELEASE_NAME := postgresql
+VALKEY_RELEASE_NAME := valkey
 DOCKERFILE_DIR := .
 DOCKERFILE_NAME := Dockerfile.dev
 CONTEXT_DIR := .
@@ -12,11 +13,12 @@ DB_USERNAME := postgres
 DB_PASS := secret
 DB_NAME := session_manager
 DB_ADMIN_PASS_KEY := secretKey
+VALKEY_PASS := $(DB_PASS)
 
 all: clean lint build test image
 
 .PHONY: start
-start: start-k3d psql-helm-install ensure-deps service-helm-install
+start: start-k3d psql-helm-install valkey-helm-install ensure-deps service-helm-install
 
 .PHONY: start-k3d
 start-k3d: delete-cluster clean-k3d
@@ -60,13 +62,20 @@ psql-helm-install:
 	  --set global.security.allowInsecureImages=true \
 	  --namespace $(NAMESPACE)
 
+.PHONY: valkey-helm-install
+valkey-helm-install:
+	@helm upgrade --install '$(VALKEY_RELEASE_NAME)' oci://registry-1.docker.io/cloudpirates/valkey \
+	  --set auth.enabled=true \
+	  --set auth.password=$(VALKEY_PASS) \
+	  --namespace $(NAMESPACE)
+
 .PHONY: ensure-deps
 ensure-deps:
-	@echo "Waiting for PostgreSQL to be available"
+	@echo "Waiting for PostgreSQL and ValKey to be available"
 	kubectl wait pod \
 	  --all \
 	  --for=condition=Ready \
-	  -l 'app.kubernetes.io/name in ($(PSQL_RELEASE_NAME))' \
+	  -l 'app.kubernetes.io/name in ($(PSQL_RELEASE_NAME), $(VALKEY_RELEASE_NAME))' \
 	  --timeout 5m \
 	  -n $(NAMESPACE)
 

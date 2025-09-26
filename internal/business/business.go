@@ -6,12 +6,13 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
+	"github.com/valkey-io/valkey-go"
 
 	"github.com/openkcm/session-manager/internal/business/server"
 	"github.com/openkcm/session-manager/internal/config"
 	oidcsql "github.com/openkcm/session-manager/internal/oidc/sql"
-	"github.com/openkcm/session-manager/internal/session"
-	sessionsql "github.com/openkcm/session-manager/internal/session/sql"
+	"github.com/openkcm/session-manager/pkg/session"
+	sessionvalkey "github.com/openkcm/session-manager/pkg/session/valkey"
 )
 
 // PublicMain starts the HTTP REST public API server.
@@ -26,8 +27,34 @@ func PublicMain(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("initialising pgxpool connection: %w", err)
 	}
 
+	valkeyHost, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.Host)
+	if err != nil {
+		return fmt.Errorf("loading valkey host: %w", err)
+	}
+
+	valkeyUsername, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.User)
+	if err != nil {
+		return fmt.Errorf("loading valkey username: %w", err)
+	}
+
+	valkeyPassword, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.Password)
+	if err != nil {
+		return fmt.Errorf("loading valkey password: %w", err)
+	}
+
+	valkeyClient, err := valkey.NewClient(valkey.ClientOption{
+		InitAddress: []string{string(valkeyHost)},
+		Username:    string(valkeyUsername),
+		Password:    string(valkeyPassword),
+	})
+	if err != nil {
+		return fmt.Errorf("creating a new valkey client: %w", err)
+	}
+
+	defer valkeyClient.Close()
+
 	oidcProviderRepo := oidcsql.NewRepository(db)
-	sessionRepo := sessionsql.NewRepository(db)
+	sessionRepo := sessionvalkey.NewRepository(valkeyClient, cfg.ValKey.Prefix)
 
 	clientID, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.ClientID)
 	if err != nil {

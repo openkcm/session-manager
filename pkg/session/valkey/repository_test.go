@@ -1,35 +1,77 @@
-package sessionsql_test
+package sessionvalkey_test
 
 import (
 	"context"
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/valkey-io/valkey-go"
 
-	"github.com/openkcm/session-manager/internal/dbtest/postgrestest"
-	"github.com/openkcm/session-manager/internal/session"
-	sessionsql "github.com/openkcm/session-manager/internal/session/sql"
+	"github.com/openkcm/session-manager/internal/dbtest/valkeytest"
+	"github.com/openkcm/session-manager/pkg/session"
+	sessionvalkey "github.com/openkcm/session-manager/pkg/session/valkey"
 )
 
-var dbPool *pgxpool.Pool
+const prefix = "session-manager"
+
+var client valkey.Client
+var testTime time.Time
+
+func init() {
+	now := time.Now()
+	//nolint:gosmopolitan
+	testTime = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Add(30 * 24 * time.Hour).Local()
+}
+
+func init() {
+	// There's a little inconsistency with the timezone when RFC3339 is parsed from a JSON object.
+	// So we do a workaround here
+	t, _ := testTime.MarshalJSON()
+	_ = testTime.UnmarshalJSON(t)
+}
 
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 
-	pool, _, terminate := postgrestest.Start(ctx)
-	defer terminate(ctx)
-
-	dbPool = pool
+	valkeyClient, _, terminate := valkeytest.Start(ctx)
+	client = valkeyClient
 
 	code := m.Run()
+	terminate(ctx)
+
 	os.Exit(code)
 }
 
+func prepareState(t *testing.T, state session.State) {
+	t.Helper()
+
+	key := fmt.Sprintf("%s:state:%s:%s", prefix, state.TenantID, state.ID)
+	err := client.Do(t.Context(), client.B().Set().Key(key).Value(valkey.JSON(state)).Build()).Error()
+	require.NoError(t, err, "inserting state")
+}
+
+func prepareSession(t *testing.T, s session.Session) {
+	t.Helper()
+
+	key := fmt.Sprintf("%s:session:%s:%s", prefix, s.TenantID, s.ID)
+	err := client.Do(t.Context(), client.B().Set().Key(key).Value(valkey.JSON(s)).Build()).Error()
+	require.NoError(t, err, "inserting session")
+}
+
 func TestRepository_LoadState(t *testing.T) {
+	prepareState(t, session.State{
+		ID:           "stateid-one",
+		TenantID:     "tenant1-id",
+		Fingerprint:  "fingerprint-one",
+		PKCEVerifier: "verifier-one",
+		RequestURI:   "http://localhost",
+		Expiry:       testTime,
+	})
+
 	tests := []struct {
 		name      string
 		tenantID  string
@@ -47,7 +89,7 @@ func TestRepository_LoadState(t *testing.T) {
 				Fingerprint:  "fingerprint-one",
 				PKCEVerifier: "verifier-one",
 				RequestURI:   "http://localhost",
-				Expiry:       postgrestest.ExpiryTime,
+				Expiry:       testTime,
 			},
 			assertErr: assert.NoError,
 		},
@@ -60,11 +102,10 @@ func TestRepository_LoadState(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := sessionsql.NewRepository(dbPool)
+			r := sessionvalkey.NewRepository(client, prefix)
 
 			gotState, err := r.LoadState(t.Context(), tt.tenantID, tt.stateID)
 			if !tt.assertErr(t, err, fmt.Sprintf("Repository.LoadState() error %v", err)) || err != nil {
-				assert.Zerof(t, gotState, "Repository.LoadState() extected zero value if an error is returned, got %v", gotState)
 				return
 			}
 
@@ -75,19 +116,16 @@ func TestRepository_LoadState(t *testing.T) {
 
 func TestRepository_StoreState(t *testing.T) {
 	const upsertTenantID = "tenant-id-upsert"
-
 	upsertState := session.State{
 		ID:           "stateid-to-upsert",
 		TenantID:     upsertTenantID,
 		Fingerprint:  "fingerprint-upsert",
 		PKCEVerifier: "verifier",
 		RequestURI:   "example.com",
-		Expiry:       postgrestest.ExpiryTime,
+		Expiry:       testTime,
 	}
 
-	r := sessionsql.NewRepository(dbPool)
-	err := r.StoreState(t.Context(), upsertTenantID, upsertState)
-	require.NoError(t, err)
+	prepareState(t, upsertState)
 
 	tests := []struct {
 		name      string
@@ -104,7 +142,7 @@ func TestRepository_StoreState(t *testing.T) {
 				Fingerprint:  "fingerprint",
 				PKCEVerifier: "verifier",
 				RequestURI:   "http://example.com",
-				Expiry:       postgrestest.ExpiryTime,
+				Expiry:       testTime,
 			},
 			assertErr: assert.NoError,
 		},
@@ -117,13 +155,14 @@ func TestRepository_StoreState(t *testing.T) {
 				Fingerprint:  "fingerprint-upsert",
 				PKCEVerifier: "verifier-upsert",
 				RequestURI:   "upsert.example.com",
-				Expiry:       postgrestest.ExpiryTime,
+				Expiry:       testTime,
 			},
 			assertErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			r := sessionvalkey.NewRepository(client, prefix)
 			err := r.StoreState(t.Context(), tt.tenantID, tt.state)
 			if !tt.assertErr(t, err, fmt.Sprintf("Repository.StoreState() error %v", err)) || err != nil {
 				return
@@ -138,6 +177,14 @@ func TestRepository_StoreState(t *testing.T) {
 }
 
 func TestRepository_LoadSession(t *testing.T) {
+	prepareSession(t, session.Session{
+		ID:          "sessionid-one",
+		TenantID:    "tenant1-id",
+		Fingerprint: "fingerprint-one",
+		Token:       "token-one",
+		Expiry:      testTime,
+	})
+
 	tests := []struct {
 		name        string
 		tenantID    string
@@ -154,7 +201,7 @@ func TestRepository_LoadSession(t *testing.T) {
 				TenantID:    "tenant1-id",
 				Fingerprint: "fingerprint-one",
 				Token:       "token-one",
-				Expiry:      postgrestest.ExpiryTime,
+				Expiry:      testTime,
 			},
 			assertErr: assert.NoError,
 		},
@@ -167,11 +214,10 @@ func TestRepository_LoadSession(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := sessionsql.NewRepository(dbPool)
+			r := sessionvalkey.NewRepository(client, prefix)
 
 			gotSession, err := r.LoadSession(t.Context(), tt.tenantID, tt.sessionID)
 			if !tt.assertErr(t, err, fmt.Sprintf("Repository.LoadSession() error %v", err)) || err != nil {
-				assert.Zerof(t, gotSession, "Repository.LoadSession() extected zero value if an error is returned, got %v", gotSession)
 				return
 			}
 
@@ -182,18 +228,15 @@ func TestRepository_LoadSession(t *testing.T) {
 
 func TestRepository_StoreSession(t *testing.T) {
 	const upsertTenantID = "tenant-id-upsert"
-
 	upsertSession := session.Session{
 		ID:          "sessionid-to-upsert",
 		TenantID:    upsertTenantID,
 		Fingerprint: "fingerprint-upsert",
 		Token:       "token-upsert",
-		Expiry:      postgrestest.ExpiryTime,
+		Expiry:      testTime,
 	}
 
-	r := sessionsql.NewRepository(dbPool)
-	err := r.StoreSession(t.Context(), upsertTenantID, upsertSession)
-	require.NoError(t, err)
+	prepareSession(t, upsertSession)
 
 	tests := []struct {
 		name      string
@@ -205,11 +248,11 @@ func TestRepository_StoreSession(t *testing.T) {
 			name:     "Success",
 			tenantID: "tenant-id-store-session-success",
 			session: session.Session{
-				ID:          "state-id-store-session-success",
+				ID:          "sessionid-id-store-session-success",
 				TenantID:    "tenant-id-store-session-success",
 				Fingerprint: "fingerprint-one",
 				Token:       "token-one",
-				Expiry:      postgrestest.ExpiryTime,
+				Expiry:      testTime,
 			},
 			assertErr: assert.NoError,
 		},
@@ -221,13 +264,14 @@ func TestRepository_StoreSession(t *testing.T) {
 				TenantID:    upsertSession.TenantID,
 				Fingerprint: "fingerprint-upsert-new",
 				Token:       "token-upsert-new",
-				Expiry:      postgrestest.ExpiryTime,
+				Expiry:      testTime,
 			},
 			assertErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			r := sessionvalkey.NewRepository(client, prefix)
 			err := r.StoreSession(t.Context(), tt.tenantID, tt.session)
 			if tt.assertErr(t, err, fmt.Sprintf("Repository.StoreSession() error %v", err)) || err != nil {
 				return

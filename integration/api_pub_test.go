@@ -24,6 +24,7 @@ func TestApiPub(t *testing.T) {
 	defer istat.Close(ctx)
 
 	istat.PreparePostgres(t)
+	istat.PrepareValKey(t)
 	istat.PrepareConfig(t)
 
 	currdir, err := os.Getwd()

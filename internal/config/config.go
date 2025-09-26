@@ -15,6 +15,7 @@ type Config struct {
 	GRPC GRPCServer `yaml:"grpc"`
 
 	Database       Database       `yaml:"database"`
+	ValKey         ValKey         `yaml:"valkey"`
 	Migrate        Migrate        `yaml:"migrate"`
 	SessionManager SessionManager `yaml:"sessionManager"`
 }
@@ -36,6 +37,13 @@ type Database struct {
 	Host     commoncfg.SourceRef `yaml:"host"`
 	User     commoncfg.SourceRef `yaml:"user"`
 	Password commoncfg.SourceRef `yaml:"password"`
+}
+
+type ValKey struct {
+	Host     commoncfg.SourceRef `yaml:"host"`
+	User     commoncfg.SourceRef `yaml:"user"`
+	Password commoncfg.SourceRef `yaml:"password"`
+	Prefix   string              `yaml:"prefix"`
 }
 
 type SessionManager struct {

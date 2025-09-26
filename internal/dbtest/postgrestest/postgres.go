@@ -110,8 +110,6 @@ func prepareDB(ctx context.Context, dbPool *pgxpool.Pool, port nat.Port) {
 	b.Queue(`INSERT INTO oidc_providers (issuer_url) VALUES ('url-one');`)
 	b.Queue(`SELECT set_config('app.tenant_id', 'tenant1-id', false);`)
 	b.Queue(`INSERT INTO oidc_provider_map (tenant_id, issuer_url) VALUES (current_setting('app.tenant_id'), 'url-one');`)
-	b.Queue(`INSERT INTO pkce_state (id, tenant_id, fingerprint, verifier, request_uri, expiry) VALUES ('stateid-one', current_setting('app.tenant_id'), 'fingerprint-one', 'verifier-one', 'http://localhost', $1);`, ExpiryTime)
-	b.Queue(`INSERT INTO sessions (state_id, tenant_id, fingerprint, token, expiry) VALUES ('sessionid-one', current_setting('app.tenant_id'), 'fingerprint-one', 'token-one', $1);`, ExpiryTime)
 	b.Queue(`INSERT INTO oidc_providers (issuer_url) VALUES ('url-two');`)
 	b.Queue(`SELECT set_config('app.tenant_id', 'tenant2-id', false);`)
 	b.Queue(`INSERT INTO oidc_provider_map (tenant_id, issuer_url) VALUES (current_setting('app.tenant_id'), 'url-two');`)

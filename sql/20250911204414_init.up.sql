@@ -17,25 +17,7 @@ CREATE TABLE oidc_provider_map (
             ON UPDATE CASCADE
 );
 
-CREATE TABLE pkce_state (
-    id TEXT PRIMARY KEY,
-    tenant_id TEXT NOT NULL,
-    fingerprint TEXT NOT NULL,
-    verifier TEXT NOT NULL,
-    request_uri TEXT NOT NULL,
-    expiry TIMESTAMPTZ NOT NULL
-);
-
-CREATE TABLE sessions (
-    state_id TEXT PRIMARY KEY,
-    tenant_id TEXT NOT NULL,
-    fingerprint TEXT NOT NULL,
-    token TEXT NOT NULL,
-    expiry TIMESTAMPTZ NOT NULL
-);
-
 -- Create RLS and policies for the tables --
--- TODO: Figure out if we can use RLS on our database. An admin user bypasses RLS and policies, so it might not work with the current setup.
 
 ALTER TABLE oidc_provider_map ENABLE ROW LEVEL SECURITY;
 ALTER TABLE oidc_provider_map FORCE ROW LEVEL SECURITY;
@@ -62,13 +44,3 @@ CREATE POLICY tenant_provider_select ON oidc_providers
             WHERE m.issuer_url = oidc_providers.issuer_url
                 AND m.tenant_id = current_setting('app.tenant_id')
         ));
-
-ALTER TABLE pkce_state ENABLE ROW LEVEL SECURITY;
-ALTER TABLE pkce_state FORCE ROW LEVEL SECURITY;
-
-CREATE POLICY pkce_state_insert ON pkce_state
-    FOR INSERT
-    WITH CHECK (true);
-
-CREATE POLICY pkce_state_select ON pkce_state
-    USING (tenant_id = current_setting('app.tenant_id'));

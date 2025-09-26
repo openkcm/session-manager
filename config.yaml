@@ -185,6 +185,18 @@ database:
         source: embedded
         value: secret
 
+valkey:
+    host:
+        source: embedded
+        value: localhost:6379
+    user:
+        source: embedded
+        value: ""
+    password:
+        source: embedded
+        value: secret
+    prefix: session-manager
+
 sessionManager:
     sessionDuration: 12h
     redirectURI: http://localhost:9092/callback
