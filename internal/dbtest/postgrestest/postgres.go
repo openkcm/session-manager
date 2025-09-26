@@ -31,7 +31,7 @@ const (
 )
 
 // ExpiryTime is the time used as "expiry" for the inserted data
-var ExpiryTime = time.Now().Add(30 * 24 * time.Hour).Truncate(0)
+var ExpiryTime = time.Now().Add(30 * 24 * time.Hour).Truncate(0).Local()
 
 // Start initialises a database instance and returns a connection pool, database port, and termination function.
 //
