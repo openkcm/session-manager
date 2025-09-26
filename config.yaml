@@ -2,6 +2,11 @@ application:
     name: session-manager
     environment: development
 
+audit:
+    endpoint: http://localhost:4043/logs
+    additionalProperties: |
+        appID: "session-manager"
+
 http:
     address: :9092
 

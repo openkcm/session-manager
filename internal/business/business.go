@@ -8,6 +8,8 @@ import (
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/valkey-io/valkey-go"
 
+	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
+
 	"github.com/openkcm/session-manager/internal/business/server"
 	"github.com/openkcm/session-manager/internal/config"
 	oidcsql "github.com/openkcm/session-manager/internal/oidc/sql"
@@ -58,10 +60,22 @@ func PublicMain(ctx context.Context, cfg *config.Config) error {
 
 	clientID, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.ClientID)
 	if err != nil {
-		return fmt.Errorf("readign client id from source ref: %w", err)
+		return fmt.Errorf("reading client id from source ref: %w", err)
 	}
 
-	sessionManager := session.NewManager(oidcProviderRepo, sessionRepo, cfg.SessionManager.SessionDuration, cfg.SessionManager.RedirectURI, string(clientID))
+	auditLogger, err := otlpaudit.NewLogger(&cfg.Audit)
+	if err != nil {
+		return fmt.Errorf("creating audit logger: %w", err)
+	}
+
+	sessionManager := session.NewManager(
+		oidcProviderRepo,
+		sessionRepo,
+		auditLogger,
+		cfg.SessionManager.SessionDuration,
+		cfg.SessionManager.RedirectURI,
+		string(clientID),
+	)
 
 	return server.StartHTTPServer(ctx, cfg, sessionManager)
 }

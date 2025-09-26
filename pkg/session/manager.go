@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"time"
 
+	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
+
 	"github.com/openkcm/session-manager/internal/oidc"
 	"github.com/openkcm/session-manager/internal/pkce"
 )
@@ -14,16 +16,25 @@ type Manager struct {
 	oidc     oidc.ProviderRepository
 	sessions Repository
 	pkce     pkce.Source
+	audit    *otlpaudit.AuditLogger
 
 	sessionDuration time.Duration
 	redirectURI     string
 	clientID        string
 }
 
-func NewManager(oidc oidc.ProviderRepository, sessions Repository, sessionDuration time.Duration, redirectURI, clientID string) *Manager {
+func NewManager(
+	oidc oidc.ProviderRepository,
+	sessions Repository,
+	auditLogger *otlpaudit.AuditLogger,
+	sessionDuration time.Duration,
+	redirectURI,
+	clientID string,
+) *Manager {
 	return &Manager{
 		oidc:            oidc,
 		sessions:        sessions,
+		audit:           auditLogger,
 		sessionDuration: sessionDuration,
 		redirectURI:     redirectURI,
 		clientID:        clientID,
