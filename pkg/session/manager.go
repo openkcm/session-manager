@@ -3,11 +3,11 @@ package session
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/url"
 	"time"
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
-
 	"github.com/openkcm/session-manager/internal/oidc"
 	"github.com/openkcm/session-manager/internal/pkce"
 )
@@ -17,6 +17,9 @@ type Manager struct {
 	sessions Repository
 	pkce     pkce.Source
 	audit    *otlpaudit.AuditLogger
+
+	// Add oidcService for token refresh
+	oidcService *oidc.Service
 
 	sessionDuration time.Duration
 	redirectURI     string
@@ -30,6 +33,7 @@ func NewManager(
 	sessionDuration time.Duration,
 	redirectURI,
 	clientID string,
+	service *oidc.Service, // add service param
 ) *Manager {
 	return &Manager{
 		oidc:            oidc,
@@ -38,6 +42,9 @@ func NewManager(
 		sessionDuration: sessionDuration,
 		redirectURI:     redirectURI,
 		clientID:        clientID,
+		pkce:            pkce.Source{},
+		// inject service
+		oidcService: service,
 	}
 }
 
@@ -90,4 +97,48 @@ func (m *Manager) authURI(provider oidc.Provider, state State, pkce pkce.PKCE) (
 	u.RawQuery = q.Encode()
 
 	return u.String(), nil
+}
+
+func (m *Manager) StartTokenRefresher(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			if err := m.RefreshTokens(ctx); err != nil {
+				log.Printf("[ERROR] Failed to refresh tokens: %v", err)
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (m *Manager) RefreshTokens(ctx context.Context) error {
+	sessions, err := m.sessions.ListSessions(ctx)
+	if err != nil {
+		return err
+	}
+	for _, s := range sessions {
+		if shouldRefresh(s) {
+			newToken, err := m.oidcService.RefreshToken(ctx, s.TenantID, s.RefreshToken, m.clientID)
+			if err != nil {
+				log.Printf("[WARN] Could not refresh token for tenant %s, session %s: %v", s.TenantID, s.ID, err)
+				continue
+			}
+			s.AccessToken = newToken.AccessToken
+			s.RefreshToken = newToken.RefreshToken
+			s.AccessTokenExpiry = newToken.ExpiresAt
+			if err := m.sessions.StoreSession(ctx, s.TenantID, s); err != nil {
+				log.Printf("[WARN] Could not store refreshed session for tenant %s, session %s: %v", s.TenantID, s.ID, err)
+				continue
+			}
+		}
+	}
+	return nil
+}
+
+func shouldRefresh(s Session) bool {
+	// refresh if token expires in less than 5 minutes
+	return time.Until(s.AccessTokenExpiry) < 5*time.Minute
 }
