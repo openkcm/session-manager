@@ -11,9 +11,19 @@ import (
 
 const objectTypeSession = "session"
 const objectTypeState = "state"
+const objectTypeId = "id"
 
 type Repository struct {
 	store *store
+}
+
+func (r *Repository) ListSessions(ctx context.Context) ([]session.Session, error) {
+	var sessions []session.Session
+	if err := getStoreObjects(ctx, r.store, objectTypeSession, objectTypeId, &sessions); err != nil {
+		return nil, fmt.Errorf("getting sessions from store: %w", err)
+	}
+
+	return sessions, nil
 }
 
 func NewRepository(valkeyClient valkey.Client, prefix string) *Repository {

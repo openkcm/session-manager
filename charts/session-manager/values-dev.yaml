@@ -48,6 +48,22 @@ image:
 
     command: /bin/migrate
 
+  tokenRefresher:
+    # The container registry to pull the image from.
+    # +docs:property
+    registry: kms20
+
+    # The container image
+    # +docs:property
+    repository: session-manager
+
+    # Override the image tag to deploy by setting this variable.
+    # If no value is set, the chart's appVersion is used.
+    # +docs:property
+    tag: latest
+
+    command: /bin/token-refresher
+
   # Kubernetes imagePullPolicy.
   pullPolicy: IfNotPresent
 
@@ -303,3 +319,6 @@ config:
 
   migrate:
     source: file:///sql
+
+  tokenRefresher:
+    refreshInterval: 30m

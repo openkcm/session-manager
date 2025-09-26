@@ -1,15 +1,19 @@
 package session
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 	"time"
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
+	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/session-manager/internal/oidc"
 	"github.com/openkcm/session-manager/internal/pkce"
@@ -197,4 +201,73 @@ func (m *Manager) exchangeCode(ctx context.Context, provider oidc.Provider, code
 
 func (m *Manager) ValidateCSRFToken(token, sessionID string) bool {
 	return csrf.Validate(token, sessionID, m.csrfSecret)
+}
+
+func (m *Manager) RefreshExpiringSessions(ctx context.Context) error {
+	sessions, err := m.sessions.ListSessions(ctx)
+	if err != nil {
+		return err
+	}
+	for _, s := range sessions {
+		provider, err := m.oidc.Get(ctx, s.Issuer)
+		if err != nil {
+			return fmt.Errorf("getting odic provider: %w", err)
+		}
+
+		if shouldRefresh(s) {
+			if err := m.RefreshSession(ctx, &s, provider); err != nil {
+				slogctx.Warn(ctx, "Could not refresh token", "tenant_id", s.TenantID, "session_id", s.ID)
+				continue
+			}
+
+			if err := m.sessions.StoreSession(ctx, s); err != nil {
+				slogctx.Warn(ctx, "Could not store refreshed session", "tenant_id", s.TenantID, "session_id", s.ID)
+				continue
+			}
+		}
+	}
+	return nil
+}
+
+// RefreshSession refreshes the access token using the given refresh token for the tenant.
+func (m *Manager) RefreshSession(ctx context.Context, s *Session, provider oidc.Provider) error {
+	data := url.Values{}
+	data.Set("grant_type", "refresh_token")
+	data.Set("refresh_token", s.RefreshToken)
+	data.Set("client_id", m.clientID)
+
+	tokenEndpoint := path.Join(provider.IssuerURL, "/token")
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenEndpoint, bytes.NewBufferString(data.Encode()))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return errors.New("token endpoint returned non-200 status")
+	}
+
+	var respData struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		ExpiresIn    int    `json:"expires_in"`
+	}
+
+	s.AccessToken = respData.AccessToken
+	s.RefreshToken = respData.RefreshToken
+	s.AccessTokenExpiry = time.Now().Add(time.Duration(respData.ExpiresIn))
+
+	return nil
+}
+
+func shouldRefresh(s Session) bool {
+	// refresh if token expires in less than 5 minutes
+	return time.Until(s.AccessTokenExpiry) < 5*time.Minute
 }

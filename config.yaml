@@ -211,3 +211,6 @@ sessionManager:
 
 migrate:
     source: file://./sql
+
+tokenRefresher:
+  refreshInterval: 30m
