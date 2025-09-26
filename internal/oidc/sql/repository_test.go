@@ -61,6 +61,7 @@ func TestRepository_GetForTenant(t *testing.T) {
 
 			gotProvider, err := r.GetForTenant(t.Context(), tt.tenantID)
 			if !tt.assertErr(t, err, fmt.Sprintf("Repository.GetForTenant() error %v", err)) || err != nil {
+				assert.Zerof(t, gotProvider, "Repository.GetForTenant() extected zero value if an error is returned, got %v", gotProvider)
 				return
 			}
 
@@ -156,10 +157,11 @@ func TestRepository_Delete(t *testing.T) {
 				return
 			}
 
-			_, err = r.GetForTenant(t.Context(), tt.tenantID)
+			p, err := r.GetForTenant(t.Context(), tt.tenantID)
 			if !errors.Is(err, serviceerr.ErrNotFound) {
 				t.Error("The provider is expected to be deleted")
 			}
+			assert.Zero(t, p, "The provider is expected to be deleted, instead a value is returned")
 		})
 	}
 }

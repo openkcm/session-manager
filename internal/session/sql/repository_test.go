@@ -64,6 +64,7 @@ func TestRepository_LoadState(t *testing.T) {
 
 			gotState, err := r.LoadState(t.Context(), tt.tenantID, tt.stateID)
 			if !tt.assertErr(t, err, fmt.Sprintf("Repository.LoadState() error %v", err)) || err != nil {
+				assert.Zerof(t, gotState, "Repository.LoadState() extected zero value if an error is returned, got %v", gotState)
 				return
 			}
 
@@ -170,6 +171,7 @@ func TestRepository_LoadSession(t *testing.T) {
 
 			gotSession, err := r.LoadSession(t.Context(), tt.tenantID, tt.sessionID)
 			if !tt.assertErr(t, err, fmt.Sprintf("Repository.LoadSession() error %v", err)) || err != nil {
+				assert.Zerof(t, gotSession, "Repository.LoadSession() extected zero value if an error is returned, got %v", gotSession)
 				return
 			}
 
