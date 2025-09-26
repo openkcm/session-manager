@@ -47,7 +47,7 @@ func TestRepository_LoadState(t *testing.T) {
 				Fingerprint:  "fingerprint-one",
 				PKCEVerifier: "verifier-one",
 				RequestURI:   "http://localhost",
-				Expiry:       postgrestest.DBTime,
+				Expiry:       postgrestest.ExpiryTime,
 			},
 			assertErr: assert.NoError,
 		},
@@ -81,7 +81,7 @@ func TestRepository_StoreState(t *testing.T) {
 		Fingerprint:  "fingerprint-upsert",
 		PKCEVerifier: "verifier",
 		RequestURI:   "example.com",
-		Expiry:       postgrestest.DBTime,
+		Expiry:       postgrestest.ExpiryTime,
 	}
 
 	r := sessionsql.NewRepository(dbPool)
@@ -103,7 +103,7 @@ func TestRepository_StoreState(t *testing.T) {
 				Fingerprint:  "fingerprint",
 				PKCEVerifier: "verifier",
 				RequestURI:   "http://example.com",
-				Expiry:       postgrestest.DBTime,
+				Expiry:       postgrestest.ExpiryTime,
 			},
 			assertErr: assert.NoError,
 		},
@@ -116,7 +116,7 @@ func TestRepository_StoreState(t *testing.T) {
 				Fingerprint:  "fingerprint-upsert",
 				PKCEVerifier: "verifier-upsert",
 				RequestURI:   "upsert.example.com",
-				Expiry:       postgrestest.DBTime,
+				Expiry:       postgrestest.ExpiryTime,
 			},
 			assertErr: assert.NoError,
 		},
@@ -153,7 +153,7 @@ func TestRepository_LoadSession(t *testing.T) {
 				TenantID:    "tenant1-id",
 				Fingerprint: "fingerprint-one",
 				Token:       "token-one",
-				Expiry:      postgrestest.DBTime,
+				Expiry:      postgrestest.ExpiryTime,
 			},
 			assertErr: assert.NoError,
 		},
@@ -186,7 +186,7 @@ func TestRepository_StoreSession(t *testing.T) {
 		TenantID:    upsertTenantID,
 		Fingerprint: "fingerprint-upsert",
 		Token:       "token-upsert",
-		Expiry:      postgrestest.DBTime,
+		Expiry:      postgrestest.ExpiryTime,
 	}
 
 	r := sessionsql.NewRepository(dbPool)
@@ -207,7 +207,7 @@ func TestRepository_StoreSession(t *testing.T) {
 				TenantID:    "tenant-id-store-session-success",
 				Fingerprint: "fingerprint-one",
 				Token:       "token-one",
-				Expiry:      postgrestest.DBTime,
+				Expiry:      postgrestest.ExpiryTime,
 			},
 			assertErr: assert.NoError,
 		},
@@ -219,7 +219,7 @@ func TestRepository_StoreSession(t *testing.T) {
 				TenantID:    upsertSession.TenantID,
 				Fingerprint: "fingerprint-upsert-new",
 				Token:       "token-upsert-new",
-				Expiry:      postgrestest.DBTime,
+				Expiry:      postgrestest.ExpiryTime,
 			},
 			assertErr: assert.NoError,
 		},

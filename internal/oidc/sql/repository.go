@@ -33,12 +33,12 @@ func setTenantContext(ctx context.Context, tx pgx.Tx, tenantID string) error {
 func (r *Repository) GetForTenant(ctx context.Context, tenantID string) (provider oidc.Provider, _ error) {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return provider, fmt.Errorf("starting transaction: %w", err)
+		return oidc.Provider{}, fmt.Errorf("starting transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
 	if err := setTenantContext(ctx, tx, tenantID); err != nil {
-		return provider, fmt.Errorf("setting tenant context: %w", err)
+		return oidc.Provider{}, fmt.Errorf("setting tenant context: %w", err)
 	}
 
 	if err := tx.QueryRow(
@@ -48,14 +48,14 @@ FROM oidc_providers p
 WHERE m.tenant_id = current_setting('app.tenant_id');`).
 		Scan(&provider.IssuerURL, &provider.Blocked, &provider.JWKSURIs, &provider.Audiences); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return provider, serviceerr.ErrNotFound
+			return oidc.Provider{}, serviceerr.ErrNotFound
 		}
 
-		return provider, fmt.Errorf("selecting from oidc_providers: %w", err)
+		return oidc.Provider{}, fmt.Errorf("selecting from oidc_providers: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return provider, fmt.Errorf("committing tx: %w", err)
+		return oidc.Provider{}, fmt.Errorf("committing tx: %w", err)
 	}
 
 	return provider, nil
@@ -67,7 +67,7 @@ func (r *Repository) Create(ctx context.Context, tenantID string, provider oidc.
 		return fmt.Errorf("starting transaction: %w", err)
 	}
 
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer tx.Rollback(ctx)
 
 	if err := setTenantContext(ctx, tx, tenantID); err != nil {
 		return fmt.Errorf("setting tenant context: %w", err)

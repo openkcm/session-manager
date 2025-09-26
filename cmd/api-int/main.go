@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	healthStatusTimeoutS = 5 * time.Second
+	healthStatusTimeout = 5 * time.Second
 )
 
 var (
@@ -89,7 +89,7 @@ func run(ctx context.Context) error {
 		healthOptions := make([]health.Option, 0)
 		healthOptions = append(healthOptions,
 			health.WithDisabledAutostart(),
-			health.WithTimeout(healthStatusTimeoutS),
+			health.WithTimeout(healthStatusTimeout),
 			health.WithStatusListener(func(ctx context.Context, state health.State) {
 				slogctx.Info(ctx, "readiness status changed", "status", state.Status)
 			}),

@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	healthStatusTimeoutS = 5 * time.Second
+	healthStatusTimeout = 5 * time.Second
 )
 
 var (
@@ -88,7 +88,7 @@ func run(ctx context.Context) error {
 
 		healthOptions := []health.Option{
 			health.WithDisabledAutostart(),
-			health.WithTimeout(healthStatusTimeoutS),
+			health.WithTimeout(healthStatusTimeout),
 			health.WithDatabaseChecker("pgx", connStr),
 			health.WithStatusListener(func(ctx context.Context, state health.State) {
 				slogctx.Info(ctx, "readiness status changed", "status", state.Status)

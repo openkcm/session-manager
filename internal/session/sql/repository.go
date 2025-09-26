@@ -33,12 +33,12 @@ func setTenantContext(ctx context.Context, tx pgx.Tx, tenantID string) error {
 func (r *Repository) LoadState(ctx context.Context, tenantID, stateID string) (state session.State, _ error) {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return state, fmt.Errorf("starting transaction: %w", err)
+		return session.State{}, fmt.Errorf("starting transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
 	if err := setTenantContext(ctx, tx, tenantID); err != nil {
-		return state, fmt.Errorf("setting tenant context: %w", err)
+		return session.State{}, fmt.Errorf("setting tenant context: %w", err)
 	}
 
 	if err := tx.QueryRow(ctx, `SELECT id, tenant_id, fingerprint, verifier, request_uri, expiry
@@ -52,11 +52,11 @@ WHERE id = $1
 			return state, serviceerr.ErrNotFound
 		}
 
-		return state, fmt.Errorf("selecting from pkce_state: %w", err)
+		return session.State{}, fmt.Errorf("selecting from pkce_state: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return state, fmt.Errorf("committing tx: %w", err)
+		return session.State{}, fmt.Errorf("committing tx: %w", err)
 	}
 
 	return state, nil
@@ -98,12 +98,12 @@ func (r *Repository) StoreState(ctx context.Context, tenantID string, state sess
 func (r *Repository) LoadSession(ctx context.Context, tenantID, sessionID string) (s session.Session, _ error) {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return s, fmt.Errorf("starting transaction: %w", err)
+		return session.Session{}, fmt.Errorf("starting transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
 	if err := setTenantContext(ctx, tx, tenantID); err != nil {
-		return s, fmt.Errorf("setting tenant context: %w", err)
+		return session.Session{}, fmt.Errorf("setting tenant context: %w", err)
 	}
 
 	if err := tx.QueryRow(
@@ -115,14 +115,14 @@ WHERE state_id = $1
 	).
 		Scan(&s.ID, &s.TenantID, &s.Fingerprint, &s.Token, &s.Expiry); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return s, serviceerr.ErrNotFound
+			return session.Session{}, serviceerr.ErrNotFound
 		}
 
-		return s, fmt.Errorf("selecting from sessions: %w", err)
+		return session.Session{}, fmt.Errorf("selecting from sessions: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return s, fmt.Errorf("committing tx: %w", err)
+		return session.Session{}, fmt.Errorf("committing tx: %w", err)
 	}
 
 	return s, nil

@@ -30,10 +30,8 @@ const (
 	DBSSLMode  = "disable"
 )
 
-// DBTime is the universal time used for the inserted test data
-//
-//nolint:gosmopolitan
-var DBTime = time.Date(2025, 9, 18, 0, 0, 0, 0, time.Local)
+// ExpiryTime is the time used as "expiry" for the inserted data
+var ExpiryTime = time.Now().Add(30 * 24 * time.Hour).Truncate(0)
 
 // Start initialises a database instance and returns a connection pool, database port, and termination function.
 //
@@ -106,8 +104,8 @@ func prepareDB(ctx context.Context, dbPool *pgxpool.Pool, port nat.Port) {
 	b.Queue(`INSERT INTO oidc_providers (issuer_url) VALUES ('url-one');`)
 	b.Queue(`SELECT set_config('app.tenant_id', 'tenant1-id', false);`)
 	b.Queue(`INSERT INTO oidc_provider_map (tenant_id, issuer_url) VALUES (current_setting('app.tenant_id'), 'url-one');`)
-	b.Queue(`INSERT INTO pkce_state (id, tenant_id, fingerprint, verifier, request_uri, expiry) VALUES ('stateid-one', current_setting('app.tenant_id'), 'fingerprint-one', 'verifier-one', 'http://localhost', $1);`, DBTime)
-	b.Queue(`INSERT INTO sessions (state_id, tenant_id, fingerprint, token, expiry) VALUES ('sessionid-one', current_setting('app.tenant_id'), 'fingerprint-one', 'token-one', $1);`, DBTime)
+	b.Queue(`INSERT INTO pkce_state (id, tenant_id, fingerprint, verifier, request_uri, expiry) VALUES ('stateid-one', current_setting('app.tenant_id'), 'fingerprint-one', 'verifier-one', 'http://localhost', $1);`, ExpiryTime)
+	b.Queue(`INSERT INTO sessions (state_id, tenant_id, fingerprint, token, expiry) VALUES ('sessionid-one', current_setting('app.tenant_id'), 'fingerprint-one', 'token-one', $1);`, ExpiryTime)
 	b.Queue(`INSERT INTO oidc_providers (issuer_url) VALUES ('url-two');`)
 	b.Queue(`SELECT set_config('app.tenant_id', 'tenant2-id', false);`)
 	b.Queue(`INSERT INTO oidc_provider_map (tenant_id, issuer_url) VALUES (current_setting('app.tenant_id'), 'url-two');`)
