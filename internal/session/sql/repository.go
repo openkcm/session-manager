@@ -30,7 +30,7 @@ func setTenantContext(ctx context.Context, tx pgx.Tx, tenantID string) error {
 	return nil
 }
 
-func (r *Repository) LoadState(ctx context.Context, tenantID, stateID string) (state session.State, _ error) {
+func (r *Repository) LoadState(ctx context.Context, tenantID, stateID string) (session.State, error) {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return session.State{}, fmt.Errorf("starting transaction: %w", err)
@@ -41,6 +41,7 @@ func (r *Repository) LoadState(ctx context.Context, tenantID, stateID string) (s
 		return session.State{}, fmt.Errorf("setting tenant context: %w", err)
 	}
 
+	var state session.State
 	if err := tx.QueryRow(ctx, `SELECT id, tenant_id, fingerprint, verifier, request_uri, expiry
 FROM pkce_state
 WHERE id = $1
@@ -95,7 +96,7 @@ func (r *Repository) StoreState(ctx context.Context, tenantID string, state sess
 	return nil
 }
 
-func (r *Repository) LoadSession(ctx context.Context, tenantID, sessionID string) (s session.Session, _ error) {
+func (r *Repository) LoadSession(ctx context.Context, tenantID, sessionID string) (session.Session, error) {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return session.Session{}, fmt.Errorf("starting transaction: %w", err)
@@ -106,6 +107,7 @@ func (r *Repository) LoadSession(ctx context.Context, tenantID, sessionID string
 		return session.Session{}, fmt.Errorf("setting tenant context: %w", err)
 	}
 
+	var s session.Session
 	if err := tx.QueryRow(
 		ctx, `SELECT state_id, tenant_id, fingerprint, token, expiry
 FROM sessions

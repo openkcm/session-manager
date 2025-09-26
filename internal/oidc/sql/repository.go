@@ -30,7 +30,7 @@ func setTenantContext(ctx context.Context, tx pgx.Tx, tenantID string) error {
 	return nil
 }
 
-func (r *Repository) GetForTenant(ctx context.Context, tenantID string) (provider oidc.Provider, _ error) {
+func (r *Repository) GetForTenant(ctx context.Context, tenantID string) (oidc.Provider, error) {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return oidc.Provider{}, fmt.Errorf("starting transaction: %w", err)
@@ -41,6 +41,7 @@ func (r *Repository) GetForTenant(ctx context.Context, tenantID string) (provide
 		return oidc.Provider{}, fmt.Errorf("setting tenant context: %w", err)
 	}
 
+	var provider oidc.Provider
 	if err := tx.QueryRow(
 		ctx, `SELECT p.issuer_url, p.blocked, p.jwks_uris, p.audience
 FROM oidc_providers p
