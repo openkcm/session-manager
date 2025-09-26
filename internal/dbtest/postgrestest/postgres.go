@@ -31,9 +31,13 @@ const (
 )
 
 // ExpiryTime is the time used as "expiry" for the inserted data
-//
-//nolint:gosmopolitan
-var ExpiryTime = time.Now().Add(30 * 24 * time.Hour).Truncate(0).Local()
+var ExpiryTime time.Time
+
+func init() {
+	// initialise time without monotonic time
+	now := time.Now()
+	ExpiryTime = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Add(30 * 24 * time.Hour).Truncate(0)
+}
 
 // Start initialises a database instance and returns a connection pool, database port, and termination function.
 //
