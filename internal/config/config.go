@@ -1,3 +1,5 @@
+// Package config defines the necessary types to configure the application.
+// An example config file config.yaml is provided in the repository.
 package config
 
 import (
@@ -7,10 +9,14 @@ import (
 )
 
 type Config struct {
-	commoncfg.BaseConfig `mapstructure:",squash"`
+	commoncfg.BaseConfig `mapstructure:",squash" yaml:",inline"`
 
-	HTTP       HTTPServer `yaml:"http"`
-	GRPCServer GRPCServer `yaml:"grpc"`
+	HTTP HTTPServer `yaml:"http"`
+	GRPC GRPCServer `yaml:"grpc"`
+
+	Database       Database       `yaml:"database"`
+	Migrate        Migrate        `yaml:"migrate"`
+	SessionManager SessionManager `yaml:"sessionManager"`
 }
 
 type HTTPServer struct {
@@ -19,8 +25,25 @@ type HTTPServer struct {
 }
 
 type GRPCServer struct {
-	commoncfg.GRPCServer `mapstructure:",squash"`
+	commoncfg.GRPCServer `yaml:",inline"`
 
-	// also embed client attributes for the gRPC health check client
-	Client commoncfg.GRPCClient
+	ShutdownTimeout time.Duration `yaml:"shutdownTimeout" default:"5s"`
+}
+
+type Database struct {
+	Name     string              `yaml:"name"`
+	Port     string              `yaml:"port"`
+	Host     commoncfg.SourceRef `yaml:"host"`
+	User     commoncfg.SourceRef `yaml:"user"`
+	Password commoncfg.SourceRef `yaml:"password"`
+}
+
+type SessionManager struct {
+	SessionDuration time.Duration       `yaml:"sessionDuration" default:"12h"`
+	RedirectURI     string              `yaml:"redirectURI" default:"https://api.cmk/callback"`
+	ClientID        commoncfg.SourceRef `yaml:"clientID"`
+}
+
+type Migrate struct {
+	Source string `yaml:"source" default:"file://./sql"`
 }

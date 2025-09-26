@@ -20,6 +20,8 @@
 /cover.html
 /cover
 
+*.log
+
 # Go vendor directory
 /vendor
 helm-tests/vendor
@@ -30,3 +32,4 @@ go.work
 # Jetbrains IDE files
 .idea
 *.iml
+

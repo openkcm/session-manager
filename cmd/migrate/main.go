@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
 	"fmt"
 	"os"
@@ -9,17 +10,19 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/mcuadros/go-defaults"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
-	"github.com/openkcm/common-sdk/pkg/health"
 	"github.com/openkcm/common-sdk/pkg/logger"
-	"github.com/openkcm/common-sdk/pkg/otlp"
-	"github.com/openkcm/common-sdk/pkg/status"
 	"github.com/openkcm/common-sdk/pkg/utils"
 	"github.com/samber/oops"
 
+	_ "github.com/golang-migrate/migrate/v4/source/file"
+	_ "github.com/jackc/pgx/v5/stdlib"
+
+	pgxmigrate "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	slogctx "github.com/veqryn/slog-context"
 
-	"github.com/openkcm/session-manager/internal/business"
 	"github.com/openkcm/session-manager/internal/config"
 )
 
@@ -38,19 +41,16 @@ var (
 //   - Start the business logic and eventually return the error from it
 func run(ctx context.Context) error {
 	// Load Configuration
-	defaults := map[string]any{}
-	cfg := &config.Config{}
+	defaultValues := map[string]any{}
+	cfg := new(config.Config)
 
-	err := commoncfg.LoadConfig(cfg,
-		defaults,
-		"/etc/session-manager",
-		"$HOME/.session-manager",
-		".",
-	)
+	err := commoncfg.LoadConfig(cfg, defaultValues, "/etc/session-manager", "$HOME/.session-manager", ".")
 	if err != nil {
 		return oops.In("main").
 			Wrapf(err, "Failed to load the configuration")
 	}
+
+	defaults.SetDefaults(cfg)
 
 	err = commoncfg.UpdateConfigVersion(&cfg.BaseConfig, BuildInfo)
 	if err != nil {
@@ -58,61 +58,35 @@ func run(ctx context.Context) error {
 			Wrapf(err, "Failed to update the version configuration")
 	}
 
-	// Logger initialisation
+	// LoggerConfig initialisation
 	err = logger.InitAsDefault(cfg.Logger, cfg.Application)
 	if err != nil {
 		return oops.In("main").
 			Wrapf(err, "Failed to initialise the logger")
 	}
 
-	// OpenTelemetry initialisation
-	err = otlp.Init(ctx, &cfg.Application, &cfg.Telemetry, &cfg.Logger)
+	connStr, err := config.MakeConnStr(cfg.Database)
 	if err != nil {
-		return oops.In("main").
-			Wrapf(err, "Failed to load the telemetry")
+		return fmt.Errorf("making connection string from config: %w", err)
 	}
 
-	// Status Server Initialisation
-	go func() {
-		liveness := status.WithLiveness(
-			health.NewHandler(
-				health.NewChecker(health.WithDisabledAutostart()),
-			),
-		)
-
-		healthOptions := make([]health.Option, 0)
-		healthOptions = append(healthOptions,
-			health.WithDisabledAutostart(),
-			health.WithTimeout(5*time.Second),
-			health.WithStatusListener(func(ctx context.Context, state health.State) {
-				slogctx.Info(ctx, "readiness status changed", "status", state.Status)
-			}),
-		)
-
-		cfg.GRPCServer.Client.Address = cfg.GRPCServer.Address
-		healthOptions = append(healthOptions,
-			health.WithGRPCServerChecker(cfg.GRPCServer.Client),
-		)
-
-		readiness := status.WithReadiness(
-			health.NewHandler(
-				health.NewChecker(healthOptions...),
-			),
-		)
-
-		err := status.Start(ctx, &cfg.BaseConfig, liveness, readiness)
-		if err != nil {
-			slogctx.Error(ctx, "Failure on the status server", "error", err)
-
-			_ = syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
-		}
-	}()
-
-	// Business Logic
-	err = business.Main(ctx, cfg)
+	db, err := sql.Open("pgx", connStr)
 	if err != nil {
-		return oops.In("main").
-			Wrapf(err, "Failed to start the main business application")
+		return oops.In("main").Wrapf(err, "opening DB connection")
+	}
+
+	driver, err := pgxmigrate.WithInstance(db, &pgxmigrate.Config{})
+	if err != nil {
+		return oops.In("main").Wrapf(err, "creating migrate driver")
+	}
+
+	m, err := migrate.NewWithDatabaseInstance(cfg.Migrate.Source, "pgx", driver)
+	if err != nil {
+		return oops.In("main").Wrapf(err, "creating migrate instance")
+	}
+
+	if err := m.Up(); err != nil {
+		return oops.In("main").Wrapf(err, "executing migration")
 	}
 
 	return nil
@@ -130,8 +104,7 @@ func runFuncWithSignalHandling(f func(context.Context) error) int {
 
 	exitCode := 0
 
-	err := f(ctx)
-	if err != nil {
+	if err := f(ctx); err != nil {
 		slogctx.Error(ctx, "Failed to start the application", "error", err)
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		exitCode = 1
