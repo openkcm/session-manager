@@ -7,4 +7,5 @@ type Repository interface {
 	StoreState(ctx context.Context, tenantID string, state State) error
 	LoadSession(ctx context.Context, tenantID, sessionID string) (Session, error)
 	StoreSession(ctx context.Context, tenantID string, session Session) error
+	GetAllSessions(ctx context.Context) ([]Session, error)
 }

@@ -14,6 +14,11 @@ type Repository struct {
 	loadStateErr, storeStateErr, loadSessionErr, storeSessionErr error
 }
 
+func (r *Repository) GetActiveSessions(ctx context.context.Context)  ([]Session, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func NewInMemRepository(loadStateErr, storeStateErr, loadSessionErr, storeSessionErr error) *Repository {
 	return &Repository{
 		States:          make(map[string]session.State),
