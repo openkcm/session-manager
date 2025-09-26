@@ -1,6 +1,8 @@
 package oidc
 
-import "context"
+import (
+	"context"
+)
 
 // ProviderRepository allows to read OIDC provider data for a tenant stored in the context.
 type ProviderRepository interface {

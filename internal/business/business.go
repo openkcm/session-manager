@@ -112,6 +112,9 @@ func publicMain(ctx context.Context, cfg *config.Config) error {
 		string(clientID),
 	)
 
+	// Start the background token refresher using the configured interval
+	sessionManager.StartTokenRefresher(ctx, cfg.SessionManager.TokenRefreshInterval)
+
 	return server.StartHTTPServer(ctx, cfg, sessionManager)
 }
 

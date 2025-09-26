@@ -47,9 +47,10 @@ type ValKey struct {
 }
 
 type SessionManager struct {
-	SessionDuration time.Duration       `yaml:"sessionDuration" default:"12h"`
-	RedirectURI     string              `yaml:"redirectURI" default:"https://api.cmk/callback"`
-	ClientID        commoncfg.SourceRef `yaml:"clientID"`
+	SessionDuration      time.Duration       `yaml:"sessionDuration" default:"12h"`
+	RedirectURI          string              `yaml:"redirectURI" default:"https://api.cmk/callback"`
+	ClientID             commoncfg.SourceRef `yaml:"clientID"`
+	TokenRefreshInterval time.Duration       `yaml:"tokenRefreshInterval" default:"30m"`
 }
 
 type Migrate struct {

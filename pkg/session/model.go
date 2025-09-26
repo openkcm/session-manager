@@ -25,4 +25,5 @@ type Session struct {
 	AccessToken  string    // Access token from the identity provider
 	RefreshToken string    // Refresh token from the identity provider
 	Expiry       time.Time // Expiry time of the session
+	AccessTokenExpiry time.Time // Expiry time of the Access Token
 }
