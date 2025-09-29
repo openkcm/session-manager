@@ -27,11 +27,20 @@ type AuthParams struct {
 	RequestURI string `form:"request_uri" json:"request_uri"`
 }
 
+// CallbackParams defines parameters for Callback.
+type CallbackParams struct {
+	Code  string `form:"code" json:"code"`
+	State string `form:"state" json:"state"`
+}
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 
 	// (GET /auth)
 	Auth(w http.ResponseWriter, r *http.Request, params AuthParams)
+
+	// (GET /callback)
+	Callback(w http.ResponseWriter, r *http.Request, params CallbackParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -83,6 +92,55 @@ func (siw *ServerInterfaceWrapper) Auth(w http.ResponseWriter, r *http.Request) 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Auth(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Callback operation middleware
+func (siw *ServerInterfaceWrapper) Callback(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CallbackParams
+
+	// ------------- Required query parameter "code" -------------
+
+	if paramValue := r.URL.Query().Get("code"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "code"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "code", r.URL.Query(), &params.Code)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "code", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "state" -------------
+
+	if paramValue := r.URL.Query().Get("state"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "state", r.URL.Query(), &params.State)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Callback(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -213,6 +271,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc("GET "+options.BaseURL+"/auth", wrapper.Auth)
+	m.HandleFunc("GET "+options.BaseURL+"/callback", wrapper.Callback)
 
 	return m
 }
@@ -239,15 +298,6 @@ func (response Auth302Response) VisitAuthResponse(w http.ResponseWriter) error {
 	return nil
 }
 
-type Auth400JSONResponse ErrorModel
-
-func (response Auth400JSONResponse) VisitAuthResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
 type AuthdefaultJSONResponse struct {
 	Body       ErrorModel
 	StatusCode int
@@ -260,11 +310,59 @@ func (response AuthdefaultJSONResponse) VisitAuthResponse(w http.ResponseWriter)
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type CallbackRequestObject struct {
+	Params CallbackParams
+}
+
+type CallbackResponseObject interface {
+	VisitCallbackResponse(w http.ResponseWriter) error
+}
+
+type Callback302ResponseHeaders struct {
+	Location  string
+	SetCookie string
+}
+
+type Callback302Response struct {
+	Headers Callback302ResponseHeaders
+}
+
+func (response Callback302Response) VisitCallbackResponse(w http.ResponseWriter) error {
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
+	w.WriteHeader(302)
+	return nil
+}
+
+type Callback403JSONResponse ErrorModel
+
+func (response Callback403JSONResponse) VisitCallbackResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CallbackdefaultJSONResponse struct {
+	Body       ErrorModel
+	StatusCode int
+}
+
+func (response CallbackdefaultJSONResponse) VisitCallbackResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
 	// (GET /auth)
 	Auth(ctx context.Context, request AuthRequestObject) (AuthResponseObject, error)
+
+	// (GET /callback)
+	Callback(ctx context.Context, request CallbackRequestObject) (CallbackResponseObject, error)
 }
 
 type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
@@ -315,6 +413,32 @@ func (sh *strictHandler) Auth(w http.ResponseWriter, r *http.Request, params Aut
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AuthResponseObject); ok {
 		if err := validResponse.VisitAuthResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// Callback operation middleware
+func (sh *strictHandler) Callback(w http.ResponseWriter, r *http.Request, params CallbackParams) {
+	var request CallbackRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.Callback(ctx, request.(CallbackRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "Callback")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CallbackResponseObject); ok {
+		if err := validResponse.VisitCallbackResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
