@@ -15,7 +15,7 @@ grpc:
 
 status:
     enabled: true
-    address: ":8888"
+    address: :8888
     profiling: true
 
 logger:

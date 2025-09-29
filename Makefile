@@ -72,6 +72,7 @@ valkey-helm-install:
 .PHONY: ensure-deps
 ensure-deps:
 	@echo "Waiting for PostgreSQL and ValKey to be available"
+	kubectl wait --for=create pod/valkey-0
 	kubectl wait pod \
 	  --all \
 	  --for=condition=Ready \
@@ -80,14 +81,11 @@ ensure-deps:
 	  -n $(NAMESPACE)
 
 .PHONY: service-helm-install
-service-helm-install: build_version.json k3d-build-image
+service-helm-install: k3d-build-image
 	@echo "Installing the service via helm"
 	@helm dependency build $(CHART_DIR)
 	helm upgrade --install $(CHART_NAME) $(CHART_DIR) --namespace $(NAMESPACE) \
 		-f $(CHART_DIR)/values-dev.yaml
-
-build_version.json:
-	@jq -nr --arg version $(shell cat VERSION) '{version: $$version}' > build_version.json
 
 .PHONY: k3d-build-image
 k3d-build-image: docker-dev-build

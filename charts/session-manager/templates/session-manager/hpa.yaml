@@ -2,15 +2,15 @@
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: {{ include "session-manager.fullname" . }}-api-pub
+  name: {{ include "session-manager.fullname" . }}
   labels:
     {{- include "session-manager.labels" . | nindent 4 }}
-    app.kubernetes.io/component: api-pub
+    app.kubernetes.io/component: session-manager
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: {{ include "session-manager.fullname" . }}-api-pub
+    name: {{ include "session-manager.fullname" . }}
   minReplicas: {{ .Values.autoscaling.minReplicas }}
   maxReplicas: {{ .Values.autoscaling.maxReplicas }}
   metrics:

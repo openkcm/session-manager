@@ -1,10 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "session-manager.fullname" . }}-api-pub
+  name: {{ include "session-manager.fullname" . }}
   labels:
     {{- include "session-manager.labels" . | nindent 4 }}
-    app.kubernetes.io/component: api-pub
+    app.kubernetes.io/component: session-manager
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
@@ -12,7 +12,7 @@ spec:
   selector:
     matchLabels:
       {{- include "session-manager.selectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: api-pub
+      app.kubernetes.io/component: session-manager
   template:
     metadata:
       {{- with .Values.pod.annotations }}
@@ -24,13 +24,13 @@ spec:
         {{- with .Values.pod.labels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-        app.kubernetes.io/component: api-pub
+        app.kubernetes.io/component: session-manager
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "session-manager.serviceAccountName" . }}-api-pub
+      serviceAccountName: {{ include "session-manager.serviceAccountName" . }}
       {{- with .Values.pod.securityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
@@ -48,12 +48,12 @@ spec:
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          image: "{{ template "session-manager.image" (tuple .Values.image.apiPub $.Chart.AppVersion) }}"
+          image: "{{ template "session-manager.image" (tuple .Values.image.sessionManager $.Chart.AppVersion) }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- with .Values.image.apiPub.command }}
+          {{- with .Values.image.sessionManager.command }}
           command: ["{{- toYaml . }}"]
           {{- end }}
-          {{- with .Values.image.apiPub.args }}
+          {{- with .Values.image.sessionManager.args }}
           args:
             {{- toYaml . | nindent 12 }}
           {{- end }}
@@ -106,7 +106,7 @@ spec:
           projected:
             sources:
               - configMap:
-                  name: {{ include "session-manager.name" . }}-api-pub-config
+                  name: {{ include "session-manager.name" . }}-config
       {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
       {{- end }}

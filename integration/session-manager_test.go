@@ -15,8 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestApiPub(t *testing.T) {
-	const exeName = "api-pub"
+func TestSessionManager(t *testing.T) {
+	const exeName = "session-manager"
 
 	ctx := t.Context()
 

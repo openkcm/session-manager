@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-var binaries = []string{"api-pub", "api-int", "migrate"}
+var binaries = []string{"session-manager", "migrate"}
 
 var validConfig string
 
