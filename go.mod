@@ -12,7 +12,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/mcuadros/go-defaults v1.2.0
 	github.com/oapi-codegen/runtime v1.1.2
-	github.com/openkcm/common-sdk v1.4.3
+	github.com/openkcm/common-sdk v1.4.4
 	github.com/samber/oops v1.19.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.39.0
