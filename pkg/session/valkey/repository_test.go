@@ -178,11 +178,12 @@ func TestRepository_StoreState(t *testing.T) {
 
 func TestRepository_LoadSession(t *testing.T) {
 	prepareSession(t, session.Session{
-		ID:          "sessionid-one",
-		TenantID:    "tenant1-id",
-		Fingerprint: "fingerprint-one",
-		Token:       "token-one",
-		Expiry:      testTime,
+		ID:           "sessionid-one",
+		TenantID:     "tenant1-id",
+		Fingerprint:  "fingerprint-one",
+		AccessToken:  "access-token-one",
+		RefreshToken: "refresh-token-one",
+		Expiry:       testTime,
 	})
 
 	tests := []struct {
@@ -197,11 +198,12 @@ func TestRepository_LoadSession(t *testing.T) {
 			tenantID:  "tenant1-id",
 			sessionID: "sessionid-one",
 			wantSession: session.Session{
-				ID:          "sessionid-one",
-				TenantID:    "tenant1-id",
-				Fingerprint: "fingerprint-one",
-				Token:       "token-one",
-				Expiry:      testTime,
+				ID:           "sessionid-one",
+				TenantID:     "tenant1-id",
+				Fingerprint:  "fingerprint-one",
+				AccessToken:  "access-token-one",
+				RefreshToken: "refresh-token-one",
+				Expiry:       testTime,
 			},
 			assertErr: assert.NoError,
 		},
@@ -229,11 +231,12 @@ func TestRepository_LoadSession(t *testing.T) {
 func TestRepository_StoreSession(t *testing.T) {
 	const upsertTenantID = "tenant-id-upsert"
 	upsertSession := session.Session{
-		ID:          "sessionid-to-upsert",
-		TenantID:    upsertTenantID,
-		Fingerprint: "fingerprint-upsert",
-		Token:       "token-upsert",
-		Expiry:      testTime,
+		ID:           "sessionid-to-upsert",
+		TenantID:     upsertTenantID,
+		Fingerprint:  "fingerprint-upsert",
+		AccessToken:  "access-token-upsert",
+		RefreshToken: "refresh-token-upsert",
+		Expiry:       testTime,
 	}
 
 	prepareSession(t, upsertSession)
@@ -248,11 +251,12 @@ func TestRepository_StoreSession(t *testing.T) {
 			name:     "Success",
 			tenantID: "tenant-id-store-session-success",
 			session: session.Session{
-				ID:          "sessionid-id-store-session-success",
-				TenantID:    "tenant-id-store-session-success",
-				Fingerprint: "fingerprint-one",
-				Token:       "token-one",
-				Expiry:      testTime,
+				ID:           "sessionid-id-store-session-success",
+				TenantID:     "tenant-id-store-session-success",
+				Fingerprint:  "fingerprint-one",
+				AccessToken:  "access-token-one",
+				RefreshToken: "refresh-token-one",
+				Expiry:       testTime,
 			},
 			assertErr: assert.NoError,
 		},
@@ -260,11 +264,12 @@ func TestRepository_StoreSession(t *testing.T) {
 			name:     "Upsert successfully",
 			tenantID: upsertTenantID,
 			session: session.Session{
-				ID:          upsertSession.ID,
-				TenantID:    upsertSession.TenantID,
-				Fingerprint: "fingerprint-upsert-new",
-				Token:       "token-upsert-new",
-				Expiry:      testTime,
+				ID:           upsertSession.ID,
+				TenantID:     upsertSession.TenantID,
+				Fingerprint:  "fingerprint-upsert-new",
+				AccessToken:  "access-token-upsert-new",
+				RefreshToken: "refresh-token-upsert-new",
+				Expiry:       testTime,
 			},
 			assertErr: assert.NoError,
 		},
