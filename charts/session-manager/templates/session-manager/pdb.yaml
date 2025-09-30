@@ -2,15 +2,15 @@
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: {{ include "session-manager.fullname" . }}-api-pub
+  name: {{ include "session-manager.fullname" . }}
   labels:
     {{- include "session-manager.labels" . | nindent 4 }}
-    app.kubernetes.io/component: api-pub
+    app.kubernetes.io/component: session-manager
 spec:
   selector:
     matchLabels:
       {{- include "session-manager.selectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: api-pub
+      app.kubernetes.io/component: session-manager
   {{- if not (or (hasKey .Values.pod.disruptionBudget "minAvailable") (hasKey .Values.pod.disruptionBudget "maxUnavailable")) }}
   minAvailable: 1 # Default value because minAvailable and maxUnavailable are not set
   {{- end }}

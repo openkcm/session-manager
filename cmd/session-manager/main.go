@@ -110,7 +110,7 @@ func run(ctx context.Context) error {
 	}()
 
 	// Business Logic
-	err = business.PublicMain(ctx, cfg)
+	err = business.Main(ctx, cfg)
 	if err != nil {
 		return oops.In("main").
 			Wrapf(err, "Failed to start the main business application")

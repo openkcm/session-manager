@@ -3,12 +3,14 @@ package business
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/valkey-io/valkey-go"
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
+	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/session-manager/internal/business/server"
 	"github.com/openkcm/session-manager/internal/config"
@@ -17,8 +19,41 @@ import (
 	sessionvalkey "github.com/openkcm/session-manager/pkg/session/valkey"
 )
 
-// PublicMain starts the HTTP REST public API server.
-func PublicMain(ctx context.Context, cfg *config.Config) error {
+// Main starts both API servers
+func Main(ctx context.Context, cfg *config.Config) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// errChan is used to capture the first error and shutdown the servers.
+	errChan := make(chan error, 1)
+
+	// wg is used to wait for all servers to shutdown.
+	var wg sync.WaitGroup
+
+	// start public HTTP REST API server
+	wg.Go(func() {
+		errChan <- publicMain(ctx, cfg)
+	})
+
+	// start internal gRPC API server
+	wg.Go(func() {
+		errChan <- internalMain(ctx, cfg)
+	})
+
+	// wait for any error to initiate the shutdown
+	if err := <-errChan; err != nil {
+		slogctx.Error(ctx, "Shutting down servers", "error", err)
+	}
+	cancel()
+
+	// wait for all servers to shutdown
+	wg.Wait()
+
+	return nil
+}
+
+// publicMain starts the HTTP REST public API server.
+func publicMain(ctx context.Context, cfg *config.Config) error {
 	connStr, err := config.MakeConnStr(cfg.Database)
 	if err != nil {
 		return fmt.Errorf("making dsn from config: %w", err)
@@ -80,8 +115,8 @@ func PublicMain(ctx context.Context, cfg *config.Config) error {
 	return server.StartHTTPServer(ctx, cfg, sessionManager)
 }
 
-// InternalMain starts the gRPC private API server.
-func InternalMain(ctx context.Context, cfg *config.Config) error {
+// internalMain starts the gRPC private API server.
+func internalMain(ctx context.Context, cfg *config.Config) error {
 	connStr, err := config.MakeConnStr(cfg.Database)
 	if err != nil {
 		return fmt.Errorf("making dsn from config: %w", err)
