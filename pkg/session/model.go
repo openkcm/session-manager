@@ -20,6 +20,7 @@ type Session struct {
 	TenantID     string    // Tenant ID for which the session is created
 	Fingerprint  string    // Fingerprint to bind the session to a specific client
 	CSRFToken    string    // CSRF token to prevent CSRF attacks
+	Issuer       string    // Issuer of the OIDC tokens
 	Claims       string    // JSON string of claims from the ID token
 	AccessToken  string    // Access token from the identity provider
 	RefreshToken string    // Refresh token from the identity provider
