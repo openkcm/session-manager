@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/openkcm/session-manager/internal/openapi"
@@ -36,4 +37,10 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 			Location: url,
 		},
 	}, nil
+}
+
+// Callback implements openapi.StrictServerInterface.
+func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackRequestObject) (openapi.CallbackResponseObject, error) {
+	//TODO implement callback logic
+	return nil, errors.New("callback not yet implemented")
 }

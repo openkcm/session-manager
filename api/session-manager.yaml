@@ -45,6 +45,58 @@ paths:
                         application/json:
                             schema:
                                 $ref: "#/components/schemas/ErrorModel"
+    /callback:
+        get:
+            description: |
+                After creating the auth code, the OIDC provider calls this endpoint, delivering the code. The Session Manager can then requests the OIDC provider to exchange the code for a valid token, additionally providing the related PKCE verifier. Steps:
+                - for the given state ID, look up the request URI, PKCE verifier, fingerprint,
+                    CMK tenant ID and token endpoint from the storage
+                - verify the current fingerprint matches the one from the storage
+                - perform a POST request to the token endpoint
+                - based on the returned OIDC token, generate a session ID and CSRF token and store:
+                    - the session ID
+                    - the CSRF token
+                    - the CMK tenant ID
+                    - parts of the the OIDC token: (claims, access token, refresh token)
+                    - the fingerprint
+                    - the date and time the session shall expire
+                - remove the state for the state ID from the storage
+                - in the response set the session and CSRF cookies
+                - return a 302 response using the request URI as location
+            operationId: callback
+            parameters:
+                - name: code
+                  in: query
+                  required: true
+                  schema:
+                      type: string
+                - name: state
+                  in: query
+                  required: true
+                  schema:
+                      type: string
+            responses:
+                "302":
+                    description: Redirect to original request URI with session and CSRF cookies set
+                    headers:
+                        Location:
+                            schema:
+                                type: string
+                        Set-Cookie:
+                            schema:
+                                type: string
+                "403":
+                    description: Fingerprint mismatch
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorModel"
+                default:
+                    description: Unexpected error
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorModel"
 
 components:
     schemas:
