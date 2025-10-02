@@ -3,11 +3,11 @@ package session
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/url"
 	"time"
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
-
 	"github.com/openkcm/session-manager/internal/oidc"
 	"github.com/openkcm/session-manager/internal/pkce"
 )
@@ -90,4 +90,55 @@ func (m *Manager) authURI(provider oidc.Provider, state State, pkce pkce.PKCE) (
 	u.RawQuery = q.Encode()
 
 	return u.String(), nil
+}
+
+func (m *Manager) StartTokenRefresher(ctx context.Context, interval time.Duration) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if err := m.RefreshTokens(ctx); err != nil {
+					log.Printf("[ERROR] Failed to refresh tokens: %v", err)
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+}
+
+func (m *Manager) RefreshTokens(ctx context.Context) error {
+	sessions, err := m.sessions.GetAllSessions(ctx)
+	if err != nil {
+		return err
+	}
+	for _, s := range sessions {
+		if shouldRefresh(s) {
+			provider, err := m.oidc.GetForTenant(ctx, s.TenantID)
+			if err != nil {
+				log.Printf("[WARN] Could not get OIDC provider for tenant %s: %v", s.TenantID, err)
+				continue
+			}
+			newToken, err := provider.RefreshToken(ctx, s.RefreshToken, m.clientID)
+			if err != nil {
+				log.Printf("[WARN] Could not refresh token for tenant %s, session %s: %v", s.TenantID, s.ID, err)
+				continue
+			}
+			s.AccessToken = newToken.AccessToken
+			s.RefreshToken = newToken.RefreshToken
+			s.AccessTokenExpiry = newToken.ExpiresAt
+			if err := m.sessions.StoreSession(ctx, s.TenantID, s); err != nil {
+				log.Printf("[WARN] Could not store refreshed session for tenant %s, session %s: %v", s.TenantID, s.ID, err)
+				continue
+			}
+		}
+	}
+	return nil
+}
+
+func shouldRefresh(s Session) bool {
+	// refresh if token expires in less than 5 minutes
+	return time.Until(s.AccessTokenExpiry) < 5*time.Minute
 }

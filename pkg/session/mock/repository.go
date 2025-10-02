@@ -12,6 +12,15 @@ type Repository struct {
 	Sessions map[string]session.Session
 
 	loadStateErr, storeStateErr, loadSessionErr, storeSessionErr error
+	StoreSessionErr                                              error
+}
+
+func (r *Repository) GetAllSessions(ctx context.Context) ([]session.Session, error) {
+	sessions := make([]session.Session, 0, len(r.Sessions))
+	for _, s := range r.Sessions {
+		sessions = append(sessions, s)
+	}
+	return sessions, nil
 }
 
 func NewInMemRepository(loadStateErr, storeStateErr, loadSessionErr, storeSessionErr error) *Repository {
@@ -70,5 +79,6 @@ func (r *Repository) StoreSession(ctx context.Context, tenantID string, session 
 		return serviceerr.ErrConflict
 	}
 
+	r.Sessions[session.ID] = session // Ensure RefreshToken is stored
 	return nil
 }

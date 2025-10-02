@@ -1,6 +1,7 @@
 package session_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/url"
@@ -137,6 +138,131 @@ func TestManager_Auth(t *testing.T) {
 			// These values are generated randomly. So check if they aren't empty
 			assert.NotEmpty(t, q.Get(kState), "State is zero")
 			assert.NotEmpty(t, q.Get(kCodeChallenge), "Code challenge is zero")
+		})
+	}
+}
+
+func TestManager_RefreshTokens(t *testing.T) {
+	type sessionFields struct {
+		ID           string
+		TenantID     string
+		AccessToken  string
+		RefreshToken string
+		Expiry       time.Time
+	}
+
+	now := time.Now()
+	aboutToExpire := now.Add(2 * time.Minute)
+	fresh := now.Add(10 * time.Minute)
+
+	makeSession := func(fields sessionFields) session.Session {
+		return session.Session{
+			ID:           fields.ID,
+			TenantID:     fields.TenantID,
+			AccessToken:  fields.AccessToken,
+			RefreshToken: fields.RefreshToken,
+			Expiry:       fields.Expiry,
+		}
+	}
+
+	tests := []struct {
+		name            string
+		sessions        []session.Session
+		refreshMock     func(ctx context.Context, refreshToken, clientID, tokenEndpoint string) (oidc.TokenResponse, error)
+		storeSessionErr error
+		wantRefreshed   bool
+		wantErr         bool
+	}{
+		{
+			name: "refreshes expiring session",
+			sessions: []session.Session{
+				makeSession(sessionFields{"s1", "tenant1", "old-token", "old-refresh", aboutToExpire}),
+			},
+			refreshMock: func(ctx context.Context, refreshToken, clientID, tokenEndpoint string) (oidc.TokenResponse, error) {
+				return oidc.TokenResponse{
+					AccessToken:  "new-token",
+					RefreshToken: "new-refresh",
+					ExpiresAt:    now.Add(1 * time.Hour),
+				}, nil
+			},
+			wantRefreshed: true,
+		},
+		{
+			name: "does not refresh fresh session",
+			sessions: []session.Session{
+				makeSession(sessionFields{"s2", "tenant2", "token", "refresh", fresh}),
+			},
+			refreshMock: func(ctx context.Context, refreshToken, clientID, tokenEndpoint string) (oidc.TokenResponse, error) {
+				t.Fatalf("RefreshToken should not be called for fresh session")
+				return oidc.TokenResponse{}, nil
+			},
+			wantRefreshed: false,
+		},
+		{
+			name: "refresh error is handled",
+			sessions: []session.Session{
+				makeSession(sessionFields{"s3", "tenant3", "token", "refresh", aboutToExpire}),
+			},
+			refreshMock: func(ctx context.Context, refreshToken, clientID, tokenEndpoint string) (oidc.TokenResponse, error) {
+				return oidc.TokenResponse{}, errors.New("refresh failed")
+			},
+			wantRefreshed: false,
+		},
+		{
+			name: "store session error is handled",
+			sessions: []session.Session{
+				makeSession(sessionFields{"s4", "tenant4", "token", "refresh", aboutToExpire}),
+			},
+			refreshMock: func(ctx context.Context, refreshToken, clientID, tokenEndpoint string) (oidc.TokenResponse, error) {
+				return oidc.TokenResponse{
+					AccessToken:  "new-token",
+					RefreshToken: "new-refresh",
+					ExpiresAt:    now.Add(1 * time.Hour),
+				}, nil
+			},
+			storeSessionErr: errors.New("store failed"),
+			wantRefreshed:   false, // session is not updated in store
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockOIDC := &oidcmock.Repository{
+				ProvidersToTenant: map[string]oidc.Provider{
+					"tenant1": {IssuerURL: "http://issuer1"},
+					"tenant2": {IssuerURL: "http://issuer2"},
+					"tenant3": {IssuerURL: "http://issuer3"},
+					"tenant4": {IssuerURL: "http://issuer4"},
+				},
+			}
+			sessionMap := map[string]session.Session{}
+			for _, s := range tt.sessions {
+				sessionMap[s.ID] = s
+			}
+			mockSessions := &sessionmock.Repository{
+				Sessions:        sessionMap,
+				StoreSessionErr: tt.storeSessionErr,
+			}
+			m := session.NewManager(mockOIDC, mockSessions, nil, time.Hour, "http://cb", "cid")
+
+			err := m.RefreshTokens(t.Context())
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			for _, s := range tt.sessions {
+				stored, ok := mockSessions.Sessions[s.ID]
+				if tt.wantRefreshed {
+					assert.True(t, ok, "session should be stored")
+					assert.Equal(t, "new-token", stored.AccessToken)
+					assert.Equal(t, "new-refresh", stored.RefreshToken)
+				} else {
+					assert.Equal(t, s.AccessToken, stored.AccessToken)
+					assert.Equal(t, s.RefreshToken, stored.RefreshToken)
+				}
+			}
 		})
 	}
 }
