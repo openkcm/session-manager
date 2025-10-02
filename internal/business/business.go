@@ -14,6 +14,7 @@ import (
 
 	"github.com/openkcm/session-manager/internal/business/server"
 	"github.com/openkcm/session-manager/internal/config"
+	"github.com/openkcm/session-manager/internal/grpc"
 	oidcsql "github.com/openkcm/session-manager/internal/oidc/sql"
 	"github.com/openkcm/session-manager/pkg/session"
 	sessionvalkey "github.com/openkcm/session-manager/pkg/session/valkey"
@@ -127,9 +128,11 @@ func internalMain(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("initialising pgxpool connection: %w", err)
 	}
 
-	// TODO: Initialise the private API service.
-	// oidcProviderRepo := oidcsql.NewRepository(db)
-	_ = oidcsql.NewRepository(db)
+	// Create the database repository.
+	oidcProviderRepo := oidcsql.NewRepository(db)
 
-	return server.StartGRPCServer(ctx, cfg)
+	// Initialize the gRPC servers.
+	oidcprovidersrv := grpc.NewOIDCProviderServer(oidcProviderRepo)
+	oidcmappingsrv := grpc.NewOIDCMappingServer(oidcProviderRepo)
+	return server.StartGRPCServer(ctx, cfg, oidcprovidersrv, oidcmappingsrv)
 }
