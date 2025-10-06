@@ -13,7 +13,7 @@ require (
 	github.com/oapi-codegen/runtime v1.1.2
 	github.com/openkcm/common-sdk v1.4.3
 	github.com/pressly/goose/v3 v3.26.0
-	github.com/samber/oops v1.19.0
+	github.com/samber/oops v1.19.3
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.39.0
 	github.com/testcontainers/testcontainers-go/modules/valkey v0.39.0
