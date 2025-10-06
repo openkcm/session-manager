@@ -4,7 +4,6 @@ package integration_test
 
 import (
 	"context"
-	"fmt"
 	"io/fs"
 	"net"
 	"os"
@@ -54,7 +53,6 @@ func initInfra(t *testing.T, exeName string) (istat infraStat) {
 
 	// Let OS choose a free port
 	istat.Cfg.HTTP.Address = "unix://" + filepath.Join(istat.Procdir, exeName+".sock")
-	fmt.Println("HTTP Address is: ", istat.Cfg.HTTP.Address)
 	istat.Cfg.GRPC.Address = ":0"
 
 	return istat
