@@ -1,3 +1,6 @@
+-- +goose Up
+-- +goose StatementBegin
+
 -- Create tables --
 
 CREATE TABLE oidc_providers (
@@ -44,3 +47,10 @@ CREATE POLICY tenant_provider_select ON oidc_providers
             WHERE m.issuer_url = oidc_providers.issuer_url
                 AND m.tenant_id = current_setting('app.tenant_id')
         ));
+-- +goose StatementEnd
+
+-- +goose Down
+-- +goose StatementBegin
+DROP TABLE oidc_provider_map CASCADE;
+DROP TABLE oidc_providers CASCADE;
+-- +goose StatementEnd

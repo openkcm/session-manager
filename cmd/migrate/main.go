@@ -10,20 +10,18 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/golang-migrate/migrate/v4"
-	"github.com/mcuadros/go-defaults"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/openkcm/common-sdk/pkg/logger"
 	"github.com/openkcm/common-sdk/pkg/utils"
+	"github.com/pressly/goose/v3"
 	"github.com/samber/oops"
 
-	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/jackc/pgx/v5/stdlib"
 
-	pgxmigrate "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/session-manager/internal/config"
+	migrations "github.com/openkcm/session-manager/sql"
 )
 
 var (
@@ -50,8 +48,6 @@ func run(ctx context.Context) error {
 			Wrapf(err, "Failed to load the configuration")
 	}
 
-	defaults.SetDefaults(cfg)
-
 	err = commoncfg.UpdateConfigVersion(&cfg.BaseConfig, BuildInfo)
 	if err != nil {
 		return oops.In("main").
@@ -75,18 +71,14 @@ func run(ctx context.Context) error {
 		return oops.In("main").Wrapf(err, "opening DB connection")
 	}
 
-	driver, err := pgxmigrate.WithInstance(db, &pgxmigrate.Config{})
-	if err != nil {
-		return oops.In("main").Wrapf(err, "creating migrate driver")
+	goose.SetBaseFS(migrations.FS)
+
+	if err := goose.SetDialect("pgx"); err != nil {
+		return fmt.Errorf("setting goose dialect: %w", err)
 	}
 
-	m, err := migrate.NewWithDatabaseInstance(cfg.Migrate.Source, "pgx", driver)
-	if err != nil {
-		return oops.In("main").Wrapf(err, "creating migrate instance")
-	}
-
-	if err := m.Up(); err != nil {
-		return oops.In("main").Wrapf(err, "executing migration")
+	if err := goose.UpContext(ctx, db, "."); err != nil {
+		return fmt.Errorf("applying migrations: %w", err)
 	}
 
 	return nil
