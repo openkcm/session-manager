@@ -34,7 +34,7 @@ func (p *Provider) Exchange(ctx context.Context, code, codeVerifier, redirectURI
 	data.Set("redirect_uri", redirectURI)
 	data.Set("client_id", clientID)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", tokenEndpoint, strings.NewReader(data.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenEndpoint, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
