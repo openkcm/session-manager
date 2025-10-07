@@ -11,6 +11,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/oapi-codegen/runtime v1.1.2
+	github.com/openkcm/api-sdk v0.8.2-0.20251001075730-360d28ee85d9
 	github.com/openkcm/common-sdk v1.4.5
 	github.com/pressly/goose/v3 v3.26.0
 	github.com/samber/oops v1.19.3
