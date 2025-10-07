@@ -15,6 +15,7 @@ import (
 	"github.com/openkcm/session-manager/internal/business/server"
 	"github.com/openkcm/session-manager/internal/config"
 	oidcsql "github.com/openkcm/session-manager/internal/oidc/sql"
+	"github.com/openkcm/session-manager/internal/pkce"
 	"github.com/openkcm/session-manager/pkg/session"
 	sessionvalkey "github.com/openkcm/session-manager/pkg/session/valkey"
 )
@@ -103,10 +104,12 @@ func publicMain(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("creating audit logger: %w", err)
 	}
 
+	pkceSource := pkce.Source{}
 	sessionManager := session.NewManager(
 		oidcProviderRepo,
 		sessionRepo,
 		auditLogger,
+		pkceSource,
 		cfg.SessionManager.SessionDuration,
 		cfg.SessionManager.RedirectURI,
 		string(clientID),

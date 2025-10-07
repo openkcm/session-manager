@@ -3,18 +3,21 @@ package session_test
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 	"time"
 
-	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 
 	"github.com/openkcm/session-manager/internal/oidc"
 	oidcmock "github.com/openkcm/session-manager/internal/oidc/mock"
+	"github.com/openkcm/session-manager/internal/pkce"
 	"github.com/openkcm/session-manager/pkg/session"
 	sessionmock "github.com/openkcm/session-manager/pkg/session/mock"
 )
@@ -44,6 +47,7 @@ func TestManager_Auth(t *testing.T) {
 		name        string
 		oidc        *oidcmock.Repository
 		sessions    *sessionmock.Repository
+		pkce        pkce.Source
 		redirectURI string
 		clientID    string
 		tenantID    string
@@ -55,7 +59,7 @@ func TestManager_Auth(t *testing.T) {
 		{
 			name:        "Success",
 			oidc:        newOIDCRepo(nil, nil, nil, nil),
-			sessions:    sessionmock.NewInMemRepository(nil, nil, nil, nil),
+			sessions:    sessionmock.NewInMemRepository(nil, nil, nil, nil, nil),
 			redirectURI: redirectURI,
 			clientID:    "my-client-id",
 			tenantID:    tenantID,
@@ -67,7 +71,7 @@ func TestManager_Auth(t *testing.T) {
 		{
 			name:        "Get OIDC error",
 			oidc:        newOIDCRepo(errors.New("faield to get oidc provider"), nil, nil, nil),
-			sessions:    sessionmock.NewInMemRepository(nil, nil, nil, nil),
+			sessions:    sessionmock.NewInMemRepository(nil, nil, nil, nil, nil),
 			redirectURI: redirectURI,
 			clientID:    "my-client-id",
 			tenantID:    tenantID,
@@ -79,7 +83,7 @@ func TestManager_Auth(t *testing.T) {
 		{
 			name:        "Save state error",
 			oidc:        newOIDCRepo(nil, nil, nil, nil),
-			sessions:    sessionmock.NewInMemRepository(nil, errors.New("failed to save state"), nil, nil),
+			sessions:    sessionmock.NewInMemRepository(nil, errors.New("failed to save state"), nil, nil, nil),
 			redirectURI: redirectURI,
 			clientID:    "my-client-id",
 			tenantID:    tenantID,
@@ -101,10 +105,15 @@ func TestManager_Auth(t *testing.T) {
 				kRedirectURI         = "redirect_uri"
 			)
 
-			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: "http://localhost:4043/logs"})
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
+
+			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: server.URL})
 			require.NoError(t, err)
 
-			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.redirectURI, tt.clientID)
+			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, tt.pkce, time.Hour, tt.redirectURI, tt.clientID)
 			got, err := m.Auth(t.Context(), tt.tenantID, tt.fingerprint, tt.requestURI)
 			t.Logf("Got Auth URL %s", got)
 
