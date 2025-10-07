@@ -53,3 +53,11 @@ func (r *Repository) StoreSession(ctx context.Context, tenantID string, s sessio
 
 	return nil
 }
+
+func (r *Repository) DeleteState(ctx context.Context, tenantID string, stateID string) error {
+	if err := r.store.Destroy(ctx, objectTypeState, tenantID, stateID); err != nil {
+		return fmt.Errorf("deleting state from store: %w", err)
+	}
+
+	return nil
+}

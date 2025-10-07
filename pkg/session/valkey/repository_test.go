@@ -289,3 +289,47 @@ func TestRepository_StoreSession(t *testing.T) {
 		})
 	}
 }
+
+func TestRepository_DeleteState(t *testing.T) {
+	const tenantID = "tenant-delete"
+	const stateID = "stateid-delete"
+	state := session.State{
+		ID:          stateID,
+		TenantID:    tenantID,
+		Fingerprint: "fingerprint-delete",
+		Expiry:      testTime,
+	}
+
+	prepareState(t, state)
+
+	tests := []struct {
+		name      string
+		tenantID  string
+		stateID   string
+		assertErr assert.ErrorAssertionFunc
+	}{
+		{
+			name:      "Delete existing state",
+			tenantID:  tenantID,
+			stateID:   stateID,
+			assertErr: assert.NoError,
+		},
+		{
+			name:      "Delete non-existing state",
+			tenantID:  "non-existent-tenant",
+			stateID:   "non-existent-state",
+			assertErr: assert.NoError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := sessionvalkey.NewRepository(client, prefix)
+			err := r.DeleteState(t.Context(), tt.tenantID, tt.stateID)
+			tt.assertErr(t, err, "Repository.DeleteState() error")
+
+			_, err = r.LoadState(t.Context(), tt.tenantID, tt.stateID)
+			assert.Error(t, err, "State should not exist after deletion")
+		})
+	}
+}
