@@ -249,11 +249,7 @@ func (m *Manager) createOperationFailedEvent(ctx context.Context, tenantID, reas
 		userID,
 		otlpaudit.LOGINMETHOD_OPENIDCONNECT,
 		failReason,
-		map[string]interface{}{
-			"reason":    reason,
-			"tenant_id": tenantID,
-			"operation": operation,
-		},
+		operation,
 	)
 	if err != nil {
 		return err
