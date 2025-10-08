@@ -91,8 +91,8 @@ func TestService_GetForTenant(t *testing.T) {
 			assertErr:    assert.NoError,
 		},
 		{
-			name:      "Get OIDC error",
-			oidcRepo:  newOIDCRepo(nil, errors.New("Repository.GetForTenant() error"), nil, nil, nil),
+			name:      "GetProviderForTenant OIDC error",
+			oidcRepo:  newOIDCRepo(nil, errors.New("Repository.GetProviderForTenant() error"), nil, nil, nil),
 			tenantID:  "does-not-exist",
 			assertErr: assert.Error,
 		},
@@ -101,7 +101,7 @@ func TestService_GetForTenant(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := oidc.NewService(tt.oidcRepo)
 
-			gotProvider, err := s.GetForTenant(t.Context(), tt.tenantID)
+			gotProvider, err := s.GetProviderForTenant(t.Context(), tt.tenantID)
 			if !tt.assertErr(t, err, fmt.Sprintf("Service.GetForTenant() error %v", err)) || err != nil {
 				assert.Zerof(t, gotProvider, "Service.GetForTenant() extected zero value if an error is returned, got %v", gotProvider)
 				return
@@ -126,9 +126,9 @@ func TestService_Create(t *testing.T) {
 			assertErr: assert.NoError,
 		},
 		{
-			name:      "Get OIDC error",
-			oidcRepo:  newOIDCRepo(nil, nil, errors.New("Repository.Create() error"), nil, nil),
-			tenantID:  "does-not-exist",
+			name:      "CreateProviderForTenant OIDC error",
+			oidcRepo:  newOIDCRepo(nil, nil, errors.New("Repository.CreateProviderForTenant() error"), nil, nil),
+			tenantID:  tenantID,
 			assertErr: assert.Error,
 		},
 	}
@@ -136,7 +136,7 @@ func TestService_Create(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := oidc.NewService(tt.oidcRepo)
 
-			err := s.Create(t.Context(), tt.tenantID, oidcProvider)
+			err := s.CreateProviderForTenant(t.Context(), tt.tenantID, oidcProvider)
 			if !tt.assertErr(t, err, fmt.Sprintf("Service.Create() error %v", err)) || err != nil {
 				return
 			}
@@ -158,8 +158,8 @@ func TestService_Delete(t *testing.T) {
 			assertErr: assert.NoError,
 		},
 		{
-			name:      "Get OIDC error",
-			oidcRepo:  newOIDCRepo(nil, nil, nil, errors.New("Repository.Delete() error"), nil),
+			name:      "DeleteProviderForTenant OIDC error",
+			oidcRepo:  newOIDCRepo(nil, nil, nil, errors.New("Repository.DeleteProviderForTenant() error"), nil),
 			tenantID:  "does-not-exist",
 			assertErr: assert.Error,
 		},
@@ -168,7 +168,7 @@ func TestService_Delete(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := oidc.NewService(tt.oidcRepo)
 
-			err := s.Delete(t.Context(), tt.tenantID, oidcProvider)
+			err := s.DeleteProviderForTenant(t.Context(), tt.tenantID, oidcProvider)
 			if !tt.assertErr(t, err, fmt.Sprintf("Service.Delete() error %v", err)) || err != nil {
 				return
 			}
@@ -190,8 +190,8 @@ func TestService_Update(t *testing.T) {
 			assertErr: assert.NoError,
 		},
 		{
-			name:      "Get OIDC error",
-			oidcRepo:  newOIDCRepo(nil, nil, nil, nil, errors.New("Repository.Delete() error")),
+			name:      "UpdateProviderForTenant OIDC error",
+			oidcRepo:  newOIDCRepo(nil, nil, nil, nil, errors.New("Repository.UpdateProviderForTenant() error")),
 			tenantID:  "does-not-exist",
 			assertErr: assert.Error,
 		},
@@ -200,7 +200,7 @@ func TestService_Update(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := oidc.NewService(tt.oidcRepo)
 
-			err := s.Update(t.Context(), tt.tenantID, oidcProvider)
+			err := s.UpdateProviderForTenant(t.Context(), tt.tenantID, oidcProvider)
 			if !tt.assertErr(t, err, fmt.Sprintf("Service.Update() error %v", err)) || err != nil {
 				return
 			}

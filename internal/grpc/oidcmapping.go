@@ -35,9 +35,9 @@ func (srv *OIDCMappingServer) ApplyOIDCMapping(ctx context.Context, req *oidcmap
 		JWKSURIs:  req.GetJwksUris(),
 		Audiences: req.GetAudiences(),
 	}
-	_, err := srv.oidc.GetForTenant(ctx, req.TenantId)
+	_, err := srv.oidc.GetProviderForTenant(ctx, req.GetTenantId())
 	if err != nil {
-		err = srv.oidc.Create(ctx, req.GetTenantId(), provider)
+		err = srv.oidc.CreateProviderForTenant(ctx, req.GetTenantId(), provider)
 		if err != nil {
 			msg := err.Error()
 			response.Message = &msg
@@ -45,7 +45,7 @@ func (srv *OIDCMappingServer) ApplyOIDCMapping(ctx context.Context, req *oidcmap
 			return response, status.Error(codes.Internal, "failed to apply OIDC mapping: "+msg)
 		}
 	} else {
-		err = srv.oidc.Update(ctx, req.GetTenantId(), provider)
+		err = srv.oidc.UpdateProviderForTenant(ctx, req.GetTenantId(), provider)
 		if err != nil {
 			msg := err.Error()
 			response.Message = &msg
@@ -62,13 +62,13 @@ func (srv *OIDCMappingServer) RemoveOIDCMapping(ctx context.Context, req *oidcma
 	resp := &oidcmappingv1.RemoveOIDCMappingResponse{
 		Success: false,
 	}
-	provider, err := srv.oidc.GetForTenant(ctx, req.GetTenantId())
+	provider, err := srv.oidc.GetProviderForTenant(ctx, req.GetTenantId())
 	if err != nil {
 		msg := err.Error()
 		resp.Message = &msg
 		return resp, status.Error(codes.NotFound, "provider for tenant not found: "+msg)
 	}
-	err = srv.oidc.Delete(ctx, req.GetTenantId(), provider)
+	err = srv.oidc.DeleteProviderForTenant(ctx, req.GetTenantId(), provider)
 	if err != nil {
 		msg := err.Error()
 		resp.Message = &msg
