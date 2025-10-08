@@ -12,11 +12,12 @@ import (
 
 	"github.com/docker/go-connections/nat"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
+
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/dbtest/postgrestest"
 	"github.com/openkcm/session-manager/internal/dbtest/valkeytest"
-	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 )
 
 type closeFunc func(ctx context.Context)
