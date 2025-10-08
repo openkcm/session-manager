@@ -24,37 +24,31 @@ func (s *Service) GetProvider(ctx context.Context, issuer string) (Provider, err
 	return provider, nil
 }
 
-func (s *Service) GetProviderForTenant(ctx context.Context, tenantID string) (Provider, error) {
+func (s *Service) ApplyMapping(ctx context.Context, tenantID string, provider Provider) error {
+	_, err := s.repository.GetForTenant(ctx, tenantID)
+	if err != nil {
+		err = s.repository.Create(ctx, tenantID, provider)
+		if err != nil {
+			return fmt.Errorf("creating provider for tenant: %w", err)
+		}
+	} else {
+		err = s.repository.Update(ctx, tenantID, provider)
+		if err != nil {
+			return fmt.Errorf("updating provider for tenant: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *Service) RemoveMapping(ctx context.Context, tenantID string) error {
 	provider, err := s.repository.GetForTenant(ctx, tenantID)
 	if err != nil {
-		return Provider{}, fmt.Errorf("getting provider by tenant URL: %w", err)
+		return fmt.Errorf("getting provider for tenant: %w", err)
 	}
-
-	return provider, nil
-}
-
-func (s *Service) CreateProviderForTenant(ctx context.Context, tenantID string, provider Provider) error {
-	err := s.repository.Create(ctx, tenantID, provider)
+	err = s.repository.Delete(ctx, tenantID, provider)
 	if err != nil {
-		return fmt.Errorf("creating provider: %w", err)
-	}
-
-	return nil
-}
-
-func (s *Service) DeleteProviderForTenant(ctx context.Context, tenantID string, provider Provider) error {
-	err := s.repository.Delete(ctx, tenantID, provider)
-	if err != nil {
-		return fmt.Errorf("deleting provider: %w", err)
-	}
-
-	return nil
-}
-
-func (s *Service) UpdateProviderForTenant(ctx context.Context, tenantID string, provider Provider) error {
-	err := s.repository.Update(ctx, tenantID, provider)
-	if err != nil {
-		return fmt.Errorf("updating provider: %w", err)
+		return fmt.Errorf("deleting provider for tenant: %w", err)
 	}
 
 	return nil
