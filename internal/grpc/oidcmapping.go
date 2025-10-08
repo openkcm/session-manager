@@ -2,10 +2,11 @@ package grpc
 
 import (
 	"context"
-	"fmt"
-	oidcmappingv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/oidcmapping/v1"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	oidcmappingv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/oidcmapping/v1"
 
 	"github.com/openkcm/session-manager/internal/oidc"
 )
@@ -28,34 +29,28 @@ func (srv *OIDCMappingServer) ApplyOIDCMapping(ctx context.Context, req *oidcmap
 	response := &oidcmappingv1.ApplyOIDCMappingResponse{
 		Success: false,
 	}
-	provider, err := srv.oidc.GetForTenant(ctx, req.TenantId)
+	provider := oidc.Provider{
+		IssuerURL: req.GetIssuer(),
+		Blocked:   req.GetBlocked(),
+		JWKSURIs:  req.GetJwksUris(),
+		Audiences: req.GetAudiences(),
+	}
+	_, err := srv.oidc.GetForTenant(ctx, req.TenantId)
 	if err != nil {
-		provider = oidc.Provider{
-			IssuerURL: req.Issuer,
-			Blocked:   req.Blocked,
-			JWKSURIs:  req.JwksUris,
-			Audiences: req.Audiences,
-		}
-		err = srv.oidc.Create(ctx, req.TenantId, provider)
+		err = srv.oidc.Create(ctx, req.GetTenantId(), provider)
 		if err != nil {
 			msg := err.Error()
 			response.Message = &msg
 
-			return response, status.Error(codes.Internal, fmt.Sprintf("failed to apply OIDC mapping: %s", msg))
+			return response, status.Error(codes.Internal, "failed to apply OIDC mapping: "+msg)
 		}
 	} else {
-		provider = oidc.Provider{
-			IssuerURL: req.Issuer,
-			Blocked:   req.Blocked,
-			JWKSURIs:  req.JwksUris,
-			Audiences: req.Audiences,
-		}
-		err = srv.oidc.Update(ctx, req.TenantId, provider)
+		err = srv.oidc.Update(ctx, req.GetTenantId(), provider)
 		if err != nil {
 			msg := err.Error()
 			response.Message = &msg
 
-			return response, status.Error(codes.Internal, fmt.Sprintf("failed to apply OIDC mapping: %s", msg))
+			return response, status.Error(codes.Internal, "failed to apply OIDC mapping: "+msg)
 		}
 	}
 	response.Success = true
@@ -67,17 +62,17 @@ func (srv *OIDCMappingServer) RemoveOIDCMapping(ctx context.Context, req *oidcma
 	resp := &oidcmappingv1.RemoveOIDCMappingResponse{
 		Success: false,
 	}
-	provider, err := srv.oidc.GetForTenant(ctx, req.TenantId)
+	provider, err := srv.oidc.GetForTenant(ctx, req.GetTenantId())
 	if err != nil {
 		msg := err.Error()
 		resp.Message = &msg
-		return resp, status.Error(codes.NotFound, fmt.Sprintf("provider for tenant not found: %s", msg))
+		return resp, status.Error(codes.NotFound, "provider for tenant not found: "+msg)
 	}
-	err = srv.oidc.Delete(ctx, req.TenantId, provider)
+	err = srv.oidc.Delete(ctx, req.GetTenantId(), provider)
 	if err != nil {
 		msg := err.Error()
 		resp.Message = &msg
-		return resp, status.Error(codes.Internal, fmt.Sprintf("delete failed: %s", msg))
+		return resp, status.Error(codes.Internal, "delete failed: "+msg)
 	}
 	resp.Success = true
 
