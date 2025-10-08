@@ -19,34 +19,6 @@ CREATE TABLE oidc_provider_map (
             ON DELETE CASCADE
             ON UPDATE CASCADE
 );
-
--- Create RLS and policies for the tables --
-
-ALTER TABLE oidc_provider_map ENABLE ROW LEVEL SECURITY;
-ALTER TABLE oidc_provider_map FORCE ROW LEVEL SECURITY;
-
-CREATE POLICY tenant_map_isolation ON oidc_provider_map
-    USING (tenant_id = current_setting('app.tenant_id'));
-
-CREATE POLICY tenant_map_insert ON oidc_provider_map
-    FOR INSERT
-    WITH CHECK (tenant_id = current_setting('app.tenant_id'));
-
-ALTER TABLE oidc_providers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE oidc_providers FORCE ROW LEVEL SECURITY;
-
-CREATE POLICY tenant_provider_insert ON oidc_providers
-    FOR INSERT
-    WITH CHECK (true);
-
-CREATE POLICY tenant_provider_select ON oidc_providers
-    USING (
-        EXISTS (
-            SELECT true
-            FROM oidc_provider_map m
-            WHERE m.issuer_url = oidc_providers.issuer_url
-                AND m.tenant_id = current_setting('app.tenant_id')
-        ));
 -- +goose StatementEnd
 
 -- +goose Down
