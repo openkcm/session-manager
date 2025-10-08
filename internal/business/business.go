@@ -15,6 +15,7 @@ import (
 	"github.com/openkcm/session-manager/internal/business/server"
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/grpc"
+	"github.com/openkcm/session-manager/internal/oidc"
 	oidcsql "github.com/openkcm/session-manager/internal/oidc/sql"
 	"github.com/openkcm/session-manager/pkg/session"
 	sessionvalkey "github.com/openkcm/session-manager/pkg/session/valkey"
@@ -129,10 +130,11 @@ func internalMain(ctx context.Context, cfg *config.Config) error {
 	}
 
 	// Create the database repository.
-	oidcProviderRepo := oidcsql.NewRepository(db)
+	repo := oidcsql.NewRepository(db)
+	service := oidc.NewService(repo)
 
 	// Initialize the gRPC servers.
-	oidcprovidersrv := grpc.NewOIDCProviderServer(oidcProviderRepo)
-	oidcmappingsrv := grpc.NewOIDCMappingServer(oidcProviderRepo)
+	oidcprovidersrv := grpc.NewOIDCProviderServer(service)
+	oidcmappingsrv := grpc.NewOIDCMappingServer(service)
 	return server.StartGRPCServer(ctx, cfg, oidcprovidersrv, oidcmappingsrv)
 }

@@ -70,6 +70,45 @@ func TestRepository_GetForTenant(t *testing.T) {
 	}
 }
 
+func TestRepository_Get(t *testing.T) {
+	tests := []struct {
+		name         string
+		issuerURL    string
+		wantProvider oidc.Provider
+		assertErr    assert.ErrorAssertionFunc
+	}{
+		{
+			name:      "Success",
+			issuerURL: "url-one",
+			wantProvider: oidc.Provider{
+				IssuerURL: "url-one",
+				Blocked:   false,
+				JWKSURIs:  make([]string, 0),
+				Audiences: make([]string, 0),
+			},
+			assertErr: assert.NoError,
+		},
+		{
+			name:      "Error does not exist",
+			issuerURL: "does-not-exist",
+			assertErr: assert.Error,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := oidcsql.NewRepository(dbPool)
+
+			gotProvider, err := r.Get(t.Context(), tt.issuerURL)
+			if !tt.assertErr(t, err, fmt.Sprintf("Repository.Get() error %v", err)) || err != nil {
+				assert.Zerof(t, gotProvider, "Repository.Get() extected zero value if an error is returned, got %v", gotProvider)
+				return
+			}
+
+			assert.Equal(t, tt.wantProvider, gotProvider, "Repository.GetForTenant()")
+		})
+	}
+}
+
 func TestRepository_Create(t *testing.T) {
 	tests := []struct {
 		name      string

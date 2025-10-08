@@ -12,13 +12,14 @@ import (
 type OIDCMappingServer struct {
 	oidcmappingv1.UnimplementedOIDCMappingServer
 
-	repo oidc.ProviderRepository
+	oidc *oidc.Service
 }
 
-func NewOIDCMappingServer(repo oidc.ProviderRepository) *OIDCMappingServer {
+func NewOIDCMappingServer(oidc *oidc.Service) *OIDCMappingServer {
 	srv := &OIDCMappingServer{
-		repo: repo,
+		oidc: oidc,
 	}
+
 	return srv
 }
 
@@ -26,6 +27,7 @@ func (srv *OIDCMappingServer) ApplyOIDCMapping(context.Context, *oidcmappingv1.A
 	// TODO: Implement the logic to create or update OIDC mappings in the repository.
 	return nil, errors.New("not implemented")
 }
+
 func (srv *OIDCMappingServer) RemoveOIDCMapping(context.Context, *oidcmappingv1.RemoveOIDCMappingRequest) (*oidcmappingv1.RemoveOIDCMappingResponse, error) {
 	// TODO: Implement the logic to remove OIDC mappings from the repository.
 	return nil, errors.New("not implemented")

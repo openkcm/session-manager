@@ -4,25 +4,42 @@ import (
 	"context"
 	"errors"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	oidcproviderv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/oidcprovider/v1"
+	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/session-manager/internal/oidc"
+	"github.com/openkcm/session-manager/internal/serviceerr"
 )
 
 type OIDCProviderServer struct {
 	oidcproviderv1.UnimplementedOIDCProviderServer
 
-	repo oidc.ProviderRepository
+	oidc *oidc.Service
 }
 
-func NewOIDCProviderServer(repo oidc.ProviderRepository) *OIDCProviderServer {
-	srv := &OIDCProviderServer{
-		repo: repo,
+func NewOIDCProviderServer(oidcService *oidc.Service) *OIDCProviderServer {
+	return &OIDCProviderServer{
+		oidc: oidcService,
 	}
-	return srv
 }
 
-func (srv *OIDCProviderServer) GetOIDCProvider(context.Context, *oidcproviderv1.GetOIDCProviderRequest) (*oidcproviderv1.GetOIDCProviderResponse, error) {
-	// TODO: Implement the logic to get OIDC provider details from the repository.
-	return nil, errors.New("not implemented")
+func (s *OIDCProviderServer) GetOIDCProvider(ctx context.Context, req *oidcproviderv1.GetOIDCProviderRequest) (*oidcproviderv1.GetOIDCProviderResponse, error) {
+	provider, err := s.oidc.GetProvider(ctx, req.GetIssuer())
+	if err != nil {
+		if errors.Is(err, serviceerr.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "oidc provider not found")
+		}
+
+		slogctx.Error(ctx, "failed to get provider", "error", err)
+		return nil, status.Error(codes.Internal, "failed to get provider")
+	}
+
+	return &oidcproviderv1.GetOIDCProviderResponse{
+		Issuer:    provider.IssuerURL,
+		JwksUris:  provider.JWKSURIs,
+		Audiences: provider.Audiences,
+	}, nil
 }

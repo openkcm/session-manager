@@ -8,17 +8,18 @@ import (
 )
 
 type Repository struct {
-	set               map[string]struct{}
+	Providers         map[string]oidc.Provider
 	ProvidersToTenant map[string]oidc.Provider
 
-	getForTenantErr, createErr, deleteErr, updateErr error
+	getErr, getForTenantErr, createErr, deleteErr, updateErr error
 }
 
-func NewInMemRepository(getForTenantErr, createErr, deleteErr, updateErr error) *Repository {
+func NewInMemRepository(getErr, getForTenantErr, createErr, deleteErr, updateErr error) *Repository {
 	return &Repository{
-		set:               make(map[string]struct{}),
+		Providers:         make(map[string]oidc.Provider),
 		ProvidersToTenant: make(map[string]oidc.Provider),
 
+		getErr:          getErr,
 		getForTenantErr: getForTenantErr,
 		createErr:       createErr,
 		deleteErr:       deleteErr,
@@ -38,13 +39,29 @@ func (r *Repository) GetForTenant(ctx context.Context, tenantID string) (oidc.Pr
 	return oidc.Provider{}, nil
 }
 
+func (r *Repository) Get(ctx context.Context, issuerURL string) (oidc.Provider, error) {
+	if r.getErr != nil {
+		return oidc.Provider{}, r.getErr
+	}
+
+	if provider, ok := r.Providers[issuerURL]; ok {
+		return provider, nil
+	}
+
+	return oidc.Provider{}, nil
+}
+
+func (r *Repository) Add(tenantID string, provider oidc.Provider) {
+	r.Providers[provider.IssuerURL] = provider
+	r.ProvidersToTenant[tenantID] = provider
+}
+
 func (r *Repository) Create(ctx context.Context, tenantID string, provider oidc.Provider) error {
 	if r.createErr != nil {
 		return r.createErr
 	}
 
-	r.set[provider.IssuerURL] = struct{}{}
-	r.ProvidersToTenant[tenantID] = provider
+	r.Add(tenantID, provider)
 
 	return nil
 }
@@ -54,7 +71,7 @@ func (r *Repository) Delete(ctx context.Context, tenantID string, provider oidc.
 		return r.deleteErr
 	}
 
-	if _, ok := r.set[provider.IssuerURL]; !ok {
+	if _, ok := r.Providers[provider.IssuerURL]; !ok {
 		return serviceerr.ErrNotFound
 	}
 
@@ -68,7 +85,7 @@ func (r *Repository) Update(ctx context.Context, tenantID string, provider oidc.
 		return r.updateErr
 	}
 
-	r.set[provider.IssuerURL] = struct{}{}
+	r.Providers[provider.IssuerURL] = provider
 	r.ProvidersToTenant[tenantID] = provider
 
 	return nil

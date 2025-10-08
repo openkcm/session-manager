@@ -33,9 +33,9 @@ func TestManager_Auth(t *testing.T) {
 		JWKSURIs:  []string{"http://jwks.example.com"},
 		Audiences: []string{requestURI},
 	}
-	newOIDCRepo := func(getForTenantErr, createErr, deleteErr, updateErr error) *oidcmock.Repository {
-		oidcRepo := oidcmock.NewInMemRepository(getForTenantErr, createErr, deleteErr, updateErr)
-		_ = oidcRepo.Create(t.Context(), tenantID, oidcProvider)
+	newOIDCRepo := func(getErr, getForTenantErr, createErr, deleteErr, updateErr error) *oidcmock.Repository {
+		oidcRepo := oidcmock.NewInMemRepository(getErr, getForTenantErr, createErr, deleteErr, updateErr)
+		oidcRepo.Add(tenantID, oidcProvider)
 
 		return oidcRepo
 	}
@@ -54,7 +54,7 @@ func TestManager_Auth(t *testing.T) {
 	}{
 		{
 			name:        "Success",
-			oidc:        newOIDCRepo(nil, nil, nil, nil),
+			oidc:        newOIDCRepo(nil, nil, nil, nil, nil),
 			sessions:    sessionmock.NewInMemRepository(nil, nil, nil, nil),
 			redirectURI: redirectURI,
 			clientID:    "my-client-id",
@@ -66,7 +66,7 @@ func TestManager_Auth(t *testing.T) {
 		},
 		{
 			name:        "Get OIDC error",
-			oidc:        newOIDCRepo(errors.New("faield to get oidc provider"), nil, nil, nil),
+			oidc:        newOIDCRepo(nil, errors.New("faield to get oidc provider"), nil, nil, nil),
 			sessions:    sessionmock.NewInMemRepository(nil, nil, nil, nil),
 			redirectURI: redirectURI,
 			clientID:    "my-client-id",
@@ -78,7 +78,7 @@ func TestManager_Auth(t *testing.T) {
 		},
 		{
 			name:        "Save state error",
-			oidc:        newOIDCRepo(nil, nil, nil, nil),
+			oidc:        newOIDCRepo(nil, nil, nil, nil, nil),
 			sessions:    sessionmock.NewInMemRepository(nil, errors.New("failed to save state"), nil, nil),
 			redirectURI: redirectURI,
 			clientID:    "my-client-id",
