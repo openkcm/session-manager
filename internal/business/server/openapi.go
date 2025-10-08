@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 
 	"github.com/openkcm/session-manager/internal/openapi"
 	"github.com/openkcm/session-manager/internal/serviceerr"
@@ -30,8 +29,9 @@ func newOpenAPIServer(sManager *session.Manager) *openAPIServer {
 // Auth implements openapi.StrictServerInterface.
 func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObject) (openapi.AuthResponseObject, error) {
 	var extractFingerprint string
-	if httpReq, ok := ctx.Value("http.request").(*http.Request); ok {
-		extractFingerprint, _ = fingerprint.FromHTTPRequest(httpReq)
+	extractFingerprint, err := fingerprint.ExtractFingerprint(ctx)
+	if err != nil {
+		return nil, err
 	}
 	url, err := s.sManager.Auth(ctx, request.Params.TenantID, extractFingerprint, request.Params.RequestURI)
 	if err != nil {
@@ -48,8 +48,9 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 // Callback implements openapi.StrictServerInterface.
 func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackRequestObject) (openapi.CallbackResponseObject, error) {
 	var currentFingerprint string
-	if httpReq, ok := ctx.Value("http.request").(*http.Request); ok {
-		currentFingerprint, _ = fingerprint.FromHTTPRequest(httpReq)
+	currentFingerprint, err := fingerprint.ExtractFingerprint(ctx)
+	if err != nil {
+		return nil, err
 	}
 	result, err := s.sManager.Callback(ctx, req.Params.State, req.Params.Code, currentFingerprint)
 

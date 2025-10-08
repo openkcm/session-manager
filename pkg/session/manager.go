@@ -216,11 +216,7 @@ func (m *Manager) createOperationSuccessEvent(ctx context.Context, tenantID, ses
 		otlpaudit.LOGINMETHOD_OPENIDCONNECT,
 		otlpaudit.MFATYPE_NONE,
 		otlpaudit.USERTYPE_BUSINESS,
-		map[string]interface{}{
-			"session_id": sessionID,
-			"tenant_id":  tenantID,
-			"operation":  operation,
-		},
+		operation,
 	)
 	if err != nil {
 		return err
