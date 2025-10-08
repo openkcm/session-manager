@@ -14,8 +14,9 @@ import (
 
 	"github.com/openkcm/session-manager/internal/business/server"
 	"github.com/openkcm/session-manager/internal/config"
+	"github.com/openkcm/session-manager/internal/grpc"
+	"github.com/openkcm/session-manager/internal/oidc"
 	oidcsql "github.com/openkcm/session-manager/internal/oidc/sql"
-	"github.com/openkcm/session-manager/internal/pkce"
 	"github.com/openkcm/session-manager/pkg/session"
 	sessionvalkey "github.com/openkcm/session-manager/pkg/session/valkey"
 )
@@ -104,12 +105,10 @@ func publicMain(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("creating audit logger: %w", err)
 	}
 
-	pkceSource := pkce.Source{}
 	sessionManager := session.NewManager(
 		oidcProviderRepo,
 		sessionRepo,
 		auditLogger,
-		pkceSource,
 		cfg.SessionManager.SessionDuration,
 		cfg.SessionManager.RedirectURI,
 		string(clientID),
@@ -130,9 +129,12 @@ func internalMain(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("initialising pgxpool connection: %w", err)
 	}
 
-	// TODO: Initialise the private API service.
-	// oidcProviderRepo := oidcsql.NewRepository(db)
-	_ = oidcsql.NewRepository(db)
+	// Create the database repository.
+	repo := oidcsql.NewRepository(db)
+	service := oidc.NewService(repo)
 
-	return server.StartGRPCServer(ctx, cfg)
+	// Initialize the gRPC servers.
+	oidcprovidersrv := grpc.NewOIDCProviderServer(service)
+	oidcmappingsrv := grpc.NewOIDCMappingServer(service)
+	return server.StartGRPCServer(ctx, cfg, oidcprovidersrv, oidcmappingsrv)
 }

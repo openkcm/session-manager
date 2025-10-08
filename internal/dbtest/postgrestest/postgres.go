@@ -2,19 +2,17 @@ package postgrestest
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
-	"net"
 	"time"
 
 	"github.com/docker/go-connections/nat"
-	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/pressly/goose/v3"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	slogctx "github.com/veqryn/slog-context"
@@ -76,10 +74,12 @@ func Start(ctx context.Context) (*pgxpool.Pool, nat.Port, func(ctx context.Conte
 	return dbPool, port, terminate
 }
 
-func makeDBConn(ctx context.Context, port nat.Port) *pgxpool.Pool {
-	connStr := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s", DBHost, DBUser, DBPassword, DBName, port.Port(), DBSSLMode)
+func connStr(port nat.Port) string {
+	return fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s", DBHost, DBUser, DBPassword, DBName, port.Port(), DBSSLMode)
+}
 
-	pool, err := pgxpool.New(ctx, connStr)
+func makeDBConn(ctx context.Context, port nat.Port) *pgxpool.Pool {
+	pool, err := pgxpool.New(ctx, connStr(port))
 	if err != nil {
 		panic(err)
 	}
@@ -87,24 +87,26 @@ func makeDBConn(ctx context.Context, port nat.Port) *pgxpool.Pool {
 	return pool
 }
 
-func migrateDB(port nat.Port) {
-	source, err := iofs.New(migrations.FS, ".")
+func migrateDB(ctx context.Context, port nat.Port) {
+	db, err := sql.Open("pgx", connStr(port))
 	if err != nil {
 		panic(err)
 	}
 
-	m, err := migrate.NewWithSourceInstance("iofs", source, fmt.Sprintf("pgx5://%s:%s@%s/%s?sslmode=%s", DBUser, DBPassword, net.JoinHostPort(DBHost, port.Port()), DBName, DBSSLMode))
-	if err != nil {
+	defer db.Close()
+
+	goose.SetBaseFS(migrations.FS)
+	if err := goose.SetDialect("pgx"); err != nil {
 		panic(err)
 	}
 
-	if err := m.Up(); err != nil {
+	if err := goose.UpContext(ctx, db, "."); err != nil {
 		panic(err)
 	}
 }
 
 func prepareDB(ctx context.Context, dbPool *pgxpool.Pool, port nat.Port) {
-	migrateDB(port)
+	migrateDB(ctx, port)
 
 	b := new(pgx.Batch)
 	b.Queue(`INSERT INTO oidc_providers (issuer_url) VALUES ('url-one');`)
