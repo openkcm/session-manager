@@ -224,8 +224,8 @@ github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJw
 github.com/opencontainers/image-spec v1.1.1/go.mod h1:qpqAh3Dmcf36wStyyWU+kCeDgrGnAve2nCC8+7h8Q0M=
 github.com/openkcm/api-sdk v0.8.2-0.20251001075730-360d28ee85d9 h1:NZomPRkeuWy/Z23yNKyDzZnwyuAqbyZ0R8hNfJCLf1U=
 github.com/openkcm/api-sdk v0.8.2-0.20251001075730-360d28ee85d9/go.mod h1:exNP1O1hLobSRCec+M3rBs2lLE4+xLdhpTLdtC+hVQE=
-github.com/openkcm/common-sdk v1.4.5 h1:w8O1MKPViaot89uiGz9K15PUWIX5RsoZuBYmo2f+yMc=
-github.com/openkcm/common-sdk v1.4.5/go.mod h1:QEcHRasBD8BHJaUjHq1XHKB7rvfRmgnHvitS2ANT+kc=
+github.com/openkcm/common-sdk v1.4.6 h1:w1MqBMFXjqsROXDzcSVBpKyG/ajs2lWxs//cGIbP7FY=
+github.com/openkcm/common-sdk v1.4.6/go.mod h1:QEcHRasBD8BHJaUjHq1XHKB7rvfRmgnHvitS2ANT+kc=
 github.com/pborman/getopt v0.0.0-20170112200414-7148bc3a4c30/go.mod h1:85jBQOZwpVEaDAr341tbn15RS4fCAsIst0qp7i8ex1o=
 github.com/pelletier/go-toml/v2 v2.2.4 h1:mye9XuhQ6gvn5h28+VilKrrPoQVanw5PMw/TB0t5Ec4=
 github.com/pelletier/go-toml/v2 v2.2.4/go.mod h1:2gIqNv+qfxSVS7cM2xJQKtLSTLUE9V8t9Stt+h56mCY=
