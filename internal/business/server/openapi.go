@@ -67,8 +67,8 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 	}
 
 	cookies := []string{
-		fmt.Sprintf("session_id=%s; HttpOnly; Secure; SameSite=Strict", result.SessionID),
-		fmt.Sprintf("csrf_token=%s; HttpOnly; Secure; SameSite=Strict", result.CSRFToken),
+		fmt.Sprintf("__Host-Http-SESSION=%s; Path=/; Secure; HttpOnly; SameSite=Strict", result.SessionID),
+		fmt.Sprintf("__Host-CSRF=%s; Path=/; Secure; SameSite=Strict", result.CSRFToken),
 	}
 
 	return openapi.Callback302Response{
