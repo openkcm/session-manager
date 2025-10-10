@@ -11,10 +11,10 @@ type Repository struct {
 	States   map[string]session.State
 	Sessions map[string]session.Session
 
-	loadStateErr, storeStateErr, loadSessionErr, storeSessionErr error
+	loadStateErr, storeStateErr, loadSessionErr, storeSessionErr, deleteStateErr error
 }
 
-func NewInMemRepository(loadStateErr, storeStateErr, loadSessionErr, storeSessionErr error) *Repository {
+func NewInMemRepository(loadStateErr, storeStateErr, loadSessionErr, storeSessionErr, deleteStateErr error) *Repository {
 	return &Repository{
 		States:          make(map[string]session.State),
 		Sessions:        make(map[string]session.Session),
@@ -22,6 +22,7 @@ func NewInMemRepository(loadStateErr, storeStateErr, loadSessionErr, storeSessio
 		storeStateErr:   storeStateErr,
 		loadSessionErr:  loadSessionErr,
 		storeSessionErr: storeSessionErr,
+		deleteStateErr:  deleteStateErr,
 	}
 }
 
@@ -70,5 +71,18 @@ func (r *Repository) StoreSession(ctx context.Context, tenantID string, session 
 		return serviceerr.ErrConflict
 	}
 
+	return nil
+}
+
+func (r *Repository) DeleteState(ctx context.Context, tenantID, stateID string) error {
+	if r.deleteStateErr != nil {
+		return r.deleteStateErr
+	}
+
+	if _, ok := r.States[stateID]; !ok {
+		return serviceerr.ErrNotFound
+	}
+
+	delete(r.States, stateID)
 	return nil
 }

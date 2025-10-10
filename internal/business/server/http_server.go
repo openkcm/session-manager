@@ -13,6 +13,7 @@ import (
 
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/openapi"
+	"github.com/openkcm/session-manager/pkg/fingerprint"
 	"github.com/openkcm/session-manager/pkg/session"
 )
 
@@ -28,7 +29,7 @@ func createHTTPServer(_ context.Context, cfg *config.Config, sManager *session.M
 	)
 
 	smHandler := openapi.Handler(strictHandler)
-	mux.Handle("/sm", smHandler)
+	mux.Handle("/sm", fingerprint.FingerprintCtxMiddleware(smHandler))
 
 	return &http.Server{
 		Addr:    cfg.HTTP.Address,
