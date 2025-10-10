@@ -93,6 +93,7 @@ func publicMain(ctx context.Context, cfg *config.Config) error {
 	defer valkeyClient.Close()
 
 	oidcProviderRepo := oidcsql.NewRepository(db)
+	oidcService := oidc.NewService(oidcProviderRepo)
 	sessionRepo := sessionvalkey.NewRepository(valkeyClient, cfg.ValKey.Prefix)
 
 	clientID, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.ClientID)
@@ -112,7 +113,11 @@ func publicMain(ctx context.Context, cfg *config.Config) error {
 		cfg.SessionManager.SessionDuration,
 		cfg.SessionManager.RedirectURI,
 		string(clientID),
+		oidcService,
 	)
+
+	// Start the background token refresher using the configured interval
+	sessionManager.StartTokenRefresher(ctx, cfg.SessionManager.TokenRefreshInterval)
 
 	return server.StartHTTPServer(ctx, cfg, sessionManager)
 }

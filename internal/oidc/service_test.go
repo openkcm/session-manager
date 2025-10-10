@@ -1,9 +1,13 @@
 package oidc_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -65,4 +69,76 @@ func TestService_Get(t *testing.T) {
 			assert.Equal(t, tt.wantProvider, gotProvider, "Service.GetProvider()")
 		})
 	}
+}
+
+func TestService_RefreshToken(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"access_token":"test-access","refresh_token":"test-refresh","expires_in":3600}`)
+	}))
+	defer ts.Close()
+
+	provider := oidc.Provider{IssuerURL: ts.URL + "/"}
+	repo := &mockProviderRepository{provider: provider}
+	svc := oidc.NewService(repo)
+
+	resp, err := svc.RefreshToken(context.Background(), provider.IssuerURL, "dummy-refresh", "dummy-client")
+	assert.NoError(t, err)
+	assert.Equal(t, "test-access", resp.AccessToken)
+	assert.Equal(t, "test-refresh", resp.RefreshToken)
+	assert.WithinDuration(t, time.Now().Add(3600*time.Second), resp.ExpiresAt, time.Second)
+}
+
+func TestService_RefreshToken_Non200(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "fail", http.StatusBadRequest)
+	}))
+	defer ts.Close()
+
+	provider := oidc.Provider{IssuerURL: ts.URL + "/"}
+	repo := &mockProviderRepository{provider: provider}
+	svc := oidc.NewService(repo)
+
+	_, err := svc.RefreshToken(context.Background(), provider.IssuerURL, "dummy-refresh", "dummy-client")
+	assert.Error(t, err)
+}
+
+func TestService_RefreshToken_InvalidJSON(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `not-json`)
+	}))
+	defer ts.Close()
+
+	provider := oidc.Provider{IssuerURL: ts.URL + "/"}
+	repo := &mockProviderRepository{provider: provider}
+	svc := oidc.NewService(repo)
+
+	_, err := svc.RefreshToken(context.Background(), provider.IssuerURL, "dummy-refresh", "dummy-client")
+	assert.Error(t, err)
+}
+
+type mockProviderRepository struct {
+	provider oidc.Provider
+}
+
+func (m *mockProviderRepository) Get(ctx context.Context, issuer string) (oidc.Provider, error) {
+	return m.provider, nil
+}
+
+func (m *mockProviderRepository) GetForTenant(ctx context.Context, tenantID string) (oidc.Provider, error) {
+	return m.provider, nil
+}
+
+// Add stub Create method to satisfy interface
+func (m *mockProviderRepository) Create(ctx context.Context, tenantID string, provider oidc.Provider) error {
+	return nil
+}
+
+func (m *mockProviderRepository) Delete(ctx context.Context, tenantID string, provider oidc.Provider) error {
+	return nil
+}
+
+func (m *mockProviderRepository) Update(ctx context.Context, tenantID string, provider oidc.Provider) error {
+	return nil
 }
