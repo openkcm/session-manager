@@ -2,6 +2,8 @@ package session
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -147,7 +149,13 @@ func (m *Manager) Callback(ctx context.Context, stateID, code, currentFingerprin
 		return nil, fmt.Errorf("exchanging code for tokens: %w", err)
 	}
 
-	sessionID := m.pkce.State()
+	sessionIDBytes := make([]byte, 32)
+	_, err = rand.Read(sessionIDBytes)
+	if err != nil {
+		return nil, fmt.Errorf("generating session ID: %w", err)
+	}
+	sessionID := hex.EncodeToString(sessionIDBytes)
+
 	csrfToken := m.pkce.State()
 
 	claimsJSON, err := json.Marshal(tokenSet.IDToken)
