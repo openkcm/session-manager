@@ -40,6 +40,8 @@ func TestManager_Auth(t *testing.T) {
 		return oidcRepo
 	}
 
+	oidcService := oidc.NewService(newOIDCRepo(nil, nil, nil, nil, nil))
+
 	tests := []struct {
 		name        string
 		oidc        *oidcmock.Repository
@@ -104,7 +106,7 @@ func TestManager_Auth(t *testing.T) {
 			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: "http://localhost:4043/logs"})
 			require.NoError(t, err)
 
-			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.redirectURI, tt.clientID)
+			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.redirectURI, tt.clientID, oidcService)
 			got, err := m.Auth(t.Context(), tt.tenantID, tt.fingerprint, tt.requestURI)
 			t.Logf("Got Auth URL %s", got)
 

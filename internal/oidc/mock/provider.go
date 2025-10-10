@@ -2,6 +2,7 @@ package oidcmock
 
 import (
 	"context"
+
 	"github.com/openkcm/session-manager/internal/oidc"
 )
 
