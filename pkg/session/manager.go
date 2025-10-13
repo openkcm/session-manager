@@ -38,7 +38,6 @@ func NewManager(
 	oidc oidc.ProviderRepository,
 	sessions Repository,
 	auditLogger *otlpaudit.AuditLogger,
-	pkce pkce.Source,
 	sessionDuration time.Duration,
 	redirectURI,
 	clientID string,
@@ -47,7 +46,6 @@ func NewManager(
 	return &Manager{
 		oidc:            oidc,
 		sessions:        sessions,
-		pkce:            pkce,
 		audit:           auditLogger,
 		sessionDuration: sessionDuration,
 		redirectURI:     redirectURI,

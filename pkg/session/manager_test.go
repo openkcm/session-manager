@@ -60,7 +60,7 @@ func TestManager_Auth(t *testing.T) {
 		{
 			name:        "Success",
 			oidc:        newOIDCRepo(nil, nil, nil, nil, nil),
-			sessions:    sessionmock.NewInMemRepository(nil, nil, nil, nil),
+			sessions:    sessionmock.NewInMemRepository(nil, nil, nil, nil, nil),
 			redirectURI: redirectURI,
 			clientID:    "my-client-id",
 			tenantID:    tenantID,
@@ -72,7 +72,7 @@ func TestManager_Auth(t *testing.T) {
 		{
 			name:        "Get OIDC error",
 			oidc:        newOIDCRepo(nil, errors.New("faield to get oidc provider"), nil, nil, nil),
-			sessions:    sessionmock.NewInMemRepository(nil, nil, nil, nil),
+			sessions:    sessionmock.NewInMemRepository(nil, nil, nil, nil, nil),
 			redirectURI: redirectURI,
 			clientID:    "my-client-id",
 			tenantID:    tenantID,
@@ -84,7 +84,7 @@ func TestManager_Auth(t *testing.T) {
 		{
 			name:        "Save state error",
 			oidc:        newOIDCRepo(nil, nil, nil, nil, nil),
-			sessions:    sessionmock.NewInMemRepository(nil, errors.New("failed to save state"), nil, nil),
+			sessions:    sessionmock.NewInMemRepository(nil, errors.New("failed to save state"), nil, nil, nil),
 			redirectURI: redirectURI,
 			clientID:    "my-client-id",
 			tenantID:    tenantID,

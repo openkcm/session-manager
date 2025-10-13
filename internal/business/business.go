@@ -17,7 +17,6 @@ import (
 	"github.com/openkcm/session-manager/internal/grpc"
 	"github.com/openkcm/session-manager/internal/oidc"
 	oidcsql "github.com/openkcm/session-manager/internal/oidc/sql"
-	"github.com/openkcm/session-manager/internal/pkce"
 	"github.com/openkcm/session-manager/pkg/session"
 	sessionvalkey "github.com/openkcm/session-manager/pkg/session/valkey"
 )
@@ -106,7 +105,6 @@ func publicMain(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("creating audit logger: %w", err)
 	}
 
-	pkceSource := pkce.Source{}
 	if len(cfg.SessionManager.CSRFSecret) < 32 {
 		return fmt.Errorf("sessionManager.csrfSecret must be at least 32 bytes")
 	}
@@ -115,7 +113,6 @@ func publicMain(ctx context.Context, cfg *config.Config) error {
 		oidcProviderRepo,
 		sessionRepo,
 		auditLogger,
-		pkceSource,
 		cfg.SessionManager.SessionDuration,
 		cfg.SessionManager.RedirectURI,
 		string(clientID),
