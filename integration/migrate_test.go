@@ -12,9 +12,10 @@ import (
 	"github.com/docker/go-connections/nat"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
-	"github.com/openkcm/session-manager/internal/config"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"gopkg.in/yaml.v3"
+
+	"github.com/openkcm/session-manager/internal/config"
 )
 
 func TestMigrate(t *testing.T) {
