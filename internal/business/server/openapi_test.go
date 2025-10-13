@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/openkcm/session-manager/internal/openapi"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/openkcm/session-manager/internal/openapi"
 )
 
 func TestOpenAPIServer_Auth_NilManager(t *testing.T) {

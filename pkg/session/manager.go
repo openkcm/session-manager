@@ -10,6 +10,7 @@ import (
 	"time"
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
+
 	"github.com/openkcm/session-manager/internal/oidc"
 	"github.com/openkcm/session-manager/internal/pkce"
 	"github.com/openkcm/session-manager/internal/serviceerr"
@@ -79,7 +80,7 @@ func (m *Manager) Auth(ctx context.Context, tenantID, fingerprint, requestURI st
 
 	if err := m.sessions.StoreState(ctx, tenantID, state); err != nil {
 		if auditErr := m.createOperationFailedEvent(ctx, tenantID, "already exists", "auth"); auditErr != nil {
-			return "", fmt.Errorf("creating auth failed logging event failed: %v (original error: %w)", auditErr, err)
+			return "", fmt.Errorf("creating auth failed logging event failed: %w (original error: %w)", auditErr, err)
 		}
 		return "", fmt.Errorf("storing session: %w", err)
 	}
@@ -120,7 +121,7 @@ func (m *Manager) Callback(ctx context.Context, stateID, code, currentFingerprin
 	state, err := m.sessions.LoadState(ctx, "", stateID)
 	if err != nil {
 		if auditErr := m.createOperationFailedEvent(ctx, "", "state load failed", "callback"); auditErr != nil {
-			return nil, fmt.Errorf("creating callback failed logging event failed: %v (original error: %w)", auditErr, err)
+			return nil, fmt.Errorf("creating callback failed logging event failed: %w (original error: %w)", auditErr, err)
 		}
 		return nil, serviceerr.ErrStateLoadFailed
 	}
@@ -131,14 +132,14 @@ func (m *Manager) Callback(ctx context.Context, stateID, code, currentFingerprin
 
 	if time.Now().After(state.Expiry) {
 		if auditErr := m.createOperationFailedEvent(ctx, state.TenantID, "state expired", "callback"); auditErr != nil {
-			return nil, fmt.Errorf("creating callback failed logging event failed: %v (original error: %w)", auditErr, err)
+			return nil, fmt.Errorf("creating callback failed logging event failed: %w (original error: %w)", auditErr, err)
 		}
 		return nil, serviceerr.ErrStateExpired
 	}
 
 	if state.Fingerprint != currentFingerprint {
 		if auditErr := m.createOperationFailedEvent(ctx, state.TenantID, "fingerprint mismatch", "callback"); auditErr != nil {
-			return nil, fmt.Errorf("creating callback failed logging event failed: %v (original error: %w)", auditErr, err)
+			return nil, fmt.Errorf("creating callback failed logging event failed: %w (original error: %w)", auditErr, err)
 		}
 		return nil, serviceerr.ErrFingerprintMismatch
 	}
@@ -253,12 +254,12 @@ func (m *Manager) createOperationFailedEvent(ctx context.Context, tenantID, reas
 	}
 
 	var failReason otlpaudit.FailReason
-	switch {
-	case reason == "state expired":
+	switch reason {
+	case "state expired":
 		failReason = otlpaudit.FAILREASON_SESSIONEXPIRED
-	case reason == "fingerprint mismatch":
+	case "fingerprint mismatch":
 		failReason = otlpaudit.FAILREASON_SESSIONREVOKED
-	case reason == "state load failed":
+	case "state load failed":
 		failReason = otlpaudit.FAILREASON_SESSIONEXPIRED
 	default:
 		failReason = otlpaudit.FailReason(otlpaudit.UNSPECIFIED)

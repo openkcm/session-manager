@@ -300,9 +300,8 @@ func TestManager_Callback(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			oidcServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path == "/token" && r.Method == "POST" {
+				if r.URL.Path == "/token" && r.Method == http.MethodPost {
 					if tt.name == "Token exchange error" {
 						w.Header().Set("Content-Type", "application/json")
 						w.WriteHeader(http.StatusBadRequest)
@@ -327,7 +326,7 @@ func TestManager_Callback(t *testing.T) {
 			defer oidcServer.Close()
 
 			auditServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method == "POST" {
+				if r.Method == http.MethodPost {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusOK)
 					w.Write([]byte(`{"success": true}`))

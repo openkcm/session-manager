@@ -31,7 +31,7 @@ func generateCSRFToken(sessionID string, secret []byte) (string, error) {
 
 func validateCSRFToken(token, sessionID string, secret []byte) bool {
 	dot := -1
-	for i := 0; i < len(token); i++ {
+	for i := range len(token) {
 		if token[i] == '.' {
 			dot = i
 			break

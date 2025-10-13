@@ -144,7 +144,7 @@ func TestFingerprintCtxMiddlewareAndExtractFingerprint(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/", nil)
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			for k, vs := range tc.headers {
 				for _, v := range vs {
 					req.Header.Add(k, v)

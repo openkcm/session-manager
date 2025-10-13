@@ -2,6 +2,7 @@ package business
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -106,7 +107,7 @@ func publicMain(ctx context.Context, cfg *config.Config) error {
 	}
 
 	if len(cfg.SessionManager.CSRFSecret) < 32 {
-		return fmt.Errorf("sessionManager.csrfSecret must be at least 32 bytes")
+		return errors.New("sessionManager.csrfSecret must be at least 32 bytes")
 	}
 
 	sessionManager := session.NewManager(
