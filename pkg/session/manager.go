@@ -2,8 +2,6 @@ package session
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -14,6 +12,7 @@ import (
 	"github.com/openkcm/session-manager/internal/oidc"
 	"github.com/openkcm/session-manager/internal/pkce"
 	"github.com/openkcm/session-manager/internal/serviceerr"
+	"github.com/openkcm/session-manager/pkg/csrf"
 )
 
 type Manager struct {
@@ -154,17 +153,9 @@ func (m *Manager) Callback(ctx context.Context, stateID, code, currentFingerprin
 		return nil, fmt.Errorf("exchanging code for tokens: %w", err)
 	}
 
-	sessionIDBytes := make([]byte, 32)
-	_, err = rand.Read(sessionIDBytes)
-	if err != nil {
-		return nil, fmt.Errorf("generating session ID: %w", err)
-	}
-	sessionID := hex.EncodeToString(sessionIDBytes)
+	sessionID := m.pkce.SessionID()
 
-	csrfToken, err := generateCSRFToken(sessionID, m.csrfSecret)
-	if err != nil {
-		return nil, fmt.Errorf("generating CSRF token: %w", err)
-	}
+	csrfToken := csrf.NewToken(sessionID, m.csrfSecret)
 
 	claimsJSON, err := json.Marshal(tokenSet.IDToken)
 	if err != nil {
@@ -206,7 +197,7 @@ func (m *Manager) ExchangeCode(ctx context.Context, provider oidc.Provider, code
 }
 
 func (m *Manager) ValidateCSRFToken(token, sessionID string) bool {
-	return validateCSRFToken(token, sessionID, m.csrfSecret)
+	return csrf.Validate(token, sessionID, m.csrfSecret)
 }
 
 func (m *Manager) createOperationInitiatedEvent(ctx context.Context, tenantID, operation string) error {

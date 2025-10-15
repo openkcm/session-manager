@@ -50,3 +50,7 @@ func (p Source) PKCE() PKCE {
 func (p Source) State() string {
 	return p.randString(64)
 }
+
+func (p Source) SessionID() string {
+	return p.randString(32)
+}
