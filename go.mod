@@ -11,7 +11,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/oapi-codegen/runtime v1.1.2
-	github.com/openkcm/api-sdk v0.8.2-0.20251001075730-360d28ee85d9
+	github.com/openkcm/api-sdk v0.9.0
 	github.com/openkcm/common-sdk v1.4.7
 	github.com/pressly/goose/v3 v3.26.0
 	github.com/samber/oops v1.19.3
@@ -159,6 +159,6 @@ require (
 	golang.org/x/tools v0.36.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250826171959-ef028d996bc1 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250826171959-ef028d996bc1 // indirect
-	google.golang.org/protobuf v1.36.9 // indirect
+	google.golang.org/protobuf v1.36.10 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
