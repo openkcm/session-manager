@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/openkcm/session-manager/internal/openapi"
+	"github.com/openkcm/session-manager/internal/serviceerr"
+	"github.com/openkcm/session-manager/pkg/fingerprint"
 	"github.com/openkcm/session-manager/pkg/session"
 )
 
@@ -26,8 +28,12 @@ func newOpenAPIServer(sManager *session.Manager) *openAPIServer {
 
 // Auth implements openapi.StrictServerInterface.
 func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObject) (openapi.AuthResponseObject, error) {
-	// TODO(Danylo): Make fingerprint
-	url, err := s.sManager.Auth(ctx, request.Params.TenantID, "fingerprint", request.Params.RequestURI)
+	var extractFingerprint string
+	extractFingerprint, err := fingerprint.ExtractFingerprint(ctx)
+	if err != nil {
+		return nil, err
+	}
+	url, err := s.sManager.Auth(ctx, request.Params.TenantID, extractFingerprint, request.Params.RequestURI)
 	if err != nil {
 		return nil, fmt.Errorf("authenticating with session manager: %w", err)
 	}
@@ -41,6 +47,34 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 
 // Callback implements openapi.StrictServerInterface.
 func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackRequestObject) (openapi.CallbackResponseObject, error) {
-	//TODO implement callback logic
-	return nil, errors.New("callback not yet implemented")
+	var currentFingerprint string
+	currentFingerprint, err := fingerprint.ExtractFingerprint(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result, err := s.sManager.FinaliseOIDCLogin(ctx, req.Params.State, req.Params.Code, currentFingerprint)
+
+	if err != nil {
+		if errors.Is(err, serviceerr.ErrFingerprintMismatch) {
+			errorCode := 403
+			errorMsg := "fingerprint mismatch"
+			return openapi.Callback403JSONResponse{
+				ErrorCode: &errorCode,
+				ErrorMsg:  &errorMsg,
+			}, nil
+		}
+		return nil, err
+	}
+
+	cookies := []string{
+		fmt.Sprintf("__Host-Http-SESSION=%s; Path=/; Secure; HttpOnly; SameSite=Strict", result.SessionID),
+		fmt.Sprintf("__Host-CSRF=%s; Path=/; Secure; SameSite=Strict", result.CSRFToken),
+	}
+
+	return openapi.Callback302Response{
+		Headers: openapi.Callback302ResponseHeaders{
+			Location:  result.RequestURI,
+			SetCookie: cookies,
+		},
+	}, nil
 }

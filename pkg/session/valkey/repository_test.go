@@ -49,7 +49,7 @@ func TestMain(m *testing.M) {
 func prepareState(t *testing.T, state session.State) {
 	t.Helper()
 
-	key := fmt.Sprintf("%s:state:%s:%s", prefix, state.TenantID, state.ID)
+	key := fmt.Sprintf("%s:state:%s", prefix, state.ID)
 	err := client.Do(t.Context(), client.B().Set().Key(key).Value(valkey.JSON(state)).Build()).Error()
 	require.NoError(t, err, "inserting state")
 }
@@ -57,7 +57,7 @@ func prepareState(t *testing.T, state session.State) {
 func prepareSession(t *testing.T, s session.Session) {
 	t.Helper()
 
-	key := fmt.Sprintf("%s:session:%s:%s", prefix, s.TenantID, s.ID)
+	key := fmt.Sprintf("%s:session:%s", prefix, s.ID)
 	err := client.Do(t.Context(), client.B().Set().Key(key).Value(valkey.JSON(s)).Build()).Error()
 	require.NoError(t, err, "inserting session")
 }
@@ -104,7 +104,7 @@ func TestRepository_LoadState(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := sessionvalkey.NewRepository(client, prefix)
 
-			gotState, err := r.LoadState(t.Context(), tt.tenantID, tt.stateID)
+			gotState, err := r.LoadState(t.Context(), tt.stateID)
 			if !tt.assertErr(t, err, fmt.Sprintf("Repository.LoadState() error %v", err)) || err != nil {
 				return
 			}
@@ -163,12 +163,12 @@ func TestRepository_StoreState(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := sessionvalkey.NewRepository(client, prefix)
-			err := r.StoreState(t.Context(), tt.tenantID, tt.state)
+			err := r.StoreState(t.Context(), tt.state)
 			if !tt.assertErr(t, err, fmt.Sprintf("Repository.StoreState() error %v", err)) || err != nil {
 				return
 			}
 
-			state, err := r.LoadState(t.Context(), tt.tenantID, tt.state.ID)
+			state, err := r.LoadState(t.Context(), tt.state.ID)
 			require.NoError(t, err)
 
 			assert.Equal(t, tt.state, state, "Inserted state is not equal")
@@ -218,7 +218,7 @@ func TestRepository_LoadSession(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := sessionvalkey.NewRepository(client, prefix)
 
-			gotSession, err := r.LoadSession(t.Context(), tt.tenantID, tt.sessionID)
+			gotSession, err := r.LoadSession(t.Context(), tt.sessionID)
 			if !tt.assertErr(t, err, fmt.Sprintf("Repository.LoadSession() error %v", err)) || err != nil {
 				return
 			}
@@ -277,15 +277,59 @@ func TestRepository_StoreSession(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := sessionvalkey.NewRepository(client, prefix)
-			err := r.StoreSession(t.Context(), tt.tenantID, tt.session)
+			err := r.StoreSession(t.Context(), tt.session)
 			if tt.assertErr(t, err, fmt.Sprintf("Repository.StoreSession() error %v", err)) || err != nil {
 				return
 			}
 
-			session, err := r.LoadSession(t.Context(), tt.tenantID, tt.session.ID)
+			session, err := r.LoadSession(t.Context(), tt.session.ID)
 			require.NoError(t, err)
 
 			assert.Equal(t, tt.session, session, "Inserted session is not equal")
+		})
+	}
+}
+
+func TestRepository_DeleteState(t *testing.T) {
+	const tenantID = "tenant-delete"
+	const stateID = "stateid-delete"
+	state := session.State{
+		ID:          stateID,
+		TenantID:    tenantID,
+		Fingerprint: "fingerprint-delete",
+		Expiry:      testTime,
+	}
+
+	prepareState(t, state)
+
+	tests := []struct {
+		name      string
+		tenantID  string
+		stateID   string
+		assertErr assert.ErrorAssertionFunc
+	}{
+		{
+			name:      "Delete existing state",
+			tenantID:  tenantID,
+			stateID:   stateID,
+			assertErr: assert.NoError,
+		},
+		{
+			name:      "Delete non-existing state",
+			tenantID:  "non-existent-tenant",
+			stateID:   "non-existent-state",
+			assertErr: assert.NoError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := sessionvalkey.NewRepository(client, prefix)
+			err := r.DeleteState(t.Context(), tt.stateID)
+			tt.assertErr(t, err, "Repository.DeleteState() error")
+
+			_, err = r.LoadState(t.Context(), tt.stateID)
+			assert.Error(t, err, "State should not exist after deletion")
 		})
 	}
 }

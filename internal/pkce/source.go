@@ -50,3 +50,7 @@ func (p Source) PKCE() PKCE {
 func (p Source) State() string {
 	return p.randString(64)
 }
+
+func (p Source) SessionID() string {
+	return p.randString(32) // Entropy E = L * log2(63) = 32 * log2(63) = 191.3 bits
+}

@@ -2,6 +2,7 @@ package business
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -105,6 +106,10 @@ func publicMain(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("creating audit logger: %w", err)
 	}
 
+	if len(cfg.SessionManager.CSRFSecret) < 32 {
+		return errors.New("sessionManager.csrfSecret must be at least 32 bytes")
+	}
+
 	sessionManager := session.NewManager(
 		oidcProviderRepo,
 		sessionRepo,
@@ -112,6 +117,7 @@ func publicMain(ctx context.Context, cfg *config.Config) error {
 		cfg.SessionManager.SessionDuration,
 		cfg.SessionManager.RedirectURI,
 		string(clientID),
+		cfg.SessionManager.CSRFSecret,
 	)
 
 	return server.StartHTTPServer(ctx, cfg, sessionManager)

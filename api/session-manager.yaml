@@ -84,7 +84,9 @@ paths:
                                 type: string
                         Set-Cookie:
                             schema:
-                                type: string
+                                type: array
+                                items:
+                                    type: string
                 "403":
                     description: Fingerprint mismatch
                     content:
