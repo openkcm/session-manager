@@ -25,8 +25,8 @@ func newStore(valkeyClient valkey.Client, prefix string) *store {
 	}
 }
 
-func (s *store) Get(ctx context.Context, objectType, tenantID, objectID string, decodeInto any) error {
-	key := s.key(objectType, tenantID, objectID)
+func (s *store) Get(ctx context.Context, objectType, objectID string, decodeInto any) error {
+	key := s.key(objectType, objectID)
 	bytes, err := s.valkey.Do(ctx, s.valkey.B().Get().Key(key).Build()).AsBytes()
 	if err != nil {
 		valkeyErr, ok := valkey.IsValkeyErr(err)
@@ -44,8 +44,8 @@ func (s *store) Get(ctx context.Context, objectType, tenantID, objectID string, 
 	return nil
 }
 
-func (s *store) Set(ctx context.Context, objectType, tenantID, id string, val any) error {
-	key := s.key(objectType, tenantID, id)
+func (s *store) Set(ctx context.Context, objectType, id string, val any) error {
+	key := s.key(objectType, id)
 	bytes, err := s.encode(val)
 	if err != nil {
 		return fmt.Errorf("encoding data: %w", err)
@@ -58,8 +58,8 @@ func (s *store) Set(ctx context.Context, objectType, tenantID, id string, val an
 	return nil
 }
 
-func (s *store) Destroy(ctx context.Context, objectType, tenantID, id string) error {
-	key := s.key(objectType, tenantID, id)
+func (s *store) Destroy(ctx context.Context, objectType, id string) error {
+	key := s.key(objectType, id)
 	if err := s.valkey.Do(ctx, s.valkey.B().Del().Key(key).Build()).Error(); err != nil {
 		return fmt.Errorf("executing del command: %w", err)
 	}
@@ -67,8 +67,8 @@ func (s *store) Destroy(ctx context.Context, objectType, tenantID, id string) er
 	return nil
 }
 
-func (s *store) key(objectType string, tenantID, objectID string) string {
-	return fmt.Sprintf("%s:%s:%s:%s", s.prefix, objectType, tenantID, objectID)
+func (s *store) key(objectType string, objectID string) string {
+	return fmt.Sprintf("%s:%s:%s", s.prefix, objectType, objectID)
 }
 
 func (s *store) encode(v any) ([]byte, error) {

@@ -77,7 +77,7 @@ func (m *Manager) Auth(ctx context.Context, tenantID, fingerprint, requestURI st
 		Expiry:       time.Now().Add(m.sessionDuration),
 	}
 
-	if err := m.sessions.StoreState(ctx, tenantID, state); err != nil {
+	if err := m.sessions.StoreState(ctx, state); err != nil {
 		if auditErr := m.createOperationFailedEvent(ctx, tenantID, "already exists", "auth"); auditErr != nil {
 			return "", fmt.Errorf("creating auth failed logging event failed: %w (original error: %w)", auditErr, err)
 		}
@@ -117,7 +117,7 @@ func (m *Manager) authURI(provider oidc.Provider, state State, pkce pkce.PKCE) (
 }
 
 func (m *Manager) Callback(ctx context.Context, stateID, code, currentFingerprint string) (*CallbackResult, error) {
-	state, err := m.sessions.LoadState(ctx, "", stateID)
+	state, err := m.sessions.LoadState(ctx, stateID)
 	if err != nil {
 		if auditErr := m.createOperationFailedEvent(ctx, "", "state load failed", "callback"); auditErr != nil {
 			return nil, fmt.Errorf("creating callback failed logging event failed: %w (original error: %w)", auditErr, err)
@@ -131,14 +131,14 @@ func (m *Manager) Callback(ctx context.Context, stateID, code, currentFingerprin
 
 	if time.Now().After(state.Expiry) {
 		if auditErr := m.createOperationFailedEvent(ctx, state.TenantID, "state expired", "callback"); auditErr != nil {
-			return nil, fmt.Errorf("creating callback failed logging event failed: %w (original error: %w)", auditErr, err)
+			return nil, fmt.Errorf("creating callback failed logging event failed: %w", auditErr)
 		}
 		return nil, serviceerr.ErrStateExpired
 	}
 
 	if state.Fingerprint != currentFingerprint {
 		if auditErr := m.createOperationFailedEvent(ctx, state.TenantID, "fingerprint mismatch", "callback"); auditErr != nil {
-			return nil, fmt.Errorf("creating callback failed logging event failed: %w (original error: %w)", auditErr, err)
+			return nil, fmt.Errorf("creating callback failed logging event failed: %w", auditErr)
 		}
 		return nil, serviceerr.ErrFingerprintMismatch
 	}
@@ -174,11 +174,11 @@ func (m *Manager) Callback(ctx context.Context, stateID, code, currentFingerprin
 		Expiry:       time.Now().Add(m.sessionDuration),
 	}
 
-	if err := m.sessions.StoreSession(ctx, state.TenantID, session); err != nil {
+	if err := m.sessions.StoreSession(ctx, session); err != nil {
 		return nil, fmt.Errorf("storing session: %w", err)
 	}
 
-	if err := m.sessions.DeleteState(ctx, state.TenantID, stateID); err != nil {
+	if err := m.sessions.DeleteState(ctx, stateID); err != nil {
 		return nil, fmt.Errorf("deleting state: %w", err)
 	}
 

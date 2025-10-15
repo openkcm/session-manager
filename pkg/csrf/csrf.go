@@ -17,7 +17,7 @@ func formMessage(sessionID, randValue string) []byte {
 
 func NewToken(sessionID string, key []byte) string {
 	buf := make([]byte, keyLength)
-	rand.Read(buf)
+	_, _ = rand.Read(buf)
 
 	randValue := hex.EncodeToString(buf)
 

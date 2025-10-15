@@ -305,7 +305,7 @@ func TestManager_Callback(t *testing.T) {
 					if tt.name == "Token exchange error" {
 						w.Header().Set("Content-Type", "application/json")
 						w.WriteHeader(http.StatusBadRequest)
-						w.Write([]byte(`{"error": "invalid_request", "error_description": "Token exchange failed"}`))
+						_, _ = w.Write([]byte(`{"error": "invalid_request", "error_description": "Token exchange failed"}`))
 						return
 					}
 
@@ -318,7 +318,7 @@ func TestManager_Callback(t *testing.T) {
 						"token_type":    "Bearer",
 						"expires_in":    3600,
 					}
-					json.NewEncoder(w).Encode(tokenResponse)
+					_ = json.NewEncoder(w).Encode(tokenResponse)
 				} else {
 					w.WriteHeader(http.StatusOK)
 				}
@@ -329,7 +329,7 @@ func TestManager_Callback(t *testing.T) {
 				if r.Method == http.MethodPost {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusOK)
-					w.Write([]byte(`{"success": true}`))
+					_, _ = w.Write([]byte(`{"success": true}`))
 				} else {
 					w.WriteHeader(http.StatusOK)
 				}

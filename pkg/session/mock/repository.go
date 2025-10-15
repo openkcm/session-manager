@@ -26,7 +26,7 @@ func NewInMemRepository(loadStateErr, storeStateErr, loadSessionErr, storeSessio
 	}
 }
 
-func (r *Repository) LoadState(ctx context.Context, tenantID, stateID string) (session.State, error) {
+func (r *Repository) LoadState(ctx context.Context, stateID string) (session.State, error) {
 	if r.loadStateErr != nil {
 		return session.State{}, r.loadStateErr
 	}
@@ -38,7 +38,7 @@ func (r *Repository) LoadState(ctx context.Context, tenantID, stateID string) (s
 	return session.State{}, serviceerr.ErrNotFound
 }
 
-func (r *Repository) StoreState(ctx context.Context, tenantID string, state session.State) error {
+func (r *Repository) StoreState(ctx context.Context, state session.State) error {
 	if r.storeStateErr != nil {
 		return r.storeStateErr
 	}
@@ -50,7 +50,7 @@ func (r *Repository) StoreState(ctx context.Context, tenantID string, state sess
 	return nil
 }
 
-func (r *Repository) LoadSession(ctx context.Context, tenantID, sessionID string) (session.Session, error) {
+func (r *Repository) LoadSession(ctx context.Context, sessionID string) (session.Session, error) {
 	if r.loadSessionErr != nil {
 		return session.Session{}, r.loadSessionErr
 	}
@@ -62,7 +62,7 @@ func (r *Repository) LoadSession(ctx context.Context, tenantID, sessionID string
 	return session.Session{}, serviceerr.ErrNotFound
 }
 
-func (r *Repository) StoreSession(ctx context.Context, tenantID string, session session.Session) error {
+func (r *Repository) StoreSession(ctx context.Context, session session.Session) error {
 	if r.storeSessionErr != nil {
 		return r.storeSessionErr
 	}
@@ -74,7 +74,7 @@ func (r *Repository) StoreSession(ctx context.Context, tenantID string, session 
 	return nil
 }
 
-func (r *Repository) DeleteState(ctx context.Context, tenantID, stateID string) error {
+func (r *Repository) DeleteState(ctx context.Context, stateID string) error {
 	if r.deleteStateErr != nil {
 		return r.deleteStateErr
 	}

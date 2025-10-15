@@ -3,8 +3,9 @@ package csrf_test
 import (
 	"testing"
 
-	"github.com/openkcm/session-manager/pkg/csrf"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/openkcm/session-manager/pkg/csrf"
 )
 
 func TestCSRF(t *testing.T) {
@@ -17,7 +18,7 @@ func TestCSRF(t *testing.T) {
 		wantValid         bool
 	}{
 		{
-			name:              "Validate a token successfuly",
+			name:              "Validate a token successfully",
 			genKey:            "my-super-secret-key",
 			genSessionID:      "some-session-id",
 			validateKey:       "my-super-secret-key",
@@ -57,5 +58,4 @@ func TestCSRF(t *testing.T) {
 			assert.Equal(t, tc.wantValid, valid, "Failed to validate the CSRF token")
 		})
 	}
-
 }
