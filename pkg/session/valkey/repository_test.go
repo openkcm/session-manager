@@ -178,12 +178,13 @@ func TestRepository_StoreState(t *testing.T) {
 
 func TestRepository_LoadSession(t *testing.T) {
 	prepareSession(t, session.Session{
-		ID:           "sessionid-one",
-		TenantID:     "tenant1-id",
-		Fingerprint:  "fingerprint-one",
-		AccessToken:  "access-token-one",
-		RefreshToken: "refresh-token-one",
-		Expiry:       testTime,
+		ID:                "sessionid-one",
+		TenantID:          "tenant1-id",
+		Fingerprint:       "fingerprint-one",
+		AccessToken:       "access-token-one",
+		RefreshToken:      "refresh-token-one",
+		Expiry:            testTime,
+		AccessTokenExpiry: testTime,
 	})
 
 	tests := []struct {
@@ -198,12 +199,13 @@ func TestRepository_LoadSession(t *testing.T) {
 			tenantID:  "tenant1-id",
 			sessionID: "sessionid-one",
 			wantSession: session.Session{
-				ID:           "sessionid-one",
-				TenantID:     "tenant1-id",
-				Fingerprint:  "fingerprint-one",
-				AccessToken:  "access-token-one",
-				RefreshToken: "refresh-token-one",
-				Expiry:       testTime,
+				ID:                "sessionid-one",
+				TenantID:          "tenant1-id",
+				Fingerprint:       "fingerprint-one",
+				AccessToken:       "access-token-one",
+				RefreshToken:      "refresh-token-one",
+				Expiry:            testTime,
+				AccessTokenExpiry: testTime,
 			},
 			assertErr: assert.NoError,
 		},
@@ -231,12 +233,13 @@ func TestRepository_LoadSession(t *testing.T) {
 func TestRepository_StoreSession(t *testing.T) {
 	const upsertTenantID = "tenant-id-upsert"
 	upsertSession := session.Session{
-		ID:           "sessionid-to-upsert",
-		TenantID:     upsertTenantID,
-		Fingerprint:  "fingerprint-upsert",
-		AccessToken:  "access-token-upsert",
-		RefreshToken: "refresh-token-upsert",
-		Expiry:       testTime,
+		ID:                "sessionid-to-upsert",
+		TenantID:          upsertTenantID,
+		Fingerprint:       "fingerprint-upsert",
+		AccessToken:       "access-token-upsert",
+		RefreshToken:      "refresh-token-upsert",
+		Expiry:            testTime,
+		AccessTokenExpiry: testTime,
 	}
 
 	prepareSession(t, upsertSession)
@@ -251,12 +254,13 @@ func TestRepository_StoreSession(t *testing.T) {
 			name:     "Success",
 			tenantID: "tenant-id-store-session-success",
 			session: session.Session{
-				ID:           "sessionid-id-store-session-success",
-				TenantID:     "tenant-id-store-session-success",
-				Fingerprint:  "fingerprint-one",
-				AccessToken:  "access-token-one",
-				RefreshToken: "refresh-token-one",
-				Expiry:       testTime,
+				ID:                "sessionid-id-store-session-success",
+				TenantID:          "tenant-id-store-session-success",
+				Fingerprint:       "fingerprint-one",
+				AccessToken:       "access-token-one",
+				RefreshToken:      "refresh-token-one",
+				Expiry:            testTime,
+				AccessTokenExpiry: testTime,
 			},
 			assertErr: assert.NoError,
 		},
@@ -264,12 +268,13 @@ func TestRepository_StoreSession(t *testing.T) {
 			name:     "Upsert successfully",
 			tenantID: upsertTenantID,
 			session: session.Session{
-				ID:           upsertSession.ID,
-				TenantID:     upsertSession.TenantID,
-				Fingerprint:  "fingerprint-upsert-new",
-				AccessToken:  "access-token-upsert-new",
-				RefreshToken: "refresh-token-upsert-new",
-				Expiry:       testTime,
+				ID:                upsertSession.ID,
+				TenantID:          upsertSession.TenantID,
+				Fingerprint:       "fingerprint-upsert-new",
+				AccessToken:       "access-token-upsert-new",
+				RefreshToken:      "refresh-token-upsert-new",
+				Expiry:            testTime,
+				AccessTokenExpiry: testTime,
 			},
 			assertErr: assert.NoError,
 		},
@@ -286,6 +291,90 @@ func TestRepository_StoreSession(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, tt.session, session, "Inserted session is not equal")
+		})
+	}
+}
+
+func TestRepository_ListSessions(t *testing.T) {
+	prepareSession(t, session.Session{
+		ID:                "sessionid-one",
+		TenantID:          "tenant1-id",
+		Fingerprint:       "fingerprint-one",
+		AccessToken:       "access-token-one",
+		RefreshToken:      "refresh-token-one",
+		Expiry:            testTime,
+		AccessTokenExpiry: testTime,
+	})
+	prepareSession(t, session.Session{
+		ID:                "sessionid-two",
+		TenantID:          "tenant1-id",
+		Fingerprint:       "fingerprint-two",
+		AccessToken:       "access-token-two",
+		RefreshToken:      "refresh-token-two",
+		Expiry:            testTime,
+		AccessTokenExpiry: testTime,
+	})
+	prepareSession(t, session.Session{
+		ID:                "sessionid-three",
+		TenantID:          "tenant2-id",
+		Fingerprint:       "fingerprint-three",
+		AccessToken:       "access-token-three",
+		RefreshToken:      "refresh-token-four",
+		Expiry:            testTime,
+		AccessTokenExpiry: testTime,
+	})
+
+	tests := []struct {
+		name         string
+		tenantID     string
+		sessionID    string
+		wantSessions []session.Session
+		assertErr    assert.ErrorAssertionFunc
+	}{
+		{
+			name: "List all sessions",
+			wantSessions: []session.Session{
+				{
+					ID:                "sessionid-one",
+					TenantID:          "tenant1-id",
+					Fingerprint:       "fingerprint-one",
+					AccessToken:       "access-token-one",
+					RefreshToken:      "refresh-token-one",
+					Expiry:            testTime,
+					AccessTokenExpiry: testTime,
+				},
+				{
+					ID:                "sessionid-two",
+					TenantID:          "tenant1-id",
+					Fingerprint:       "fingerprint-two",
+					AccessToken:       "access-token-two",
+					RefreshToken:      "refresh-token-two",
+					Expiry:            testTime,
+					AccessTokenExpiry: testTime,
+				},
+				{
+					ID:                "sessionid-three",
+					TenantID:          "tenant2-id",
+					Fingerprint:       "fingerprint-three",
+					AccessToken:       "access-token-three",
+					RefreshToken:      "refresh-token-four",
+					Expiry:            testTime,
+					AccessTokenExpiry: testTime,
+				},
+			},
+			assertErr: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := sessionvalkey.NewRepository(client, prefix)
+
+			gotSessions, err := r.ListSessions(t.Context())
+			if !tt.assertErr(t, err, fmt.Sprintf("Repository.ListSessions() error %v", err)) || err != nil {
+				return
+			}
+
+			assert.Equal(t, tt.wantSessions, gotSessions, "Repository.ListSessions()")
 		})
 	}
 }

@@ -26,5 +26,8 @@ COPY --from=builder /bin/session-manager /bin/session-manager
 COPY --from=builder /bin/migrate /bin/migrate
 COPY sql /sql
 
+# Token Refresher
+COPY --from=builder /bin/token-refresher /bin/token-refresher
+
 EXPOSE 8080
 ENTRYPOINT ["/bin/session-manager"]

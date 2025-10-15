@@ -46,6 +46,20 @@ image:
     # +docs:property
     tag: latest
 
+  tokenRefresher:
+    # The container registry to pull the image from.
+    # +docs:property
+    registry: kms.common.repositories.cloud.sap
+
+    # The container image
+    # +docs:property
+    repository: session-manager
+
+    # Override the image tag to deploy by setting this variable.
+    # If no value is set, the chart's appVersion is used.
+    # +docs:property
+    tag: latest
+
   # Kubernetes imagePullPolicy.
   pullPolicy: IfNotPresent
 
@@ -302,3 +316,6 @@ config:
 
   migrate:
     source: file:///sql
+
+  tokenRefresher:
+    refreshInterval: 30m

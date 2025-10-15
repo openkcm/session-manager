@@ -16,15 +16,16 @@ type State struct {
 
 // Session represents a user session in our system.
 type Session struct {
-	ID           string    // Session ID in our system
-	TenantID     string    // Tenant ID for which the session is created
-	Fingerprint  string    // Fingerprint to bind the session to a specific client
-	CSRFToken    string    // CSRF token to prevent CSRF attacks
-	Issuer       string    // Issuer of the OIDC tokens
-	Claims       string    // JSON string of claims from the ID token
-	AccessToken  string    // Access token from the identity provider
-	RefreshToken string    // Refresh token from the identity provider
-	Expiry       time.Time // Expiry time of the session
+	ID                string    // Session ID in our system
+	TenantID          string    // Tenant ID for which the session is created
+	Fingerprint       string    // Fingerprint to bind the session to a specific client
+	CSRFToken         string    // CSRF token to prevent CSRF attacks
+	Issuer            string    // Issuer of the OIDC tokens
+	Claims            string    // JSON string of claims from the ID token
+	AccessToken       string    // Access token from the identity provider
+	RefreshToken      string    // Refresh token from the identity provider
+	Expiry            time.Time // Expiry time of the session
+	AccessTokenExpiry time.Time // Expiry time of the Access Token
 }
 
 // OIDCSessionData represents a data from the last step of the OIDC flow.

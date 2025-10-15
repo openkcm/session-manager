@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/valkey-io/valkey-go"
@@ -27,21 +28,7 @@ func newStore(valkeyClient valkey.Client, prefix string) *store {
 
 func (s *store) Get(ctx context.Context, objectType, objectID string, decodeInto any) error {
 	key := s.key(objectType, objectID)
-	bytes, err := s.valkey.Do(ctx, s.valkey.B().Get().Key(key).Build()).AsBytes()
-	if err != nil {
-		valkeyErr, ok := valkey.IsValkeyErr(err)
-		if ok && valkeyErr.IsNil() {
-			return errors.Join(valkeyErr, serviceerr.ErrConflict)
-		}
-
-		return fmt.Errorf("executing get command: %w", err)
-	}
-
-	if err := s.decode(bytes, decodeInto); err != nil {
-		return fmt.Errorf("decoding state: %w", err)
-	}
-
-	return nil
+	return s.get(ctx, key, decodeInto)
 }
 
 func (s *store) Set(ctx context.Context, objectType, id string, val any) error {
@@ -67,6 +54,24 @@ func (s *store) Destroy(ctx context.Context, objectType, id string) error {
 	return nil
 }
 
+func (s *store) get(ctx context.Context, key string, decodeInto any) error {
+	bytes, err := s.valkey.Do(ctx, s.valkey.B().Get().Key(key).Build()).AsBytes()
+	if err != nil {
+		valkeyErr, ok := valkey.IsValkeyErr(err)
+		if ok && valkeyErr.IsNil() {
+			return errors.Join(valkeyErr, serviceerr.ErrConflict)
+		}
+
+		return fmt.Errorf("executing get command: %w", err)
+	}
+
+	if err := s.decode(bytes, decodeInto); err != nil {
+		return fmt.Errorf("decoding state: %w", err)
+	}
+
+	return nil
+}
+
 func (s *store) key(objectType string, objectID string) string {
 	return fmt.Sprintf("%s:%s:%s", s.prefix, objectType, objectID)
 }
@@ -86,4 +91,30 @@ func (s *store) decode(data []byte, into any) error {
 	}
 
 	return nil
+}
+
+func getStoreObjects[T any](ctx context.Context, s *store, objectType string, objectID string, decodeInto *[]T) error {
+	key := s.key(objectType, objectID)
+	var cursor uint64
+	for {
+		scan, err := s.valkey.Do(ctx, s.valkey.B().Scan().Cursor(cursor).Match(key).Count(100).Build()).AsScanEntry()
+		if err != nil {
+			return fmt.Errorf("executing scan command: %w", err)
+		}
+
+		cursor = scan.Cursor
+		*decodeInto = slices.Grow(*decodeInto, len(scan.Elements))
+		for _, key := range scan.Elements {
+			var decoded T
+			if err := s.get(ctx, key, &decoded); err != nil {
+				return fmt.Errorf("getting an element: %w", err)
+			}
+
+			*decodeInto = append(*decodeInto, decoded)
+		}
+
+		if cursor == 0 {
+			return nil
+		}
+	}
 }

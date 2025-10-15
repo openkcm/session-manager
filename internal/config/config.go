@@ -18,6 +18,7 @@ type Config struct {
 	ValKey         ValKey         `yaml:"valkey"`
 	Migrate        Migrate        `yaml:"migrate"`
 	SessionManager SessionManager `yaml:"sessionManager"`
+	TokenRefresher TokenRefresher `yaml:"tokenRefresher"`
 }
 
 type HTTPServer struct {
@@ -55,4 +56,8 @@ type SessionManager struct {
 
 type Migrate struct {
 	Source string `yaml:"source" default:"file://./sql"`
+}
+
+type TokenRefresher struct {
+	RefreshInterval time.Duration `yaml:"refreshInterval" default:"30m"`
 }

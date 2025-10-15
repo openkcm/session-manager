@@ -56,6 +56,7 @@ func TestManager_Auth(t *testing.T) {
 		requestURI  string
 		wantURL     string
 		errAssert   assert.ErrorAssertionFunc
+		provider    oidc.Provider
 	}{
 		{
 			name:        "Success",
