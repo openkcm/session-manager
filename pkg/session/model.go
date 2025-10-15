@@ -26,3 +26,18 @@ type Session struct {
 	RefreshToken string    // Refresh token from the identity provider
 	Expiry       time.Time // Expiry time of the session
 }
+
+// OIDCSessionData represents a data from the last step of the OIDC flow.
+type OIDCSessionData struct {
+	SessionID  string
+	CSRFToken  string
+	RequestURI string
+}
+
+type tokenSet struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	IDToken      string `json:"id_token"`
+	TokenType    string `json:"token_type"`
+	ExpiresIn    int    `json:"expires_in"`
+}

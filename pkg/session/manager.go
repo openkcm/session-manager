@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
@@ -26,12 +28,6 @@ type Manager struct {
 	clientID        string
 
 	csrfSecret []byte
-}
-
-type CallbackResult struct {
-	SessionID   string
-	CSRFToken   string
-	RedirectURI string
 }
 
 func NewManager(
@@ -56,10 +52,6 @@ func NewManager(
 
 // Auth returns an OIDC authorise URI.
 func (m *Manager) Auth(ctx context.Context, tenantID, fingerprint, requestURI string) (string, error) {
-	if err := m.createOperationInitiatedEvent(ctx, tenantID, "auth"); err != nil {
-		return "", fmt.Errorf("creating auth initiated logging event failed: %w", err)
-	}
-
 	provider, err := m.oidc.GetForTenant(ctx, tenantID)
 	if err != nil {
 		return "", fmt.Errorf("getting oidc provider: %w", err)
@@ -78,19 +70,12 @@ func (m *Manager) Auth(ctx context.Context, tenantID, fingerprint, requestURI st
 	}
 
 	if err := m.sessions.StoreState(ctx, state); err != nil {
-		if auditErr := m.createOperationFailedEvent(ctx, tenantID, "already exists", "auth"); auditErr != nil {
-			return "", fmt.Errorf("creating auth failed logging event failed: %w (original error: %w)", auditErr, err)
-		}
 		return "", fmt.Errorf("storing session: %w", err)
 	}
 
 	u, err := m.authURI(provider, state, pkce)
 	if err != nil {
 		return "", fmt.Errorf("generating auth uri: %w", err)
-	}
-
-	if auditErr := m.createOperationSuccessEvent(ctx, tenantID, stateID, "auth"); auditErr != nil {
-		return "", fmt.Errorf("creating auth success logging event failed: %w", auditErr)
 	}
 
 	return u, nil
@@ -116,56 +101,43 @@ func (m *Manager) authURI(provider oidc.Provider, state State, pkce pkce.PKCE) (
 	return u.String(), nil
 }
 
-func (m *Manager) Callback(ctx context.Context, stateID, code, currentFingerprint string) (*CallbackResult, error) {
+func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerprint string) (OIDCSessionData, error) {
 	state, err := m.sessions.LoadState(ctx, stateID)
 	if err != nil {
-		if auditErr := m.createOperationFailedEvent(ctx, "", "state load failed", "callback"); auditErr != nil {
-			return nil, fmt.Errorf("creating callback failed logging event failed: %w (original error: %w)", auditErr, err)
-		}
-		return nil, serviceerr.ErrStateLoadFailed
-	}
-
-	if err := m.createOperationInitiatedEvent(ctx, state.TenantID, "callback"); err != nil {
-		return nil, fmt.Errorf("creating callback initiated logging event failed: %w", err)
+		return OIDCSessionData{}, fmt.Errorf("loading state from the storage: %w", err)
 	}
 
 	if time.Now().After(state.Expiry) {
-		if auditErr := m.createOperationFailedEvent(ctx, state.TenantID, "state expired", "callback"); auditErr != nil {
-			return nil, fmt.Errorf("creating callback failed logging event failed: %w", auditErr)
-		}
-		return nil, serviceerr.ErrStateExpired
+		return OIDCSessionData{}, serviceerr.ErrStateExpired
 	}
 
-	if state.Fingerprint != currentFingerprint {
-		if auditErr := m.createOperationFailedEvent(ctx, state.TenantID, "fingerprint mismatch", "callback"); auditErr != nil {
-			return nil, fmt.Errorf("creating callback failed logging event failed: %w", auditErr)
-		}
-		return nil, serviceerr.ErrFingerprintMismatch
+	if state.Fingerprint != fingerprint {
+		return OIDCSessionData{}, serviceerr.ErrFingerprintMismatch
 	}
 
 	provider, err := m.oidc.GetForTenant(ctx, state.TenantID)
 	if err != nil {
-		return nil, fmt.Errorf("getting oidc provider: %w", err)
+		return OIDCSessionData{}, fmt.Errorf("getting oidc provider: %w", err)
 	}
 
-	tokenSet, err := m.ExchangeCode(ctx, provider, code, state.PKCEVerifier)
+	tokenSet, err := m.exchangeCode(ctx, provider, code, state.PKCEVerifier)
 	if err != nil {
-		return nil, fmt.Errorf("exchanging code for tokens: %w", err)
+		return OIDCSessionData{}, fmt.Errorf("exchanging code for tokens: %w", err)
 	}
 
 	sessionID := m.pkce.SessionID()
-
 	csrfToken := csrf.NewToken(sessionID, m.csrfSecret)
 
+	// TODO: which claims should we use?
 	claimsJSON, err := json.Marshal(tokenSet.IDToken)
 	if err != nil {
-		return nil, fmt.Errorf("marshaling claims: %w", err)
+		return OIDCSessionData{}, fmt.Errorf("marshaling claims: %w", err)
 	}
 
 	session := Session{
 		ID:           sessionID,
 		TenantID:     state.TenantID,
-		Fingerprint:  currentFingerprint,
+		Fingerprint:  fingerprint,
 		CSRFToken:    csrfToken,
 		Issuer:       provider.IssuerURL,
 		Claims:       string(claimsJSON),
@@ -175,97 +147,54 @@ func (m *Manager) Callback(ctx context.Context, stateID, code, currentFingerprin
 	}
 
 	if err := m.sessions.StoreSession(ctx, session); err != nil {
-		return nil, fmt.Errorf("storing session: %w", err)
+		return OIDCSessionData{}, fmt.Errorf("storing session: %w", err)
 	}
 
 	if err := m.sessions.DeleteState(ctx, stateID); err != nil {
-		return nil, fmt.Errorf("deleting state: %w", err)
+		return OIDCSessionData{}, fmt.Errorf("deleting state: %w", err)
 	}
 
-	if auditErr := m.createOperationSuccessEvent(ctx, state.TenantID, session.ID, "callback"); auditErr != nil {
-		return nil, fmt.Errorf("creating callback success logging event failed: %w", auditErr)
-	}
-	return &CallbackResult{
-		SessionID:   sessionID,
-		CSRFToken:   csrfToken,
-		RedirectURI: state.RequestURI,
+	return OIDCSessionData{
+		SessionID:  sessionID,
+		CSRFToken:  csrfToken,
+		RequestURI: state.RequestURI,
 	}, nil
 }
 
-func (m *Manager) ExchangeCode(ctx context.Context, provider oidc.Provider, code, codeVerifier string) (*oidc.TokenSet, error) {
-	return provider.Exchange(ctx, code, codeVerifier, m.redirectURI, m.clientID)
+func (m *Manager) exchangeCode(ctx context.Context, provider oidc.Provider, code, codeVerifier string) (tokenSet, error) {
+	tokenEndpoint := provider.IssuerURL + "/token"
+
+	data := url.Values{}
+	data.Set("grant_type", "authorization_code")
+	data.Set("code", code)
+	data.Set("code_verifier", codeVerifier)
+	data.Set("redirect_uri", m.redirectURI)
+	data.Set("client_id", m.clientID)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenEndpoint, strings.NewReader(data.Encode()))
+	if err != nil {
+		return tokenSet{}, fmt.Errorf("creating request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return tokenSet{}, fmt.Errorf("executing request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return tokenSet{}, fmt.Errorf("token exchange failed with status: %d", resp.StatusCode)
+	}
+
+	var tokens tokenSet
+	if err := json.NewDecoder(resp.Body).Decode(&tokens); err != nil {
+		return tokenSet{}, fmt.Errorf("decoding response: %w", err)
+	}
+
+	return tokens, nil
 }
 
 func (m *Manager) ValidateCSRFToken(token, sessionID string) bool {
 	return csrf.Validate(token, sessionID, m.csrfSecret)
-}
-
-func (m *Manager) createOperationInitiatedEvent(ctx context.Context, tenantID, operation string) error {
-	eventMetadata, err := otlpaudit.NewEventMetadata(operation+"_user", tenantID, fmt.Sprintf("%s_initiated_%d", operation, time.Now().UnixNano()))
-	if err != nil {
-		return err
-	}
-
-	event, err := otlpaudit.NewUnauthenticatedRequestEvent(eventMetadata)
-	if err != nil {
-		return err
-	}
-
-	return m.audit.SendEvent(ctx, event)
-}
-
-func (m *Manager) createOperationSuccessEvent(ctx context.Context, tenantID, sessionID, operation string) error {
-	eventMetadata, err := otlpaudit.NewEventMetadata(sessionID, tenantID, fmt.Sprintf("%s_success_%d", operation, time.Now().UnixNano()))
-	if err != nil {
-		return err
-	}
-
-	event, err := otlpaudit.NewUserLoginSuccessEvent(
-		eventMetadata,
-		sessionID,
-		otlpaudit.LOGINMETHOD_OPENIDCONNECT,
-		otlpaudit.MFATYPE_NONE,
-		otlpaudit.USERTYPE_BUSINESS,
-		operation,
-	)
-	if err != nil {
-		return err
-	}
-
-	return m.audit.SendEvent(ctx, event)
-}
-
-func (m *Manager) createOperationFailedEvent(ctx context.Context, tenantID, reason, operation string) error {
-	correlationID := fmt.Sprintf("%s_failed_%d", operation, time.Now().UnixNano())
-	userID := "unknown"
-
-	eventMetadata, err := otlpaudit.NewEventMetadata(userID, tenantID, correlationID)
-	if err != nil {
-		return err
-	}
-
-	var failReason otlpaudit.FailReason
-	switch reason {
-	case "state expired":
-		failReason = otlpaudit.FAILREASON_SESSIONEXPIRED
-	case "fingerprint mismatch":
-		failReason = otlpaudit.FAILREASON_SESSIONREVOKED
-	case "state load failed":
-		failReason = otlpaudit.FAILREASON_SESSIONEXPIRED
-	default:
-		failReason = otlpaudit.FailReason(otlpaudit.UNSPECIFIED)
-	}
-
-	event, err := otlpaudit.NewUserLoginFailureEvent(
-		eventMetadata,
-		userID,
-		otlpaudit.LOGINMETHOD_OPENIDCONNECT,
-		failReason,
-		operation,
-	)
-	if err != nil {
-		return err
-	}
-
-	return m.audit.SendEvent(ctx, event)
 }

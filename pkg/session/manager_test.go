@@ -349,7 +349,7 @@ func TestManager_Callback(t *testing.T) {
 
 			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, redirectURI, "client-id", testCSRFSecret)
 
-			result, err := m.Callback(context.Background(), tt.stateID, tt.code, tt.fingerprint)
+			result, err := m.FinaliseOIDCLogin(context.Background(), tt.stateID, tt.code, tt.fingerprint)
 
 			if !tt.errAssert(t, err, fmt.Sprintf("Manager.Callback() error = %v", err)) {
 				return
@@ -371,7 +371,7 @@ func TestManager_Callback(t *testing.T) {
 			}
 
 			if tt.wantRedirectURI != "" {
-				assert.Equal(t, tt.wantRedirectURI, result.RedirectURI, "RedirectURI should match")
+				assert.Equal(t, tt.wantRedirectURI, result.RequestURI, "RedirectURI should match")
 			}
 		})
 	}

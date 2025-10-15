@@ -52,7 +52,7 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 	if err != nil {
 		return nil, err
 	}
-	result, err := s.sManager.Callback(ctx, req.Params.State, req.Params.Code, currentFingerprint)
+	result, err := s.sManager.FinaliseOIDCLogin(ctx, req.Params.State, req.Params.Code, currentFingerprint)
 
 	if err != nil {
 		if errors.Is(err, serviceerr.ErrFingerprintMismatch) {
@@ -73,7 +73,7 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 
 	return openapi.Callback302Response{
 		Headers: openapi.Callback302ResponseHeaders{
-			Location:  result.RedirectURI,
+			Location:  result.RequestURI,
 			SetCookie: cookies,
 		},
 	}, nil
