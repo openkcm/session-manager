@@ -4,7 +4,7 @@ metadata:
   name: {{ include "session-manager.name" . }}-token-refresher-config
   labels:
     {{- include "session-manager.labels" . | nindent 4 }}
-    app.kubernetes.io/component: migrate
+    app.kubernetes.io/component: token-refresher
 immutable: {{ .Values.config.isImmutable | default false }}
 data:
  config.yaml: |-
