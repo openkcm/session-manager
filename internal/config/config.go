@@ -51,7 +51,8 @@ type SessionManager struct {
 	SessionDuration time.Duration       `yaml:"sessionDuration" default:"12h"`
 	RedirectURI     string              `yaml:"redirectURI" default:"https://api.cmk/callback"`
 	ClientID        commoncfg.SourceRef `yaml:"clientID"`
-	CSRFSecret      string              `yaml:"csrfSecret"`
+	CSRFSecret      commoncfg.SourceRef `yaml:"csrfSecret"`
+	JWSSigAlgs      []string            `yaml:"jwsSigAlgs"` // A list of supported JWT signature algorithms
 }
 
 type Migrate struct {
