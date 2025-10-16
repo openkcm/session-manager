@@ -59,162 +59,19 @@ func Main(ctx context.Context, cfg *config.Config) error {
 
 // publicMain starts the HTTP REST public API server.
 func publicMain(ctx context.Context, cfg *config.Config) error {
-	connStr, err := config.MakeConnStr(cfg.Database)
+	sessionManager, err := initSessionManager(ctx, cfg)
 	if err != nil {
-		return fmt.Errorf("making dsn from config: %w", err)
+		return fmt.Errorf("initialising the session manager: %w", err)
 	}
-
-	db, err := pgxpool.New(ctx, connStr)
-	if err != nil {
-		return fmt.Errorf("initialising pgxpool connection: %w", err)
-	}
-
-	valkeyHost, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.Host)
-	if err != nil {
-		return fmt.Errorf("loading valkey host: %w", err)
-	}
-
-	valkeyUsername, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.User)
-	if err != nil {
-		return fmt.Errorf("loading valkey username: %w", err)
-	}
-
-	valkeyPassword, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.Password)
-	if err != nil {
-		return fmt.Errorf("loading valkey password: %w", err)
-	}
-
-	valkeyClient, err := valkey.NewClient(valkey.ClientOption{
-		InitAddress: []string{string(valkeyHost)},
-		Username:    string(valkeyUsername),
-		Password:    string(valkeyPassword),
-	})
-	if err != nil {
-		return fmt.Errorf("creating a new valkey client: %w", err)
-	}
-
-	defer valkeyClient.Close()
-
-	oidcProviderRepo := oidcsql.NewRepository(db)
-	sessionRepo := sessionvalkey.NewRepository(valkeyClient, cfg.ValKey.Prefix)
-
-	clientID, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.ClientID)
-	if err != nil {
-		return fmt.Errorf("reading client id from source ref: %w", err)
-	}
-
-	auditLogger, err := otlpaudit.NewLogger(&cfg.Audit)
-	if err != nil {
-		return fmt.Errorf("creating audit logger: %w", err)
-	}
-
-	csrfSecret, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.CSRFSecret)
-	if err != nil {
-		return fmt.Errorf("loading csrf token from source ref: %w", err)
-	}
-
-	if len(csrfSecret) < 32 {
-		return errors.New("CSRF secret must be at least 32 bytes")
-	}
-
-	sessionManager := session.NewManager(
-		oidcProviderRepo,
-		sessionRepo,
-		auditLogger,
-		cfg.SessionManager.SessionDuration,
-		cfg.SessionManager.RedirectURI,
-		string(clientID),
-		string(csrfSecret),
-		cfg.SessionManager.JWSSigAlgs,
-	)
 
 	return server.StartHTTPServer(ctx, cfg, sessionManager)
 }
 
-func startTokenRefresher(ctx context.Context, sessionManager *session.Manager, cfg *config.Config) error {
-	ticker := time.NewTicker(cfg.TokenRefresher.RefreshInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			if err := sessionManager.RefreshExpiringSessions(ctx); err != nil {
-				log.Printf("[ERROR] Failed to refresh tokens: %v", err)
-			}
-		case <-ctx.Done():
-			return nil
-		}
-	}
-}
-
 func TokenRefresherMain(ctx context.Context, cfg *config.Config) error {
-	connStr, err := config.MakeConnStr(cfg.Database)
+	sessionManager, err := initSessionManager(ctx, cfg)
 	if err != nil {
-		return fmt.Errorf("making dsn from config: %w", err)
+		return fmt.Errorf("initialising the session manager: %w", err)
 	}
-
-	db, err := pgxpool.New(ctx, connStr)
-	if err != nil {
-		return fmt.Errorf("initialising pgxpool connection: %w", err)
-	}
-
-	valkeyHost, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.Host)
-	if err != nil {
-		return fmt.Errorf("loading valkey host: %w", err)
-	}
-
-	valkeyUsername, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.User)
-	if err != nil {
-		return fmt.Errorf("loading valkey username: %w", err)
-	}
-
-	valkeyPassword, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.Password)
-	if err != nil {
-		return fmt.Errorf("loading valkey password: %w", err)
-	}
-
-	valkeyClient, err := valkey.NewClient(valkey.ClientOption{
-		InitAddress: []string{string(valkeyHost)},
-		Username:    string(valkeyUsername),
-		Password:    string(valkeyPassword),
-	})
-	if err != nil {
-		return fmt.Errorf("creating a new valkey client: %w", err)
-	}
-
-	defer valkeyClient.Close()
-
-	oidcProviderRepo := oidcsql.NewRepository(db)
-	sessionRepo := sessionvalkey.NewRepository(valkeyClient, cfg.ValKey.Prefix)
-
-	clientID, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.ClientID)
-	if err != nil {
-		return fmt.Errorf("reading client id from source ref: %w", err)
-	}
-
-	auditLogger, err := otlpaudit.NewLogger(&cfg.Audit)
-	if err != nil {
-		return fmt.Errorf("creating audit logger: %w", err)
-	}
-
-	csrfSecret, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.CSRFSecret)
-	if err != nil {
-		return fmt.Errorf("loading csrf token from source ref: %w", err)
-	}
-
-	if len(csrfSecret) < 32 {
-		return errors.New("CSRF secret must be at least 32 bytes")
-	}
-
-	sessionManager := session.NewManager(
-		oidcProviderRepo,
-		sessionRepo,
-		auditLogger,
-		cfg.SessionManager.SessionDuration,
-		cfg.SessionManager.RedirectURI,
-		string(clientID),
-		string(csrfSecret),
-		cfg.SessionManager.JWSSigAlgs,
-	)
 
 	return startTokenRefresher(ctx, sessionManager, cfg)
 }
@@ -239,4 +96,90 @@ func internalMain(ctx context.Context, cfg *config.Config) error {
 	oidcprovidersrv := grpc.NewOIDCProviderServer(service)
 	oidcmappingsrv := grpc.NewOIDCMappingServer(service)
 	return server.StartGRPCServer(ctx, cfg, oidcprovidersrv, oidcmappingsrv)
+}
+
+func startTokenRefresher(ctx context.Context, sessionManager *session.Manager, cfg *config.Config) error {
+	ticker := time.NewTicker(cfg.TokenRefresher.RefreshInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			if err := sessionManager.RefreshExpiringSessions(ctx); err != nil {
+				log.Printf("[ERROR] Failed to refresh tokens: %v", err)
+			}
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+func initSessionManager(ctx context.Context, cfg *config.Config) (*session.Manager, error) {
+	connStr, err := config.MakeConnStr(cfg.Database)
+	if err != nil {
+		return nil, fmt.Errorf("making dsn from config: %w", err)
+	}
+
+	db, err := pgxpool.New(ctx, connStr)
+	if err != nil {
+		return nil, fmt.Errorf("initialising pgxpool connection: %w", err)
+	}
+
+	valkeyHost, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.Host)
+	if err != nil {
+		return nil, fmt.Errorf("loading valkey host: %w", err)
+	}
+
+	valkeyUsername, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.User)
+	if err != nil {
+		return nil, fmt.Errorf("loading valkey username: %w", err)
+	}
+
+	valkeyPassword, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.Password)
+	if err != nil {
+		return nil, fmt.Errorf("loading valkey password: %w", err)
+	}
+
+	valkeyClient, err := valkey.NewClient(valkey.ClientOption{
+		InitAddress: []string{string(valkeyHost)},
+		Username:    string(valkeyUsername),
+		Password:    string(valkeyPassword),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("creating a new valkey client: %w", err)
+	}
+
+	defer valkeyClient.Close()
+
+	oidcProviderRepo := oidcsql.NewRepository(db)
+	sessionRepo := sessionvalkey.NewRepository(valkeyClient, cfg.ValKey.Prefix)
+
+	clientID, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.ClientID)
+	if err != nil {
+		return nil, fmt.Errorf("reading client id from source ref: %w", err)
+	}
+
+	auditLogger, err := otlpaudit.NewLogger(&cfg.Audit)
+	if err != nil {
+		return nil, fmt.Errorf("creating audit logger: %w", err)
+	}
+
+	csrfSecret, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.CSRFSecret)
+	if err != nil {
+		return nil, fmt.Errorf("loading csrf token from source ref: %w", err)
+	}
+
+	if len(csrfSecret) < 32 {
+		return nil, errors.New("CSRF secret must be at least 32 bytes")
+	}
+
+	return session.NewManager(
+		oidcProviderRepo,
+		sessionRepo,
+		auditLogger,
+		cfg.SessionManager.SessionDuration,
+		cfg.SessionManager.RedirectURI,
+		string(clientID),
+		string(csrfSecret),
+		cfg.SessionManager.JWSSigAlgs,
+	), nil
 }
