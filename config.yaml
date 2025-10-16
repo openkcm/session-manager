@@ -208,9 +208,15 @@ sessionManager:
     clientID:
         source: embedded
         value: my-client-id
+    csrfSecret:
+        source: embedded
+        value: my-csrf-secret
+    jwsSigAlgs:
+        - RS256
+        - HS256
 
 migrate:
     source: file://./sql
 
 tokenRefresher:
-  refreshInterval: 30m
+    refreshInterval: 30m

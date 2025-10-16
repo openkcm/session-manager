@@ -108,8 +108,13 @@ func publicMain(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("creating audit logger: %w", err)
 	}
 
-	if len(cfg.SessionManager.CSRFSecret) < 32 {
-		return errors.New("sessionManager.csrfSecret must be at least 32 bytes")
+	csrfSecret, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.CSRFSecret)
+	if err != nil {
+		return fmt.Errorf("loading csrf token from source ref: %w", err)
+	}
+
+	if len(csrfSecret) < 32 {
+		return errors.New("CSRF secret must be at least 32 bytes")
 	}
 
 	sessionManager := session.NewManager(
@@ -119,7 +124,7 @@ func publicMain(ctx context.Context, cfg *config.Config) error {
 		cfg.SessionManager.SessionDuration,
 		cfg.SessionManager.RedirectURI,
 		string(clientID),
-		cfg.SessionManager.CSRFSecret,
+		string(csrfSecret),
 		cfg.SessionManager.JWSSigAlgs,
 	)
 
@@ -191,6 +196,15 @@ func TokenRefresherMain(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("creating audit logger: %w", err)
 	}
 
+	csrfSecret, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.CSRFSecret)
+	if err != nil {
+		return fmt.Errorf("loading csrf token from source ref: %w", err)
+	}
+
+	if len(csrfSecret) < 32 {
+		return errors.New("CSRF secret must be at least 32 bytes")
+	}
+
 	sessionManager := session.NewManager(
 		oidcProviderRepo,
 		sessionRepo,
@@ -198,7 +212,7 @@ func TokenRefresherMain(ctx context.Context, cfg *config.Config) error {
 		cfg.SessionManager.SessionDuration,
 		cfg.SessionManager.RedirectURI,
 		string(clientID),
-		cfg.SessionManager.CSRFSecret,
+		string(csrfSecret),
 		cfg.SessionManager.JWSSigAlgs,
 	)
 
