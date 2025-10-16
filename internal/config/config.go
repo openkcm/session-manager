@@ -52,6 +52,7 @@ type SessionManager struct {
 	RedirectURI     string              `yaml:"redirectURI" default:"https://api.cmk/callback"`
 	ClientID        commoncfg.SourceRef `yaml:"clientID"`
 	CSRFSecret      string              `yaml:"csrfSecret"`
+	JWSSigAlgs      []string            `yaml:"jwsSigAlgs"` // A list of supported JWT signature algorithms
 }
 
 type Migrate struct {

@@ -120,6 +120,7 @@ func publicMain(ctx context.Context, cfg *config.Config) error {
 		cfg.SessionManager.RedirectURI,
 		string(clientID),
 		cfg.SessionManager.CSRFSecret,
+		cfg.SessionManager.JWSSigAlgs,
 	)
 
 	return server.StartHTTPServer(ctx, cfg, sessionManager)
@@ -198,6 +199,7 @@ func TokenRefresherMain(ctx context.Context, cfg *config.Config) error {
 		cfg.SessionManager.RedirectURI,
 		string(clientID),
 		cfg.SessionManager.CSRFSecret,
+		cfg.SessionManager.JWSSigAlgs,
 	)
 
 	return startTokenRefresher(ctx, sessionManager, cfg)

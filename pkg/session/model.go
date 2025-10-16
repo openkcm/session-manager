@@ -35,7 +35,9 @@ type OIDCSessionData struct {
 	RequestURI string
 }
 
-type tokenSet struct {
+// tokenResponse represents the response from the token endpoint
+// described in https://openid.net/specs/openid-connect-core-1_0.html#TokenResponse
+type tokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	IDToken      string `json:"id_token"`

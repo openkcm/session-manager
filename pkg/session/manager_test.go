@@ -2,7 +2,6 @@ package session_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -115,9 +114,8 @@ func TestManager_Auth(t *testing.T) {
 			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: server.URL})
 			require.NoError(t, err)
 
-			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.redirectURI, tt.clientID, testCSRFSecret)
+			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.redirectURI, tt.clientID, testCSRFSecret, []string{"RS256"})
 			got, err := m.Auth(t.Context(), tt.tenantID, tt.fingerprint, tt.requestURI)
-			t.Logf("Got Auth URL %s", got)
 
 			if !tt.errAssert(t, err, fmt.Sprintf("Manager.Auth() error = %v", err)) || err != nil {
 				return
@@ -152,7 +150,7 @@ func TestManager_Auth(t *testing.T) {
 	}
 }
 
-func TestManager_Callback(t *testing.T) {
+func TestManager_FinaliseOIDCLogin(t *testing.T) {
 	const (
 		redirectURI    = "http://sm.example.com/sm/callback"
 		requestURI     = "http://cmk.example.com/ui"
@@ -162,8 +160,6 @@ func TestManager_Callback(t *testing.T) {
 		code           = "auth-code"
 		fingerprint    = "test-fingerprint"
 		pkceVerifier   = "test-verifier"
-		accessToken    = "access-token"
-		refreshToken   = "refresh-token"
 		testCSRFSecret = "12345678901234567890123456789012"
 	)
 
@@ -194,11 +190,6 @@ func TestManager_Callback(t *testing.T) {
 		Expiry:       time.Now().Add(time.Hour),
 	}
 
-	newOIDCRepo := func(getErr, getForTenantErr, createErr, deleteErr, updateErr error) *oidcmock.Repository {
-		oidcRepo := oidcmock.NewInMemRepository(getErr, getForTenantErr, createErr, deleteErr, updateErr)
-		return oidcRepo
-	}
-
 	newSessionRepo := func(loadStateErr, storeStateErr, storeSessionErr, deleteStateErr, deleteSessionErr error, state *session.State) *sessionmock.Repository {
 		sessionRepo := sessionmock.NewInMemRepository(loadStateErr, storeStateErr, storeSessionErr, deleteStateErr, deleteSessionErr)
 		if storeSessionErr != nil {
@@ -220,6 +211,7 @@ func TestManager_Callback(t *testing.T) {
 		stateID         string
 		code            string
 		fingerprint     string
+		oidcServerFail  bool
 		wantSessionID   bool
 		wantCSRFToken   bool
 		wantRedirectURI string
@@ -227,7 +219,7 @@ func TestManager_Callback(t *testing.T) {
 	}{
 		{
 			name:            "Success",
-			oidc:            newOIDCRepo(nil, nil, nil, nil, nil),
+			oidc:            oidcmock.NewInMemRepository(nil, nil, nil, nil, nil),
 			sessions:        newSessionRepo(nil, nil, nil, nil, nil, &validState),
 			stateID:         stateID,
 			code:            code,
@@ -239,7 +231,7 @@ func TestManager_Callback(t *testing.T) {
 		},
 		{
 			name:            "State load error",
-			oidc:            newOIDCRepo(nil, nil, nil, nil, nil),
+			oidc:            oidcmock.NewInMemRepository(nil, nil, nil, nil, nil),
 			sessions:        newSessionRepo(errors.New("state not found"), nil, nil, nil, nil, nil),
 			stateID:         stateID,
 			code:            code,
@@ -251,7 +243,7 @@ func TestManager_Callback(t *testing.T) {
 		},
 		{
 			name:            "State expired",
-			oidc:            newOIDCRepo(nil, nil, nil, nil, nil),
+			oidc:            oidcmock.NewInMemRepository(nil, nil, nil, nil, nil),
 			sessions:        newSessionRepo(nil, nil, nil, nil, nil, &expiredState),
 			stateID:         stateID,
 			code:            code,
@@ -263,7 +255,7 @@ func TestManager_Callback(t *testing.T) {
 		},
 		{
 			name:            "Fingerprint mismatch",
-			oidc:            newOIDCRepo(nil, nil, nil, nil, nil),
+			oidc:            oidcmock.NewInMemRepository(nil, nil, nil, nil, nil),
 			sessions:        newSessionRepo(nil, nil, nil, nil, nil, &mismatchState),
 			stateID:         stateID,
 			code:            code,
@@ -275,7 +267,7 @@ func TestManager_Callback(t *testing.T) {
 		},
 		{
 			name:            "OIDC provider get error",
-			oidc:            newOIDCRepo(nil, errors.New("provider not found"), nil, nil, nil),
+			oidc:            oidcmock.NewInMemRepository(nil, errors.New("provider not found"), nil, nil, nil),
 			sessions:        newSessionRepo(nil, nil, nil, nil, nil, &validState),
 			stateID:         stateID,
 			code:            code,
@@ -287,11 +279,12 @@ func TestManager_Callback(t *testing.T) {
 		},
 		{
 			name:            "Token exchange error",
-			oidc:            newOIDCRepo(nil, nil, nil, nil, nil),
+			oidc:            oidcmock.NewInMemRepository(nil, nil, nil, nil, nil),
 			sessions:        newSessionRepo(nil, nil, nil, nil, nil, &validState),
 			stateID:         stateID,
 			code:            code,
 			fingerprint:     fingerprint,
+			oidcServerFail:  true,
 			wantSessionID:   false,
 			wantCSRFToken:   false,
 			wantRedirectURI: "",
@@ -301,54 +294,28 @@ func TestManager_Callback(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			oidcServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path == "/token" && r.Method == http.MethodPost {
-					if tt.name == "Token exchange error" {
-						w.Header().Set("Content-Type", "application/json")
-						w.WriteHeader(http.StatusBadRequest)
-						_, _ = w.Write([]byte(`{"error": "invalid_request", "error_description": "Token exchange failed"}`))
-						return
-					}
-
-					w.Header().Set("Content-Type", "application/json")
-					w.WriteHeader(http.StatusOK)
-					tokenResponse := map[string]interface{}{
-						"access_token":  accessToken,
-						"refresh_token": refreshToken,
-						"id_token":      "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...",
-						"token_type":    "Bearer",
-						"expires_in":    3600,
-					}
-					_ = json.NewEncoder(w).Encode(tokenResponse)
-				} else {
-					w.WriteHeader(http.StatusOK)
-				}
-			}))
+			oidcServer := StartOIDCServer(t, tt.oidcServerFail)
 			defer oidcServer.Close()
 
-			auditServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method == http.MethodPost {
-					w.Header().Set("Content-Type", "application/json")
-					w.WriteHeader(http.StatusOK)
-					_, _ = w.Write([]byte(`{"success": true}`))
-				} else {
-					w.WriteHeader(http.StatusOK)
-				}
-			}))
+			auditServer := StartAuditServer(t)
 			defer auditServer.Close()
+
 			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
 			require.NoError(t, err)
 
-			oidcProviderWithMockServer := oidc.Provider{
+			jwksURI, err := url.JoinPath(oidcServer.URL, "/.well-known/jwks.json")
+			require.NoError(t, err)
+
+			localOIDCProvider := oidc.Provider{
 				IssuerURL: oidcServer.URL,
 				Blocked:   false,
-				JWKSURIs:  []string{oidcServer.URL + "/jwks"},
+				JWKSURIs:  []string{jwksURI},
 				Audiences: []string{requestURI},
 			}
 
-			tt.oidc.Add(tenantID, oidcProviderWithMockServer)
+			tt.oidc.Add(tenantID, localOIDCProvider)
 
-			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, redirectURI, "client-id", testCSRFSecret)
+			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, redirectURI, "client-id", testCSRFSecret, []string{"RS256"})
 
 			result, err := m.FinaliseOIDCLogin(context.Background(), tt.stateID, tt.code, tt.fingerprint)
 
@@ -357,7 +324,7 @@ func TestManager_Callback(t *testing.T) {
 			}
 
 			if err != nil {
-				assert.Nil(t, result, "Result should be nil on error")
+				assert.Zero(t, result, "Result should be nil on error")
 				return
 			}
 

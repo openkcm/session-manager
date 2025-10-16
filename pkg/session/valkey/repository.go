@@ -11,7 +11,6 @@ import (
 
 const objectTypeSession = "session"
 const objectTypeState = "state"
-const objectTypeId = "id"
 
 type Repository struct {
 	store *store
@@ -19,7 +18,7 @@ type Repository struct {
 
 func (r *Repository) ListSessions(ctx context.Context) ([]session.Session, error) {
 	var sessions []session.Session
-	if err := getStoreObjects(ctx, r.store, objectTypeSession, objectTypeId, &sessions); err != nil {
+	if err := getStoreObjects(ctx, r.store, objectTypeSession, "*", &sessions); err != nil {
 		return nil, fmt.Errorf("getting sessions from store: %w", err)
 	}
 

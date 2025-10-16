@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"path"
 	"strings"
 	"time"
+
+	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 	slogctx "github.com/veqryn/slog-context"
@@ -32,6 +34,7 @@ type Manager struct {
 	clientID        string
 
 	csrfSecret []byte
+	jwsSigAlgs []jose.SignatureAlgorithm
 }
 
 func NewManager(
@@ -42,7 +45,13 @@ func NewManager(
 	redirectURI,
 	clientID string,
 	csrfHMACSecret string,
+	jwsSigAlgs []string,
 ) *Manager {
+	algs := make([]jose.SignatureAlgorithm, 0, len(jwsSigAlgs))
+	for _, alg := range jwsSigAlgs {
+		algs = append(algs, jose.SignatureAlgorithm(alg))
+	}
+
 	return &Manager{
 		oidc:            oidc,
 		sessions:        sessions,
@@ -51,6 +60,7 @@ func NewManager(
 		redirectURI:     redirectURI,
 		clientID:        clientID,
 		csrfSecret:      []byte(csrfHMACSecret),
+		jwsSigAlgs:      algs,
 	}
 }
 
@@ -105,6 +115,31 @@ func (m *Manager) authURI(provider oidc.Provider, state State, pkce pkce.PKCE) (
 	return u.String(), nil
 }
 
+func (m *Manager) getProviderKeySet(ctx context.Context, provider oidc.Provider) (*jose.JSONWebKeySet, error) {
+	var keySet jose.JSONWebKeySet
+	if len(provider.JWKSURIs) == 0 {
+		return nil, errors.New("invalid oidc provider config: jwks uris are missng")
+	}
+
+	// TODO(Danylo): how do we deal with multiple JWKS uris?
+	uri := provider.JWKSURIs[0]
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating a new HTTP request: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("executing an http request: %w", err)
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&keySet); err != nil {
+		return nil, fmt.Errorf("decoding keyset response: %w", err)
+	}
+
+	return &keySet, nil
+}
+
 func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerprint string) (OIDCSessionData, error) {
 	state, err := m.sessions.LoadState(ctx, stateID)
 	if err != nil {
@@ -124,7 +159,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("getting oidc provider: %w", err)
 	}
 
-	tokenSet, err := m.exchangeCode(ctx, provider, code, state.PKCEVerifier)
+	tokens, err := m.exchangeCode(ctx, provider, code, state.PKCEVerifier)
 	if err != nil {
 		return OIDCSessionData{}, fmt.Errorf("exchanging code for tokens: %w", err)
 	}
@@ -132,8 +167,22 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 	sessionID := m.pkce.SessionID()
 	csrfToken := csrf.NewToken(sessionID, m.csrfSecret)
 
-	// TODO: which claims should we use?
-	claimsJSON, err := json.Marshal(tokenSet.IDToken)
+	token, err := jwt.ParseSigned(tokens.IDToken, m.jwsSigAlgs)
+	if err != nil {
+		return OIDCSessionData{}, fmt.Errorf("parsing id token: %w", err)
+	}
+
+	keyset, err := m.getProviderKeySet(ctx, provider)
+	if err != nil {
+		return OIDCSessionData{}, fmt.Errorf("getting jwks for a provider: %w", err)
+	}
+
+	var claims jwt.Claims
+	if err := token.Claims(keyset, &claims); err != nil {
+		return OIDCSessionData{}, fmt.Errorf("getting JWT claims: %w", err)
+	}
+
+	claimsJSON, err := json.Marshal(claims)
 	if err != nil {
 		return OIDCSessionData{}, fmt.Errorf("marshaling claims: %w", err)
 	}
@@ -145,8 +194,8 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		CSRFToken:    csrfToken,
 		Issuer:       provider.IssuerURL,
 		Claims:       string(claimsJSON),
-		AccessToken:  tokenSet.AccessToken,
-		RefreshToken: tokenSet.RefreshToken,
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
 		Expiry:       time.Now().Add(m.sessionDuration),
 	}
 
@@ -165,7 +214,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 	}, nil
 }
 
-func (m *Manager) exchangeCode(ctx context.Context, provider oidc.Provider, code, codeVerifier string) (tokenSet, error) {
+func (m *Manager) exchangeCode(ctx context.Context, provider oidc.Provider, code, codeVerifier string) (tokenResponse, error) {
 	tokenEndpoint := provider.IssuerURL + "/token"
 
 	data := url.Values{}
@@ -177,23 +226,23 @@ func (m *Manager) exchangeCode(ctx context.Context, provider oidc.Provider, code
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenEndpoint, strings.NewReader(data.Encode()))
 	if err != nil {
-		return tokenSet{}, fmt.Errorf("creating request: %w", err)
+		return tokenResponse{}, fmt.Errorf("creating request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return tokenSet{}, fmt.Errorf("executing request: %w", err)
+		return tokenResponse{}, fmt.Errorf("executing request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return tokenSet{}, fmt.Errorf("token exchange failed with status: %d", resp.StatusCode)
+		return tokenResponse{}, fmt.Errorf("token exchange failed with status: %d", resp.StatusCode)
 	}
 
-	var tokens tokenSet
+	var tokens tokenResponse
 	if err := json.NewDecoder(resp.Body).Decode(&tokens); err != nil {
-		return tokenSet{}, fmt.Errorf("decoding response: %w", err)
+		return tokenResponse{}, fmt.Errorf("decoding response: %w", err)
 	}
 
 	return tokens, nil
@@ -236,7 +285,10 @@ func (m *Manager) RefreshSession(ctx context.Context, s *Session, provider oidc.
 	data.Set("refresh_token", s.RefreshToken)
 	data.Set("client_id", m.clientID)
 
-	tokenEndpoint := path.Join(provider.IssuerURL, "/token")
+	tokenEndpoint, err := url.JoinPath(provider.IssuerURL, "/token")
+	if err != nil {
+		return fmt.Errorf("making issuer token path: %w", err)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenEndpoint, bytes.NewBufferString(data.Encode()))
 	if err != nil {

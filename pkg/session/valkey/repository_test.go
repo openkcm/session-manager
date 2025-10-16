@@ -16,8 +16,6 @@ import (
 	sessionvalkey "github.com/openkcm/session-manager/pkg/session/valkey"
 )
 
-const prefix = "session-manager"
-
 var client valkey.Client
 var testTime time.Time
 
@@ -46,7 +44,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func prepareState(t *testing.T, state session.State) {
+func prepareState(t *testing.T, prefix string, state session.State) {
 	t.Helper()
 
 	key := fmt.Sprintf("%s:state:%s", prefix, state.ID)
@@ -54,7 +52,7 @@ func prepareState(t *testing.T, state session.State) {
 	require.NoError(t, err, "inserting state")
 }
 
-func prepareSession(t *testing.T, s session.Session) {
+func prepareSession(t *testing.T, prefix string, s session.Session) {
 	t.Helper()
 
 	key := fmt.Sprintf("%s:session:%s", prefix, s.ID)
@@ -63,7 +61,9 @@ func prepareSession(t *testing.T, s session.Session) {
 }
 
 func TestRepository_LoadState(t *testing.T) {
-	prepareState(t, session.State{
+	const prefix = "session-manager-load-state-test"
+
+	prepareState(t, prefix, session.State{
 		ID:           "stateid-one",
 		TenantID:     "tenant1-id",
 		Fingerprint:  "fingerprint-one",
@@ -115,7 +115,9 @@ func TestRepository_LoadState(t *testing.T) {
 }
 
 func TestRepository_StoreState(t *testing.T) {
+	const prefix = "session-manager-store-state-test"
 	const upsertTenantID = "tenant-id-upsert"
+
 	upsertState := session.State{
 		ID:           "stateid-to-upsert",
 		TenantID:     upsertTenantID,
@@ -125,7 +127,7 @@ func TestRepository_StoreState(t *testing.T) {
 		Expiry:       testTime,
 	}
 
-	prepareState(t, upsertState)
+	prepareState(t, prefix, upsertState)
 
 	tests := []struct {
 		name      string
@@ -177,7 +179,9 @@ func TestRepository_StoreState(t *testing.T) {
 }
 
 func TestRepository_LoadSession(t *testing.T) {
-	prepareSession(t, session.Session{
+	const prefix = "session-manager-load-session-test"
+
+	prepareSession(t, prefix, session.Session{
 		ID:                "sessionid-one",
 		TenantID:          "tenant1-id",
 		Fingerprint:       "fingerprint-one",
@@ -231,6 +235,8 @@ func TestRepository_LoadSession(t *testing.T) {
 }
 
 func TestRepository_StoreSession(t *testing.T) {
+	const prefix = "session-manager-store-session-test"
+
 	const upsertTenantID = "tenant-id-upsert"
 	upsertSession := session.Session{
 		ID:                "sessionid-to-upsert",
@@ -242,7 +248,7 @@ func TestRepository_StoreSession(t *testing.T) {
 		AccessTokenExpiry: testTime,
 	}
 
-	prepareSession(t, upsertSession)
+	prepareSession(t, prefix, upsertSession)
 
 	tests := []struct {
 		name      string
@@ -296,7 +302,9 @@ func TestRepository_StoreSession(t *testing.T) {
 }
 
 func TestRepository_ListSessions(t *testing.T) {
-	prepareSession(t, session.Session{
+	const prefix = "session-manager-list-sessions-test"
+
+	prepareSession(t, prefix, session.Session{
 		ID:                "sessionid-one",
 		TenantID:          "tenant1-id",
 		Fingerprint:       "fingerprint-one",
@@ -305,7 +313,7 @@ func TestRepository_ListSessions(t *testing.T) {
 		Expiry:            testTime,
 		AccessTokenExpiry: testTime,
 	})
-	prepareSession(t, session.Session{
+	prepareSession(t, prefix, session.Session{
 		ID:                "sessionid-two",
 		TenantID:          "tenant1-id",
 		Fingerprint:       "fingerprint-two",
@@ -314,7 +322,7 @@ func TestRepository_ListSessions(t *testing.T) {
 		Expiry:            testTime,
 		AccessTokenExpiry: testTime,
 	})
-	prepareSession(t, session.Session{
+	prepareSession(t, prefix, session.Session{
 		ID:                "sessionid-three",
 		TenantID:          "tenant2-id",
 		Fingerprint:       "fingerprint-three",
@@ -382,6 +390,8 @@ func TestRepository_ListSessions(t *testing.T) {
 func TestRepository_DeleteState(t *testing.T) {
 	const tenantID = "tenant-delete"
 	const stateID = "stateid-delete"
+	const prefix = "session-manager-delete-state-test"
+
 	state := session.State{
 		ID:          stateID,
 		TenantID:    tenantID,
@@ -389,7 +399,7 @@ func TestRepository_DeleteState(t *testing.T) {
 		Expiry:      testTime,
 	}
 
-	prepareState(t, state)
+	prepareState(t, prefix, state)
 
 	tests := []struct {
 		name      string
