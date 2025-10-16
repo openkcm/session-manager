@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/openkcm/session-manager/compare/v0.1.0...v0.1.1) (2025-10-16)
+
+
+### Miscellaneous Chores
+
+* release 0.1.1 ([f357645](https://github.com/openkcm/session-manager/commit/f35764522c21808a3901b3d0e1bf4d5d8fb7ab5c))
+
 ## [0.1.0](https://github.com/openkcm/session-manager/compare/v0.0.1...v0.1.0) (2025-10-16)
 
 
