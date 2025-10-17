@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.0](https://github.com/openkcm/session-manager/compare/v0.1.1...v1.0.0) (2025-10-17)
+
+
+### ⚠ BREAKING CHANGES
+
+* single CLI ([#43](https://github.com/openkcm/session-manager/issues/43))
+
+### Code Refactoring
+
+* single CLI ([#43](https://github.com/openkcm/session-manager/issues/43)) ([b4f70ee](https://github.com/openkcm/session-manager/commit/b4f70eee9eefe856844b6f4dc0960bbee3502879))
+
 ## [0.1.1](https://github.com/openkcm/session-manager/compare/v0.1.0...v0.1.1) (2025-10-16)
 
 
