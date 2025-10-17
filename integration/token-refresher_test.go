@@ -16,11 +16,11 @@ import (
 )
 
 func TestTokenRefresher(t *testing.T) {
-	const exeName = "token-refresher"
+	const cmdName = "token-refresher"
 
 	ctx := t.Context()
 
-	istat := initInfra(t, exeName)
+	istat := initInfra(t, cmdName)
 	defer istat.Close(ctx)
 
 	istat.PreparePostgres(t)
@@ -36,9 +36,9 @@ func TestTokenRefresher(t *testing.T) {
 	commandCtx, cancelCommand := context.WithTimeout(ctx, 10*time.Second)
 	defer cancelCommand()
 
-	cmd := exec.CommandContext(commandCtx, filepath.Join(currdir, "./"+exeName))
+	cmd := exec.CommandContext(commandCtx, filepath.Join(currdir, "./session-manager"), cmdName)
 
-	cmdOutPath := filepath.Join(currdir, exeName+".log")
+	cmdOutPath := filepath.Join(currdir, cmdName+".log")
 	cmdOut, err := os.Create(cmdOutPath)
 	if err != nil {
 		t.Fatalf("failed to create a log file")

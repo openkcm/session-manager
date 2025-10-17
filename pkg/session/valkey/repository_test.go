@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"testing"
 	"time"
 
@@ -315,7 +316,7 @@ func TestRepository_ListSessions(t *testing.T) {
 	})
 	prepareSession(t, prefix, session.Session{
 		ID:                "sessionid-two",
-		TenantID:          "tenant1-id",
+		TenantID:          "tenant2-id",
 		Fingerprint:       "fingerprint-two",
 		AccessToken:       "access-token-two",
 		RefreshToken:      "refresh-token-two",
@@ -324,10 +325,10 @@ func TestRepository_ListSessions(t *testing.T) {
 	})
 	prepareSession(t, prefix, session.Session{
 		ID:                "sessionid-three",
-		TenantID:          "tenant2-id",
+		TenantID:          "tenant3-id",
 		Fingerprint:       "fingerprint-three",
 		AccessToken:       "access-token-three",
-		RefreshToken:      "refresh-token-four",
+		RefreshToken:      "refresh-token-three",
 		Expiry:            testTime,
 		AccessTokenExpiry: testTime,
 	})
@@ -353,7 +354,7 @@ func TestRepository_ListSessions(t *testing.T) {
 				},
 				{
 					ID:                "sessionid-two",
-					TenantID:          "tenant1-id",
+					TenantID:          "tenant2-id",
 					Fingerprint:       "fingerprint-two",
 					AccessToken:       "access-token-two",
 					RefreshToken:      "refresh-token-two",
@@ -362,10 +363,10 @@ func TestRepository_ListSessions(t *testing.T) {
 				},
 				{
 					ID:                "sessionid-three",
-					TenantID:          "tenant2-id",
+					TenantID:          "tenant3-id",
 					Fingerprint:       "fingerprint-three",
 					AccessToken:       "access-token-three",
-					RefreshToken:      "refresh-token-four",
+					RefreshToken:      "refresh-token-three",
 					Expiry:            testTime,
 					AccessTokenExpiry: testTime,
 				},
@@ -381,6 +382,9 @@ func TestRepository_ListSessions(t *testing.T) {
 			if !tt.assertErr(t, err, fmt.Sprintf("Repository.ListSessions() error %v", err)) || err != nil {
 				return
 			}
+
+			sort.Slice(gotSessions, func(i, j int) bool { return gotSessions[i].ID < gotSessions[j].ID })
+			sort.Slice(tt.wantSessions, func(i, j int) bool { return tt.wantSessions[i].ID < tt.wantSessions[j].ID })
 
 			assert.Equal(t, tt.wantSessions, gotSessions, "Repository.ListSessions()")
 		})

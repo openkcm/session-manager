@@ -19,8 +19,8 @@ import (
 )
 
 func TestMigrate(t *testing.T) {
-	const exeName = "migrate"
-	const configFilePath = "./" + exeName + "-test/config.yaml"
+	const cmdName = "migrate"
+	const configFilePath = "./" + cmdName + "-test/config.yaml"
 	const dbuser = "postgres"
 	const dbpass = "secret"
 	const dbname = "session_manager"
@@ -91,9 +91,9 @@ func TestMigrate(t *testing.T) {
 	defer os.Chdir(currdir)
 
 	// Run the migrations
-	cmd := exec.CommandContext(ctx, filepath.Join(currdir, "./"+exeName))
+	cmd := exec.CommandContext(ctx, filepath.Join(currdir, "./session-manager"), cmdName)
 
-	cmdOutPath := filepath.Join(currdir, exeName+".log")
+	cmdOutPath := filepath.Join(currdir, cmdName+".log")
 	cmdOut, err := os.Create(cmdOutPath)
 	if err != nil {
 		t.Fatalf("failed to create an log file")

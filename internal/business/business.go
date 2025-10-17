@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -73,6 +72,7 @@ func TokenRefresherMain(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("initialising the session manager: %w", err)
 	}
 
+	slogctx.Info(ctx, "Starting token refresh job")
 	return startTokenRefresher(ctx, sessionManager, cfg)
 }
 
@@ -99,14 +99,16 @@ func internalMain(ctx context.Context, cfg *config.Config) error {
 }
 
 func startTokenRefresher(ctx context.Context, sessionManager *session.Manager, cfg *config.Config) error {
-	ticker := time.NewTicker(cfg.TokenRefresher.RefreshInterval)
-	defer ticker.Stop()
+	c := time.Tick(cfg.TokenRefresher.RefreshInterval)
 	for {
+		slogctx.Info(ctx, "Triggering tokens refresh")
+		if err := sessionManager.RefreshExpiringSessions(ctx); err != nil {
+			slogctx.Error(ctx, "Failed to refresh tokens", "error", err)
+		}
+
 		select {
-		case <-ticker.C:
-			if err := sessionManager.RefreshExpiringSessions(ctx); err != nil {
-				log.Printf("[ERROR] Failed to refresh tokens: %v", err)
-			}
+		case <-c:
+			continue
 		case <-ctx.Done():
 			return nil
 		}
