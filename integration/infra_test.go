@@ -32,14 +32,14 @@ type infraStat struct {
 	closeFuncs []closeFunc
 }
 
-func initInfra(t *testing.T, exeName string) (istat infraStat) {
+func initInfra(t *testing.T, cmdName string) (istat infraStat) {
 	t.Helper()
 
 	// Since the config is read from the file $PWD/config.yaml,
 	// we're running a process in a subdirectory so that we aren't interferring with the other tests.
 	wd, err := os.Getwd()
 	require.NoError(t, err, "failed to get wd")
-	istat.Procdir = filepath.Join(wd, exeName+"-test")
+	istat.Procdir = filepath.Join(wd, cmdName+"-test")
 	istat.ConfigFilePath = filepath.Join(istat.Procdir, "config.yaml")
 
 	// Prepare a directory for the test
@@ -53,7 +53,7 @@ func initInfra(t *testing.T, exeName string) (istat infraStat) {
 	require.NoError(t, err, "failed to load config")
 
 	// Let OS choose a free port
-	istat.Cfg.HTTP.Address = "unix://" + filepath.Join(istat.Procdir, exeName+".sock")
+	istat.Cfg.HTTP.Address = "unix://" + filepath.Join(istat.Procdir, cmdName+".sock")
 	istat.Cfg.GRPC.Address = ":0"
 
 	return istat

@@ -210,7 +210,7 @@ sessionManager:
         value: my-client-id
     csrfSecret:
         source: embedded
-        value: my-csrf-secret
+        value: my-csrf-secret-at-least-thirty-two-bits-size
     jwsSigAlgs:
         - RS256
         - HS256

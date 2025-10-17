@@ -12,22 +12,9 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 \
     go build -o /bin/session-manager ./cmd/session-manager
 
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    --mount=type=bind,target=. \
-    CGO_ENABLED=0 \
-    go build -o /bin/migrate ./cmd/migrate
-
 FROM gcr.io/distroless/static-debian12:debug AS runner
 
 COPY --from=builder /bin/session-manager /bin/session-manager
-
-# Migrations
-COPY --from=builder /bin/migrate /bin/migrate
-COPY sql /sql
-
-# Token Refresher
-COPY --from=builder /bin/token-refresher /bin/token-refresher
 
 EXPOSE 8080
 ENTRYPOINT ["/bin/session-manager"]

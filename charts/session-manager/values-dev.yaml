@@ -32,6 +32,9 @@ image:
     # +docs:property
     tag: latest
 
+    command: /bin/session-manager
+    args: ["api-server"]
+
   migrate:
     # The container registry to pull the image from.
     # +docs:property
@@ -46,7 +49,8 @@ image:
     # +docs:property
     tag: latest
 
-    command: /bin/migrate
+    command: /bin/session-manager
+    args: ["migrate"]
 
   tokenRefresher:
     # The container registry to pull the image from.
@@ -62,7 +66,8 @@ image:
     # +docs:property
     tag: latest
 
-    command: /bin/token-refresher
+    command: /bin/session-manager
+    args: ["token-refresher"]
 
   # Kubernetes imagePullPolicy.
   pullPolicy: IfNotPresent
@@ -318,7 +323,7 @@ config:
       value: my-client-id
     csrfSecret:
       source: embedded
-      value: my-csrf-secret
+      value: my-csrf-secret-at-least-thirty-two-bits-size
     jwsSigAlgs:
       - RS256
       - HS256

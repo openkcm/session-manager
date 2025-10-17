@@ -6,7 +6,7 @@ metadata:
     {{- include "session-manager.labels" . | nindent 4 }}
     app.kubernetes.io/component: token-refresher
 spec:
-  replicas: {{ .Values.tokenRefresher.replicaCount | default 1 }}
+  replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
       app.kubernetes.io/name: {{ include "session-manager.name" . }}
@@ -25,6 +25,19 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "session-manager.serviceAccountName" . }}
+      {{- with .Values.pod.securityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+      {{- with .Values.extraInitContainers }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: {{ include "session-manager.name" . }}-token-refresher
           image: "{{ template "session-manager.image" (tuple .Values.image.tokenRefresher $.Chart.AppVersion) }}"

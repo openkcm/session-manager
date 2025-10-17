@@ -7,9 +7,9 @@ metadata:
     app.kubernetes.io/component: migrate
 immutable: {{ .Values.config.isImmutable | default false }}
 data:
- config.yaml: |-
-   # Based on github.com/openkcm/common-sdk/pkg/commoncfg
-   application:
+  config.yaml: |-
+    # Based on github.com/openkcm/common-sdk/pkg/commoncfg
+    application:
       name: {{ .Chart.Name }}
     {{- with .Values.config }}
       environment: {{ .environment }}
@@ -24,6 +24,10 @@ data:
     # Based on github.com/openkcm/session-manager/pkg/config
     database:
       {{- toYaml .database | nindent 6 }}
-    migrate:
-      {{- toYaml .migrate | nindent 6 }}
+
+    valkey:
+      {{- toYaml .valkey | nindent 6 }}
+
+    sessionManager:
+      {{- toYaml .sessionManager | nindent 6 }}
     {{- end }}
