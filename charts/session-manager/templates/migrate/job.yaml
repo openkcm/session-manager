@@ -19,7 +19,7 @@ spec:
         {{- end }}
     spec:
       restartPolicy: OnFailure
-      {{- with .Values.global.imagePullSecrets }}
+      {{- with .Values.global.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
