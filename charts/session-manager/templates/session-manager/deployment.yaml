@@ -48,15 +48,10 @@ spec:
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          image: "{{ template "session-manager.image" (tuple .Values.image.sessionManager $.Chart.AppVersion) }}"
+          image: "{{ template "session-manager.image" (tuple .Values.image $.Chart.AppVersion) }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- with .Values.image.sessionManager.command }}
-          command: ["{{- toYaml . }}"]
-          {{- end }}
-          {{- with .Values.image.sessionManager.args }}
-          args:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
+          command: [ "/bin/session-manager" ]
+          args: [ "api-server" ]
           {{- with .Values.ports }}
           ports:
             {{- toYaml . | nindent 12 }}

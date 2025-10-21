@@ -4,7 +4,6 @@ metadata:
   name: {{ include "session-manager.name" . }}-config
   labels:
     {{- include "session-manager.labels" . | nindent 4 }}
-    app.kubernetes.io/component: session-manager
 immutable: {{ .Values.config.isImmutable | default false }}
 data:
   config.yaml: |-
@@ -16,7 +15,7 @@ data:
       {{- with .labels }}
       labels:
         {{- toYaml . | nindent 8 }}
-      {{- end}}
+      {{- end }}
 
     audit:
       {{- toYaml .audit | nindent 6 }}
@@ -42,4 +41,7 @@ data:
 
     sessionManager:
       {{- toYaml .sessionManager | nindent 6 }}
+
+    migrate:
+      {{- toYaml .migrate | nindent 6 }}
     {{- end }}
