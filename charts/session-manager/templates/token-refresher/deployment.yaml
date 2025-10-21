@@ -6,9 +6,7 @@ metadata:
     {{- include "session-manager.labels" . | nindent 4 }}
     app.kubernetes.io/component: token-refresher
 spec:
-  {{- if not .Values.autoscaling.enabled }}
-  replicas: {{ .Values.replicaCount }}
-  {{- end }}
+  replicas: 1
   selector:
     matchLabels:
       {{- include "session-manager.selectorLabels" . | nindent 6 }}
@@ -35,10 +33,6 @@ spec:
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      initContainers:
-      {{- with .Values.extraInitContainers }}
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
       containers:
         - name: {{ include "session-manager.name" . }}-token-refresher
           {{- with .Values.securityContext }}
@@ -47,31 +41,9 @@ spec:
           {{- end }}
           image: "{{ template "session-manager.image" (tuple .Values.image $.Chart.AppVersion) }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- with .Values.image.command }}
-          command: [{{- toYaml . }}]
-          {{- end }}
+          command: [ "/bin/session-manager" ]
           args: [ "token-refresher" ]
-          env:
-            - name: MY_POD_IP
-              valueFrom:
-                fieldRef:
-                  apiVersion: v1
-                  fieldPath: status.podIP
-            - name: K8S_NODE_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: spec.nodeName
-            - name: K8S_NODE_IP
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.hostIP
-            {{- with .Values.extraEnvs }}
-              {{- toYaml . | nindent 12 }}
-            {{- end }}
-          {{- with .Values.extraEnvsFrom }}
-          envFrom:
-          {{- . | toYaml | nindent 12 }}
-          {{- end }}
+          env: []
           {{- with .Values.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -80,28 +52,13 @@ spec:
             - name: {{ include "session-manager.name" . }}-config-volume
               mountPath: /etc/{{ include "session-manager.name" . }}
               readOnly: true
-          {{- with .Values.extraVolumeMounts }}
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
       volumes:
         - name: {{ include "session-manager.name" . }}-config-volume
           projected:
             sources:
               - configMap:
                   name: {{ include "session-manager.name" . }}-config
-      {{- with .Values.extraVolumes }}
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-

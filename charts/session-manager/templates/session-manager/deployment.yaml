@@ -50,9 +50,7 @@ spec:
           {{- end }}
           image: "{{ template "session-manager.image" (tuple .Values.image $.Chart.AppVersion) }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- with .Values.image.command }}
-          command: ["{{- toYaml . }}"]
-          {{- end }}
+          command: [ "/bin/session-manager" ]
           args: [ "api-server" ]
           {{- with .Values.ports }}
           ports:

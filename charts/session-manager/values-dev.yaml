@@ -19,6 +19,9 @@ replicaCount: 1
 # This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
 image:
   # The container registry to pull the image from.
+  # For example:
+  #   registry: ghcr.io/openkcm
+  #   repository: images/crypto-layer
   # +docs:property
   registry: kms20
 
@@ -31,7 +34,9 @@ image:
   # +docs:property
   tag: latest
 
-  command: /bin/session-manager
+  # Setting a digest will override any tag.
+  # +docs:property
+  # digest: sha256:0e072dddd1f7f8fc8909a2ca6f65e76c5f0d2fcfb8be47935ae3457e8bbceb20
 
   # Kubernetes imagePullPolicy.
   pullPolicy: IfNotPresent
