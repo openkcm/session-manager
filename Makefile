@@ -42,7 +42,7 @@ delete-cluster:
 
 .PHONY: clean-k3d
 clean-k3d:
-	@echo "Cleaning everything in the cmk namespace in k3d."
+	@echo "Cleaning everything in the session-manager namespace in k3d."
 	@if kubectl --kubeconfig=${KUBECTL_CONFIG} get namespace $(NAMESPACE) > /dev/null 2>&1; then \
 	   kubectl --kubeconfig=${KUBECTL_CONFIG} delete namespace $(NAMESPACE) --ignore-not-found=true; \
 	else \
@@ -85,6 +85,11 @@ service-helm-install: k3d-build-image
 	@echo "Installing the service via helm"
 	@helm dependency build $(CHART_DIR)
 	helm upgrade --install $(CHART_NAME) $(CHART_DIR) --namespace $(NAMESPACE) \
+		-f $(CHART_DIR)/values-dev.yaml
+
+.PHONY: service-render-helm
+service-render-helm:
+	helm template --debug $(CHART_NAME) $(CHART_DIR) --namespace $(NAMESPACE) \
 		-f $(CHART_DIR)/values-dev.yaml
 
 .PHONY: k3d-build-image

@@ -45,15 +45,12 @@ spec:
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          image: "{{ template "session-manager.image" (tuple .Values.image.tokenRefresher $.Chart.AppVersion) }}"
+          image: "{{ template "session-manager.image" (tuple .Values.image $.Chart.AppVersion) }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- with .Values.image.tokenRefresher.command }}
+          {{- with .Values.image.command }}
           command: [{{- toYaml . }}]
           {{- end }}
-          {{- with .Values.image.tokenRefresher.args }}
-          args:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
+          args: [ "token-refresher" ]
           env:
             - name: MY_POD_IP
               valueFrom:
@@ -91,7 +88,7 @@ spec:
           projected:
             sources:
               - configMap:
-                  name: {{ include "session-manager.name" . }}-token-refresher-config
+                  name: {{ include "session-manager.name" . }}-config
       {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
       {{- end }}

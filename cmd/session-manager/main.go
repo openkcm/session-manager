@@ -28,7 +28,7 @@ var (
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
-	Short: "CMK Version",
+	Short: "Session Manager Version",
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		isVersionCmd = true
 
@@ -45,10 +45,9 @@ var versionCmd = &cobra.Command{
 
 func rootCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "cmk",
-		Short: "OpenKCM CMK - Customer Manager Keys",
-		Long: "OpenKCM Customer Manager Keys(CMK) is a key management service to manage " +
-			"encryption keys for applications and services.",
+		Use:   "session-manager",
+		Short: "Session Manager",
+		Long:  "KCM Session Manager, implementing the OIDC authorization code flow.",
 	}
 
 	cmd.PersistentFlags().DurationVar(&gracefulShutdown, "graceful-shutdown", 1*time.Second, "graceful shutdown")

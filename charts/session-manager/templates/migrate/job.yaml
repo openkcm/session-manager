@@ -38,15 +38,12 @@ spec:
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          image: "{{ template "session-manager.image" (tuple .Values.image.migrate $.Chart.AppVersion) }}"
+          image: "{{ template "session-manager.image" (tuple .Values.image $.Chart.AppVersion) }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- with .Values.image.migrate.command }}
+          {{- with .Values.image.command }}
           command: ["{{- toYaml . }}"]
           {{- end }}
-          {{- with .Values.image.migrate.args }}
-          args:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
+          args: [ "migrate" ]
           {{- with .Values.ports }}
           ports:
             {{- toYaml . | nindent 12 }}
@@ -88,7 +85,7 @@ spec:
           projected:
             sources:
               - configMap:
-                  name: {{ include "session-manager.name" . }}-migrate-config
+                  name: {{ include "session-manager.name" . }}-config
       {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
