@@ -17,4 +17,5 @@ FROM gcr.io/distroless/static-debian12:debug AS runner
 COPY --from=builder /bin/session-manager /bin/session-manager
 
 EXPOSE 8080
+EXPOSE 9091
 ENTRYPOINT ["/bin/session-manager"]
