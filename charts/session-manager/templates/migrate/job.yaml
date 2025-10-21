@@ -3,46 +3,47 @@ kind: Job
 metadata:
   name: {{ include "session-manager.fullname" . }}-migrate
   labels:
-    {{- include "session-manager.labels" . | nindent 4 }}
-    app.kuberentes.io/component: migrate
+    {{- include "session-manager.migrate.labels" . | nindent 4 }}
 spec:
   ttlSecondsAfterFinished: 300
   template:
     metadata:
-      {{- with .Values.pod.annotations }}
+      {{- with .Values.migrate.pod.annotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "session-manager.labels" . | nindent 8 }}
-        {{- with .Values.pod.labels }}
+        {{- include "session-manager.migrate.labels" . | nindent 8 }}
+        {{- with .Values.migrate.pod.labels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-        app.kubernetes.io/component: migrate
     spec:
       restartPolicy: OnFailure
-      {{- with .Values.imagePullSecrets }}
+      {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.pod.securityContext }}
+      {{- with .Values.migrate.pod.securityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
         - name: {{ include "session-manager.name" . }}
-          {{- with .Values.securityContext }}
+          {{- with .Values.global.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          image: "{{ template "session-manager.image" (tuple .Values.image $.Chart.AppVersion) }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: [ "/bin/session-manager" ]
+          image: "{{ template "session-manager.image" (tuple .Values.global.image $.Chart.AppVersion) }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          {{- with .Values.global.image.command }}
+          command:
+          {{- toYaml . | nindent 12 }}
+          {{- end }}
           args: [ "migrate" ]
           env: []
           volumeMounts:
             - name: {{ include "session-manager.name" . }}-config-volume
-              mountPath: /etc/{{ include "session-manager.name" . }}
+              mountPath: /etc/session-manager
               readOnly: true
       volumes:
         - name: {{ include "session-manager.name" . }}-config-volume

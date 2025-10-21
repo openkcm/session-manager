@@ -13,153 +13,215 @@ fullnameOverride: ""
 # This is helpful when installing a chart dependency (sub chart).
 namespace: ""
 
-# This will set the replicaset count more information can be found here: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
-replicaCount: 1
+global:
+  # This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
+  image:
+    # The container registry to pull the image from.
+    # For example:
+    #   registry: ghcr.io/openkcm
+    #   repository: images/crypto-layer
+    # +docs:property
+    registry: kms20
 
-# This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
-image:
-  # The container registry to pull the image from.
-  # For example:
-  #   registry: ghcr.io/openkcm
-  #   repository: images/crypto-layer
-  # +docs:property
-  registry: kms20
+    # The container image
+    # +docs:property
+    repository: session-manager
 
-  # The container image
-  # +docs:property
-  repository: session-manager
+    # Override the image tag to deploy by setting this variable.
+    # If no value is set, the chart's appVersion is used.
+    # +docs:property
+    tag: latest
 
-  # Override the image tag to deploy by setting this variable.
-  # If no value is set, the chart's appVersion is used.
-  # +docs:property
-  tag: latest
+    # Setting a digest will override any tag.
+    # +docs:property
+    # digest: sha256:0e072dddd1f7f8fc8909a2ca6f65e76c5f0d2fcfb8be47935ae3457e8bbceb20
 
-  # Setting a digest will override any tag.
-  # +docs:property
-  # digest: sha256:0e072dddd1f7f8fc8909a2ca6f65e76c5f0d2fcfb8be47935ae3457e8bbceb20
+    # Setting the command.
+    # +docs:property
+    command: [ "/bin/session-manager" ]
 
-  # Kubernetes imagePullPolicy.
-  pullPolicy: IfNotPresent
+    # Kubernetes imagePullPolicy.
+    pullPolicy: IfNotPresent
 
-# This is for the secretes for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
-imagePullSecrets:
 
-# This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
-serviceAccount:
-  # Specifies whether a service account should be created
-  create: true
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
-  name: ""
+  # This is for the secretes for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+  imagePullSecrets: []
 
-pod:
-  # This is for setting Kubernetes Annotations to a Pod.
-  # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
-  annotations: {}
-
-  # This is for setting Kubernetes Labels to a Pod.
-  # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
-  labels: {}
+  # This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
+  serviceAccount:
+    # Specifies whether a service account should be created
+    create: true
+    # Annotations to add to the service account
+    annotations: {}
+    # The name of the service account to use.
+    # If not set and create is true, a name is generated using the fullname template
+    name: ""
 
   securityContext: {}
-  # fsGroup: 2000
-
-  disruptionBudget:
-    # Enable or disable the PodDisruptionBudget resource.
-    #
-    # This prevents downtime during voluntary disruptions such as during a Node upgrade.
-    # For example, the PodDisruptionBudget will block `kubectl drain`
-    # Pod is currently running.
-    enabled: false
-
-securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
+    # capabilities:
+    #   drop:
+    #   - ALL
+    # readOnlyRootFilesystem: true
   # runAsNonRoot: true
   # runAsUser: 1000
 
-# This is for setting up a service more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/
-service:
-  # Labels to add to the service
-  labels: {}
-  # Annotations to add to the service
-  annotations: {}
-  # This sets the service type more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
-  type: ClusterIP
-  # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
+
+# API Server Submodule Configuration
+apiServer:
+  # This will set the replicaset count more information can be found here: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
+  replicaCount: 1
+
+  pod:
+    # This is for setting Kubernetes Annotations to a Pod.
+    # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
+    annotations: {}
+
+    # This is for setting Kubernetes Labels to a Pod.
+    # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+    labels: {}
+
+    securityContext: {}
+    # fsGroup: 2000
+
+    disruptionBudget:
+      # Enable or disable the PodDisruptionBudget resource.
+      #
+      # This prevents downtime during voluntary disruptions such as during a Node upgrade.
+      # For example, the PodDisruptionBudget will block `kubectl drain`
+      # Pod is currently running.
+      enabled: false
+
+    nodeSelector: { }
+    tolerations: [ ]
+    affinity: { }
+    topologySpreadConstraints: [ ]
+
+  # This is for setting up a service more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/
+  service:
+    # Labels to add to the service
+    labels: {}
+    # Annotations to add to the service
+    annotations: {}
+    # This sets the service type more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
+    type: ClusterIP
+    # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
+    ports:
+      - port: 8080
+        protocol: TCP
+        targetPort: http
+        name: http
+      - port: 9091
+        protocol: TCP
+        targetPort: grpc
+        name: grpc
+
+  resources: {}
+
+  # This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+  livenessProbe:
+    httpGet:
+      path: /probe/liveness
+      port: http-status
+      scheme: HTTP
+    failureThreshold: 1
+    periodSeconds: 10
+  readinessProbe:
+    httpGet:
+      path: /probe/readiness
+      port: http-status
+      scheme: HTTP
+    failureThreshold: 1
+    periodSeconds: 10
+
+  # This section is for setting up autoscaling more information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/
+  hpa:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 1
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: 80
+
+  # Additional init containers on the output Deployment definition.
+  extraInitContainers: []
+
+  # Additional containers on the output Deployment definition.
+  extraContainers: []
+
+  # Additional volumes on the output Deployment definition.
+  extraVolumes: []
+
+  # Additional volumeMounts on the output Deployment definition.
+  extraVolumeMounts: []
+
+  # Additional ens on the output Deployment definition.
+  extraEnvs: []
+
+  # Additional envsFrom on the output Deployment definition.
+  extraEnvsFrom: []
+
   ports:
-    - port: 8080
+    - name: http-status
+      containerPort: 8888
       protocol: TCP
-      targetPort: http
-      name: http
-    - port: 9091
+    - name: http
+      containerPort: 8080
       protocol: TCP
-      targetPort: grpc
-      name: grpc
+    - name: grpc
+      containerPort: 9091
+      protocol: TCP
 
-resources: {}
+# Token Refresher Submodule Configuration
+tokenRefresher:
+  pod:
+    # This is for setting Kubernetes Annotations to a Pod.
+    # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
+    annotations: {}
 
-# This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
-livenessProbe:
-  httpGet:
-    path: /probe/liveness
-    port: http-status
-    scheme: HTTP
-  failureThreshold: 1
-  periodSeconds: 10
-readinessProbe:
-  httpGet:
-    path: /probe/readiness
-    port: http-status
-    scheme: HTTP
-  failureThreshold: 1
-  periodSeconds: 10
+    # This is for setting Kubernetes Labels to a Pod.
+    # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+    labels: {}
 
-# This section is for setting up autoscaling more information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 1
-  targetCPUUtilizationPercentage: 80
-  targetMemoryUtilizationPercentage: 80
+    securityContext: {}
+    # fsGroup: 2000
 
-# Additional init containers on the output Deployment definition.
-extraInitContainers: []
+  resources: {}
 
-# Additional containers on the output Deployment definition.
-extraContainers: []
+  # This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+  livenessProbe:
+    httpGet:
+      path: /probe/liveness
+      port: http-status
+      scheme: HTTP
+    failureThreshold: 1
+    periodSeconds: 10
+  readinessProbe:
+    httpGet:
+      path: /probe/readiness
+      port: http-status
+      scheme: HTTP
+    failureThreshold: 1
+    periodSeconds: 10
 
-# Additional volumes on the output Deployment definition.
-extraVolumes: []
+  ports:
+    - name: http-status
+      containerPort: 8888
+      protocol: TCP
 
-# Additional volumeMounts on the output Deployment definition.
-extraVolumeMounts: []
 
-# Additional ens on the output Deployment definition.
-extraEnvs: []
-# Additional envsFrom on the output Deployment definition.
-extraEnvsFrom: []
+# Migrate Job Configuration
+migrate:
+  pod:
+    # This is for setting Kubernetes Annotations to a Pod.
+    # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
+    annotations: { }
 
-nodeSelector: {}
+    # This is for setting Kubernetes Labels to a Pod.
+    # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+    labels: { }
 
-tolerations: []
+    securityContext: { }
+    # fsGroup: 2000
 
-ports:
-  - name: http-status
-    containerPort: 8888
-    protocol: TCP
-  - name: http
-    containerPort: 8080
-    protocol: TCP
-  - name: grpc
-    containerPort: 9091
-    protocol: TCP
-
-affinity: {}
 
 config:
   isImmutable: false

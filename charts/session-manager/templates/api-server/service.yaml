@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "session-manager.fullname" . }}
+  labels:
+    {{- include "session-manager.api-server.labels" . | nindent 4 }}
+    {{- with .Values.apiServer.service.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- with .Values.apiServer.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+{{- end }}
+spec:
+  type: {{ .Values.apiServer.service.type }}
+{{- with .Values.apiServer.service.ports }}
+  ports:
+    {{- toYaml . | nindent 4 }}
+{{- end }}
+  selector:
+    {{- include "session-manager.api-server.selectorLabels" . | nindent 4 }}

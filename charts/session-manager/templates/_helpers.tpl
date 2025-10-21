@@ -18,7 +18,7 @@ If release name contains chart name it will be used as a full name.
 {{- if contains $name .Release.Name }}
 {{- .Release.Name | trunc 63 | trimSuffix "-" }}
 {{- else }}
-{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
+{{- printf "%s" $name | trunc 63 | trimSuffix "-" }}
 {{- end }}
 {{- end }}
 {{- end }}
@@ -55,21 +55,70 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{/*
-Selector labels
+Migrate labels
+*/}}
+{{- define "session-manager.migrate.labels" -}}
+{{ include "session-manager.labels" . }}
+{{ include "session-manager.name" . }}.openkcm.io/component: migrate
+{{- end }}
+
+{{/*
+API Server labels
+*/}}
+{{- define "session-manager.api-server.labels" -}}
+{{ include "session-manager.labels" . }}
+{{ include "session-manager.name" . }}.openkcm.io/component: api-server
+{{- end }}
+
+{{/*
+Token Refresher labels
+*/}}
+{{- define "session-manager.token-refresher.labels" -}}
+{{ include "session-manager.labels" . }}
+{{ include "session-manager.name" . }}.openkcm.io/component: token-refresher
+{{- end }}
+
+{{/*
+Common Selector labels
 */}}
 {{- define "session-manager.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "session-manager.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: {{ .Chart.Name }}
+{{- end }}
+
+{{/*
+Migrate Selector labels
+*/}}
+{{- define "session-manager.migrate.selectorLabels" -}}
+{{ include "session-manager.selectorLabels" . }}
+{{ include "session-manager.name" . }}.openkcm.io/component: migrate
+{{- end }}
+
+{{/*
+API Server Selector labels
+*/}}
+{{- define "session-manager.api-server.selectorLabels" -}}
+{{ include "session-manager.selectorLabels" . }}
+{{ include "session-manager.name" . }}.openkcm.io/component: api-server
+{{- end }}
+
+{{/*
+Token Refresher Selector labels
+*/}}
+{{- define "session-manager.token-refresher.selectorLabels" -}}
+{{ include "session-manager.selectorLabels" . }}
+{{ include "session-manager.name" . }}.openkcm.io/component: token-refresher
 {{- end }}
 
 {{/*
 Create the name of the service account to use
 */}}
 {{- define "session-manager.serviceAccountName" -}}
-{{- if .Values.serviceAccount.create }}
-{{- default (include "session-manager.fullname" .) .Values.serviceAccount.name }}
+{{- if .Values.global.serviceAccount.create }}
+{{- default (include "session-manager.fullname" .) .Values.global.serviceAccount.name }}
 {{- else }}
-{{- default "default" .Values.serviceAccount.name }}
+{{- default "default" .Values.global.serviceAccount.name }}
 {{- end }}
 {{- end }}
 

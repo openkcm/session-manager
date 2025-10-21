@@ -3,56 +3,56 @@ kind: Deployment
 metadata:
   name: {{ include "session-manager.fullname" . }}
   labels:
-    {{- include "session-manager.labels" . | nindent 4 }}
-    app.kubernetes.io/component: session-manager
+    {{- include "session-manager.api-server.labels" . | nindent 4 }}
 spec:
-  {{- if not .Values.autoscaling.enabled }}
-  replicas: {{ .Values.replicaCount }}
+  {{- if not .Values.apiServer.hpa.enabled }}
+  replicas: {{ .Values.apiServer.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
-      {{- include "session-manager.selectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: session-manager
+      {{- include "session-manager.api-server.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.pod.annotations }}
+      {{- with .Values.apiServer.pod.annotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "session-manager.labels" . | nindent 8 }}
-        {{- with .Values.pod.labels }}
+        {{- include "session-manager.api-server.labels" . | nindent 8 }}
+        {{- with .Values.apiServer.pod.labels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-        app.kubernetes.io/component: session-manager
     spec:
-      {{- with .Values.imagePullSecrets }}
+      {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "session-manager.serviceAccountName" . }}
-      {{- with .Values.pod.securityContext }}
+      {{- with .Values.apiServer.pod.securityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       initContainers:
-      {{- with .Values.extraInitContainers }}
+      {{- with .Values.apiServer.extraInitContainers }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-      {{- with .Values.extraContainers }}
+      {{- with .Values.apiServer.extraContainers }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
         - name: {{ include "session-manager.name" . }}
-          {{- with .Values.securityContext }}
+          {{- with .Values.global.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          image: "{{ template "session-manager.image" (tuple .Values.image $.Chart.AppVersion) }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: [ "/bin/session-manager" ]
+          image: "{{ template "session-manager.image" (tuple .Values.global.image $.Chart.AppVersion) }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          {{- with .Values.global.image.command }}
+          command:
+          {{- toYaml . | nindent 12 }}
+          {{- end }}
           args: [ "api-server" ]
-          {{- with .Values.ports }}
+          {{- with .Values.apiServer.ports }}
           ports:
             {{- toYaml . | nindent 12 }}
           {{- end }}
@@ -70,30 +70,30 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.hostIP
-            {{- with .Values.extraEnvs }}
+            {{- with .Values.apiServer.extraEnvs }}
               {{- toYaml . | nindent 12 }}
             {{- end }}
-          {{- with .Values.extraEnvsFrom }}
+          {{- with .Values.apiServer.extraEnvsFrom }}
           envFrom:
           {{- . | toYaml | nindent 12 }}
           {{- end }}
-          {{- with .Values.livenessProbe }}
+          {{- with .Values.apiServer.livenessProbe }}
           livenessProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with .Values.readinessProbe }}
+          {{- with .Values.apiServer.readinessProbe }}
           readinessProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with .Values.resources }}
+          {{- with .Values.apiServer.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           volumeMounts:
             - name: {{ include "session-manager.name" . }}-config-volume
-              mountPath: /etc/{{ include "session-manager.name" . }}
+              mountPath: /etc/session-manager
               readOnly: true
-          {{- with .Values.extraVolumeMounts }}
+          {{- with .Values.apiServer.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
           {{- end }}
       volumes:
@@ -102,18 +102,22 @@ spec:
             sources:
               - configMap:
                   name: {{ include "session-manager.name" . }}-config
-      {{- with .Values.extraVolumes }}
+      {{- with .Values.apiServer.extraVolumes }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.nodeSelector }}
+      {{- with .Values.apiServer.pod.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.affinity }}
+      {{- with .Values.apiServer.pod.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.tolerations }}
+      {{- with .Values.apiServer.pod.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 6 }}
+      {{- end }}
+      {{- with .Values.apiServer.pod.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
