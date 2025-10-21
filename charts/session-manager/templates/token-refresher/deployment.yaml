@@ -6,24 +6,25 @@ metadata:
     {{- include "session-manager.labels" . | nindent 4 }}
     app.kubernetes.io/component: token-refresher
 spec:
+  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
+  {{- end }}
   selector:
     matchLabels:
-      app.kubernetes.io/name: {{ include "session-manager.name" . }}
+      {{- include "session-manager.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: token-refresher
   template:
     metadata:
-      labels:
-        app.kubernetes.io/name: {{ include "session-manager.name" . }}
-        app.kubernetes.io/component: token-refresher
-        {{- include "session-manager.labels" . | nindent 8 }}
-        {{- with .Values.pod.labels }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
       {{- with .Values.pod.annotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      labels:
+        {{- include "session-manager.labels" . | nindent 8 }}
+        {{- with .Values.pod.labels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        app.kubernetes.io/component: token-refresher
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -40,6 +41,10 @@ spec:
       {{- end }}
       containers:
         - name: {{ include "session-manager.name" . }}-token-refresher
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           image: "{{ template "session-manager.image" (tuple .Values.image.tokenRefresher $.Chart.AppVersion) }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- with .Values.image.tokenRefresher.command }}
@@ -88,14 +93,6 @@ spec:
               - configMap:
                   name: {{ include "session-manager.name" . }}-token-refresher-config
       {{- with .Values.extraVolumes }}
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.pod.securityContext }}
-      securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       {{- with .Values.nodeSelector }}
