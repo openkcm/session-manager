@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/openkcm/session-manager/compare/v0.2.0...v0.2.1) (2025-10-21)
+
+
+### Bug Fixes
+
+* **charts:** render issues ([#48](https://github.com/openkcm/session-manager/issues/48)) ([1ab8109](https://github.com/openkcm/session-manager/commit/1ab81095c2e6704a8c1184a51b89bc636380b223))
+
 ## [0.2.0](https://github.com/openkcm/session-manager/compare/v1.0.1...v0.2.0) (2025-10-17)
 
 
