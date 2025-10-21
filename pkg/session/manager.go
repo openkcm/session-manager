@@ -182,18 +182,17 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("getting JWT claims: %w", err)
 	}
 
-	claimsJSON, err := json.Marshal(claims)
-	if err != nil {
-		return OIDCSessionData{}, fmt.Errorf("marshaling claims: %w", err)
-	}
-
 	session := Session{
-		ID:           sessionID,
-		TenantID:     state.TenantID,
-		Fingerprint:  fingerprint,
-		CSRFToken:    csrfToken,
-		Issuer:       provider.IssuerURL,
-		Claims:       string(claimsJSON),
+		ID:          sessionID,
+		TenantID:    state.TenantID,
+		Fingerprint: fingerprint,
+		CSRFToken:   csrfToken,
+		Issuer:      provider.IssuerURL,
+		Claims: Claims{
+			Subject: claims.Subject,
+			Email:   "",         // TODO: extract email from claims
+			Groups:  []string{}, // TODO: extract groups from claims
+		},
 		AccessToken:  tokens.AccessToken,
 		RefreshToken: tokens.RefreshToken,
 		Expiry:       time.Now().Add(m.sessionDuration),

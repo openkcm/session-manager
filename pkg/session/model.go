@@ -21,11 +21,17 @@ type Session struct {
 	Fingerprint       string    // Fingerprint to bind the session to a specific client
 	CSRFToken         string    // CSRF token to prevent CSRF attacks
 	Issuer            string    // Issuer of the OIDC tokens
-	Claims            string    // JSON string of claims from the ID token
+	Claims            Claims    // Claims from the ID token
 	AccessToken       string    // Access token from the identity provider
 	RefreshToken      string    // Refresh token from the identity provider
 	Expiry            time.Time // Expiry time of the session
 	AccessTokenExpiry time.Time // Expiry time of the Access Token
+}
+
+type Claims struct {
+	Subject string   `json:"sub"`
+	Email   string   `json:"email"`
+	Groups  []string `json:"groups"`
 }
 
 // OIDCSessionData represents a data from the last step of the OIDC flow.
