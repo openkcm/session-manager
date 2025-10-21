@@ -97,6 +97,10 @@ service:
       protocol: TCP
       targetPort: http
       name: http
+    - port: 9091
+      protocol: TCP
+      targetPort: grpc
+      name: grpc
 
 resources: {}
 
@@ -151,6 +155,9 @@ ports:
     protocol: TCP
   - name: http
     containerPort: 8080
+    protocol: TCP
+  - name: grpc
+    containerPort: 9091
     protocol: TCP
 
 affinity: {}

@@ -23,6 +23,9 @@ data:
     http:
       address: :{{ .http.port }}
 
+    grpc:
+      address: :{{ .grpc.port }}
+
     status:
       {{- toYaml .status | nindent 6 }}
 
