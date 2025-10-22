@@ -41,6 +41,9 @@ spec:
           {{- end }}
           image: "{{ template "session-manager.image" (tuple .Values.image $.Chart.AppVersion) }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.image.command }}
+          command: {{ . }}
+          {{- end }}
           args: [ "token-refresher" ]
           env: []
           {{- with .Values.resources }}
