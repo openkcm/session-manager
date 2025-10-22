@@ -37,7 +37,6 @@ spec:
           {{- end }}
           image: "{{ template "session-manager.image" (tuple .Values.image $.Chart.AppVersion) }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: [ "/bin/session-manager" ]
           args: [ "migrate" ]
           env: []
           volumeMounts:
