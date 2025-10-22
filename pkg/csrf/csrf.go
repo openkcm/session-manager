@@ -18,12 +18,13 @@ func formMessage(sessionID, randValue string) []byte {
 func NewToken(sessionID string, key []byte) string {
 	buf := make([]byte, keyLength)
 	_, _ = rand.Read(buf)
-
 	randValue := hex.EncodeToString(buf)
 
-	msg := formMessage(sessionID, randValue)
 	hash := hmac.New(sha256.New, key)
-	return hex.EncodeToString(hash.Sum(msg)) + "." + hex.EncodeToString([]byte(randValue))
+	hash.Write(formMessage(sessionID, randValue))
+	hmacValue := hash.Sum(nil)
+
+	return hex.EncodeToString(hmacValue) + "." + hex.EncodeToString([]byte(randValue))
 }
 
 func Validate(token, sessionID string, key []byte) bool {
@@ -32,7 +33,7 @@ func Validate(token, sessionID string, key []byte) bool {
 		return false
 	}
 
-	mac, err := hex.DecodeString(parts[0])
+	receivedHmacValue, err := hex.DecodeString(parts[0])
 	if err != nil {
 		return false
 	}
@@ -42,8 +43,9 @@ func Validate(token, sessionID string, key []byte) bool {
 		return false
 	}
 
-	msg := formMessage(sessionID, string(randValue))
-	expectedHash := hmac.New(sha256.New, key)
+	hash := hmac.New(sha256.New, key)
+	hash.Write(formMessage(sessionID, string(randValue)))
+	expectedHmacValue := hash.Sum(nil)
 
-	return hmac.Equal(mac, expectedHash.Sum(msg))
+	return hmac.Equal(receivedHmacValue, expectedHmacValue)
 }
