@@ -264,12 +264,12 @@ func (m *Manager) RefreshExpiringSessions(ctx context.Context) error {
 
 		if shouldRefresh(s) {
 			if err := m.RefreshSession(ctx, &s, provider); err != nil {
-				slogctx.Warn(ctx, "Could not refresh token", "tenant_id", s.TenantID, "session_id", s.ID)
+				slogctx.Warn(ctx, "Could not refresh token", "tenant_id", s.TenantID)
 				continue
 			}
 
 			if err := m.sessions.StoreSession(ctx, s); err != nil {
-				slogctx.Warn(ctx, "Could not store refreshed session", "tenant_id", s.TenantID, "session_id", s.ID)
+				slogctx.Warn(ctx, "Could not store refreshed session", "tenant_id", s.TenantID)
 				continue
 			}
 		}
