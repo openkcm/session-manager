@@ -218,6 +218,17 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("deleting state: %w", err)
 	}
 
+	// audit userLoginSuccess
+	// TODO: correlation id? - third arg metadata field
+	metadata, _ := otlpaudit.NewEventMetadata(session.Claims.Email, state.TenantID, state.TenantID)
+	event, err := otlpaudit.NewUserLoginSuccessEvent(metadata, state.TenantID, otlpaudit.LOGINMETHOD_OPENIDCONNECT, otlpaudit.MFATYPE_NONE, otlpaudit.USERTYPE_BUSINESS, state.TenantID)
+	if err != nil {
+		err := m.audit.SendEvent(ctx, event)
+		if err != nil {
+			return OIDCSessionData{}, err
+		}
+	}
+
 	return OIDCSessionData{
 		SessionID:  sessionID,
 		CSRFToken:  csrfToken,
