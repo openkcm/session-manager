@@ -46,9 +46,15 @@ spec:
             - name: {{ include "session-manager.name" . }}-config-volume
               mountPath: /etc/{{ include "session-manager.name" . }}
               readOnly: true
+          {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
       volumes:
         - name: {{ include "session-manager.name" . }}-config-volume
           projected:
             sources:
               - configMap:
                   name: {{ include "session-manager.name" . }}-config
+      {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
