@@ -41,10 +41,11 @@ type Database struct {
 }
 
 type ValKey struct {
-	Host     commoncfg.SourceRef `yaml:"host"`
-	User     commoncfg.SourceRef `yaml:"user"`
-	Password commoncfg.SourceRef `yaml:"password"`
-	Prefix   string              `yaml:"prefix"`
+	Host      commoncfg.SourceRef `yaml:"host"`
+	User      commoncfg.SourceRef `yaml:"user"`
+	Password  commoncfg.SourceRef `yaml:"password"`
+	Prefix    string              `yaml:"prefix"`
+	SecretRef commoncfg.SecretRef `yaml:"secretRef"`
 }
 
 type SessionManager struct {
