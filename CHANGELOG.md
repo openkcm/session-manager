@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.0](https://github.com/openkcm/session-manager/compare/v0.2.1...v0.3.0) (2025-10-23)
+
+
+### Features
+
+* valkey mTLS authentication ([#57](https://github.com/openkcm/session-manager/issues/57)) ([d4fb525](https://github.com/openkcm/session-manager/commit/d4fb525f3b0844d890bd418ca4e890fb296ff674))
+
+
+### Bug Fixes
+
+* **charts:** expose grpc port ([#51](https://github.com/openkcm/session-manager/issues/51)) ([4147699](https://github.com/openkcm/session-manager/commit/41476995bd28054204573147a4ced88af8cb442a))
+* CSRF token ([#56](https://github.com/openkcm/session-manager/issues/56)) ([c9e466e](https://github.com/openkcm/session-manager/commit/c9e466e8a24ca42b5353bca4076573dc420fe91a))
+
 ## [0.2.1](https://github.com/openkcm/session-manager/compare/v0.2.0...v0.2.1) (2025-10-21)
 
 
