@@ -141,11 +141,22 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (*session.Manag
 		return nil, fmt.Errorf("loading valkey password: %w", err)
 	}
 
-	valkeyClient, err := valkey.NewClient(valkey.ClientOption{
+	valkeyOpts := valkey.ClientOption{
 		InitAddress: []string{string(valkeyHost)},
 		Username:    string(valkeyUsername),
 		Password:    string(valkeyPassword),
-	})
+	}
+
+	if cfg.ValKey.SecretRef.Type == commoncfg.MTLSSecretType {
+		tlsConfig, err := commoncfg.LoadMTLSConfig(&cfg.ValKey.SecretRef.MTLS)
+		if err != nil {
+			return nil, fmt.Errorf("loading valkey mTLS config from secret ref: %w", err)
+		}
+
+		valkeyOpts.TLSConfig = tlsConfig
+	}
+
+	valkeyClient, err := valkey.NewClient(valkeyOpts)
 	if err != nil {
 		return nil, fmt.Errorf("creating a new valkey client: %w", err)
 	}

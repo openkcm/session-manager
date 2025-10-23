@@ -293,6 +293,18 @@ config:
       source: embedded
       value: secret
     prefix: session-manager
+    secretRef:
+      type: insecure # Supports "mtls" or "insecure"
+      # mtls:
+      #   cert:
+      #     source: embedded
+      #     value: value
+      #   certKey:
+      #     source: embedded
+      #     value: value
+      #   serverCa:
+      #     source: embedded
+      #     value: value
 
   sessionManager:
     sessionDuration: 12h
