@@ -34,6 +34,9 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
+      {{- with .Values.extraContainers }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
         - name: {{ include "session-manager.name" . }}
           {{- with .Values.securityContext }}
           securityContext:
