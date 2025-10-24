@@ -5,17 +5,18 @@ metadata:
   labels:
     {{- include "session-manager.labels" . | nindent 4 }}
     app.kuberentes.io/component: migrate
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation
 spec:
   ttlSecondsAfterFinished: 300
   template:
     metadata:
-      annotations:
       {{- with .Values.pod.annotations }}
+      annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-        "helm.sh/hook": pre-install,pre-upgrade
-        "helm.sh/weight": "0"
-        "helm.sh/hook-delete-policy": before-hook-creation
       labels:
         {{- include "session-manager.labels" . | nindent 8 }}
         {{- with .Values.pod.labels }}
@@ -33,6 +34,9 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
+      {{- with .Values.extraContainers }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
         - name: {{ include "session-manager.name" . }}
           {{- with .Values.securityContext }}
           securityContext:
