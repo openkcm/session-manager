@@ -9,10 +9,13 @@ spec:
   ttlSecondsAfterFinished: 300
   template:
     metadata:
-      {{- with .Values.pod.annotations }}
       annotations:
+      {{- with .Values.pod.annotations }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
+        "helm.sh/hook": pre-install,pre-upgrade
+        "helm.sh/weight": "0"
+        "helm.sh/hook-delete-policy": before-hook-creation
       labels:
         {{- include "session-manager.labels" . | nindent 8 }}
         {{- with .Values.pod.labels }}
