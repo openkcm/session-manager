@@ -179,10 +179,12 @@ config:
       appID: "session-manager"
 
   http:
-    port: 8080
+    address: :8080
 
   grpc:
-    port: 9091
+    address: :9091
+    flags:
+      reflection: false
 
   # Expose the status port
   status:

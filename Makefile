@@ -72,7 +72,6 @@ valkey-helm-install:
 .PHONY: ensure-deps
 ensure-deps:
 	@echo "Waiting for PostgreSQL and ValKey to be available"
-	kubectl wait --for=create pod/valkey-0
 	kubectl wait pod \
 	  --all \
 	  --for=condition=Ready \

@@ -8,10 +8,13 @@ audit:
         appID: "session-manager"
 
 http:
-    address: :9092
+    address: :8080
 
 grpc:
     address: :9091
+    flags:
+        reflection: true
+        health: true
 
 status:
     enabled: true
