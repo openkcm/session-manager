@@ -4,6 +4,10 @@ metadata:
   name: {{ include "session-manager.name" . }}-config
   labels:
     {{- include "session-manager.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation
 immutable: {{ .Values.config.isImmutable | default false }}
 data:
   config.yaml: |-
@@ -21,10 +25,10 @@ data:
       {{- toYaml .audit | nindent 6 }}
 
     http:
-      address: :{{ .http.port }}
+      {{- toYaml .http | nindent 6 }}
 
     grpc:
-      address: :{{ .grpc.port }}
+      {{- toYaml .grpc | nindent 6 }}
 
     status:
       {{- toYaml .status | nindent 6 }}
