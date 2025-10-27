@@ -184,7 +184,8 @@ config:
   grpc:
     address: :9091
     flags:
-      reflection: false
+      reflection: true
+      health: false
 
   # Expose the status port
   status:
