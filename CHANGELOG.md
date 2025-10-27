@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/openkcm/session-manager/compare/v0.3.0...v0.4.0) (2025-10-27)
+
+
+### Features
+
+* support configurable gRPC reflection ([#62](https://github.com/openkcm/session-manager/issues/62)) ([77f0715](https://github.com/openkcm/session-manager/commit/77f0715dba3309e1234e1f3b77c49ee119aa9bd7))
+
 ## [0.3.0](https://github.com/openkcm/session-manager/compare/v0.2.1...v0.3.0) (2025-10-23)
 
 
