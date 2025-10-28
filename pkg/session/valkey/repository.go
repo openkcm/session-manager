@@ -3,14 +3,23 @@ package sessionvalkey
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/valkey-io/valkey-go"
 
 	"github.com/openkcm/session-manager/pkg/session"
 )
 
-const objectTypeSession = "session"
-const objectTypeState = "state"
+const (
+	objectTypeSession         = "session"
+	objectTypeState           = "state"
+	objectTypeProviderSession = "providerSession"
+	objectTypeAccessToken     = "accessToken"
+	objectTypeRefreshToken    = "refreshToken"
+	refreshTokenPrefix        = "refreshToken_"
+	accessTokenPrefix         = "accessToken_"
+	providerPrefix            = "providerToken_"
+)
 
 type Repository struct {
 	store *store
@@ -40,7 +49,8 @@ func (r *Repository) LoadState(ctx context.Context, stateID string) (state sessi
 }
 
 func (r *Repository) StoreState(ctx context.Context, state session.State) error {
-	if err := r.store.Set(ctx, objectTypeState, state.ID, state); err != nil {
+	duration := time.Until(state.Expiry)
+	if err := r.store.Set(ctx, objectTypeState, state.ID, state, duration); err != nil {
 		return fmt.Errorf("setting state into storage: %w", err)
 	}
 
@@ -55,8 +65,45 @@ func (r *Repository) LoadSession(ctx context.Context, sessionID string) (s sessi
 	return s, nil
 }
 
+func (r *Repository) GetSessIDByProviderID(ctx context.Context, providerID string) (s string, _ error) {
+	if err := r.store.Get(ctx, objectTypeProviderSession, providerPrefix+providerID, &s); err != nil {
+		return "", fmt.Errorf("getting session from store: %w", err)
+	}
+
+	return s, nil
+}
+
+func (r *Repository) GetAccessTokenForSession(ctx context.Context, sessionID string) (accessToken string, _ error) {
+	if err := r.store.Get(ctx, objectTypeAccessToken, accessTokenPrefix+sessionID, &accessToken); err != nil {
+		return "", fmt.Errorf("getting accessToken from store: %w", err)
+	}
+
+	return accessToken, nil
+}
+
+func (r *Repository) GetRefreshTokenForSession(ctx context.Context, sessionID string) (refreshToken string, _ error) {
+	if err := r.store.Get(ctx, objectTypeRefreshToken, refreshTokenPrefix+sessionID, &refreshToken); err != nil {
+		return "", fmt.Errorf("getting refreshToken from store: %w", err)
+	}
+
+	return refreshToken, nil
+}
+
 func (r *Repository) StoreSession(ctx context.Context, s session.Session) error {
-	if err := r.store.Set(ctx, objectTypeSession, s.ID, s); err != nil {
+	duration := time.Until(s.Expiry)
+	if err := r.store.Set(ctx, objectTypeProviderSession, providerPrefix+s.ProviderID, s.ID, duration); err != nil {
+		return fmt.Errorf("storing session in store: %w", err)
+	}
+
+	if err := r.store.Set(ctx, objectTypeAccessToken, accessTokenPrefix+s.ID, s.AccessToken, duration); err != nil {
+		return fmt.Errorf("storing session in store: %w", err)
+	}
+
+	if err := r.store.Set(ctx, objectTypeRefreshToken, refreshTokenPrefix+s.ID, s.RefreshToken, duration); err != nil {
+		return fmt.Errorf("storing session in store: %w", err)
+	}
+
+	if err := r.store.Set(ctx, objectTypeSession, s.ID, s, duration); err != nil {
 		return fmt.Errorf("setting session into storage: %w", err)
 	}
 

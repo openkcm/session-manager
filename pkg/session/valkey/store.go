@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/valkey-io/valkey-go"
 
@@ -31,14 +32,14 @@ func (s *store) Get(ctx context.Context, objectType, objectID string, decodeInto
 	return s.get(ctx, key, decodeInto)
 }
 
-func (s *store) Set(ctx context.Context, objectType, id string, val any) error {
+func (s *store) Set(ctx context.Context, objectType, id string, val any, duration time.Duration) error {
 	key := s.key(objectType, id)
 	bytes, err := s.encode(val)
 	if err != nil {
 		return fmt.Errorf("encoding data: %w", err)
 	}
 
-	if err := s.valkey.Do(ctx, s.valkey.B().Set().Key(key).Value(valkey.BinaryString(bytes)).Build()).Error(); err != nil {
+	if err := s.valkey.Do(ctx, s.valkey.B().Set().Key(key).Value(valkey.BinaryString(bytes)).Ex(duration).Build()).Error(); err != nil {
 		return fmt.Errorf("executing set command: %w", err)
 	}
 

@@ -18,6 +18,7 @@ type State struct {
 type Session struct {
 	ID                string    // Session ID in our system
 	TenantID          string    // Tenant ID for which the session is created
+	ProviderID        string    // Provider session ID defined by the OIDC provider (`sid` claim)
 	Fingerprint       string    // Fingerprint to bind the session to a specific client
 	CSRFToken         string    // CSRF token to prevent CSRF attacks
 	Issuer            string    // Issuer of the OIDC tokens
