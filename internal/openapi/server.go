@@ -36,10 +36,10 @@ type CallbackParams struct {
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 
-	// (GET /auth)
+	// (GET /sm/auth)
 	Auth(w http.ResponseWriter, r *http.Request, params AuthParams)
 
-	// (GET /callback)
+	// (GET /sm/callback)
 	Callback(w http.ResponseWriter, r *http.Request, params CallbackParams)
 }
 
@@ -270,8 +270,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
-	m.HandleFunc("GET "+options.BaseURL+"/auth", wrapper.Auth)
-	m.HandleFunc("GET "+options.BaseURL+"/callback", wrapper.Callback)
+	m.HandleFunc("GET "+options.BaseURL+"/sm/auth", wrapper.Auth)
+	m.HandleFunc("GET "+options.BaseURL+"/sm/callback", wrapper.Callback)
 
 	return m
 }
@@ -358,10 +358,10 @@ func (response CallbackdefaultJSONResponse) VisitCallbackResponse(w http.Respons
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
-	// (GET /auth)
+	// (GET /sm/auth)
 	Auth(ctx context.Context, request AuthRequestObject) (AuthResponseObject, error)
 
-	// (GET /callback)
+	// (GET /sm/callback)
 	Callback(ctx context.Context, request CallbackRequestObject) (CallbackResponseObject, error)
 }
 
