@@ -19,7 +19,6 @@ import (
 
 // createStatusServer creates an API http server using the given config
 func createHTTPServer(_ context.Context, cfg *config.Config, sManager *session.Manager) *http.Server {
-	mux := http.NewServeMux()
 	openAPIServer := newOpenAPIServer(sManager)
 	strictHandler := openapi.NewStrictHandler(
 		openAPIServer,
@@ -28,12 +27,11 @@ func createHTTPServer(_ context.Context, cfg *config.Config, sManager *session.M
 		},
 	)
 
-	smHandler := openapi.Handler(strictHandler)
-	mux.Handle("/sm", fingerprint.FingerprintCtxMiddleware(smHandler))
+	handler := fingerprint.FingerprintCtxMiddleware(openapi.Handler(strictHandler))
 
 	return &http.Server{
 		Addr:    cfg.HTTP.Address,
-		Handler: mux,
+		Handler: handler,
 	}
 }
 
