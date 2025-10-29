@@ -71,6 +71,11 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 		return "", fmt.Errorf("getting oidc provider: %w", err)
 	}
 
+	openidConf, err := m.getOpenIDConfig(ctx, provider)
+	if err != nil {
+		return "", fmt.Errorf("getting an openid config: %w", err)
+	}
+
 	stateID := m.pkce.State()
 	pkce := m.pkce.PKCE()
 
@@ -87,7 +92,7 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 		return "", fmt.Errorf("storing session: %w", err)
 	}
 
-	u, err := m.authURI(provider, state, pkce)
+	u, err := m.authURI(openidConf, state, pkce)
 	if err != nil {
 		return "", fmt.Errorf("generating auth uri: %w", err)
 	}
@@ -95,10 +100,10 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 	return u, nil
 }
 
-func (m *Manager) authURI(provider oidc.Provider, state State, pkce pkce.PKCE) (string, error) {
-	u, err := url.Parse(provider.IssuerURL)
+func (m *Manager) authURI(openidConf oidc.Configuration, state State, pkce pkce.PKCE) (string, error) {
+	u, err := url.Parse(openidConf.AuthorizationEndpoint)
 	if err != nil {
-		return "", fmt.Errorf("parsing issuer url: %w", err)
+		return "", fmt.Errorf("parsing authorisation endpoint url: %w", err)
 	}
 
 	q := u.Query()
@@ -115,14 +120,9 @@ func (m *Manager) authURI(provider oidc.Provider, state State, pkce pkce.PKCE) (
 	return u.String(), nil
 }
 
-func (m *Manager) getProviderKeySet(ctx context.Context, provider oidc.Provider) (*jose.JSONWebKeySet, error) {
+func (m *Manager) getProviderKeySet(ctx context.Context, oidcConf oidc.Configuration) (*jose.JSONWebKeySet, error) {
 	var keySet jose.JSONWebKeySet
-	if len(provider.JWKSURIs) == 0 {
-		return nil, errors.New("invalid oidc provider config: jwks uris are missng")
-	}
-
-	// TODO(Danylo): how do we deal with multiple JWKS uris?
-	uri := provider.JWKSURIs[0]
+	uri := oidcConf.JwksURI
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating a new HTTP request: %w", err)
@@ -161,7 +161,12 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("getting oidc provider: %w", err)
 	}
 
-	tokens, err := m.exchangeCode(ctx, provider, code, state.PKCEVerifier)
+	openidConf, err := m.getOpenIDConfig(ctx, provider)
+	if err != nil {
+		return OIDCSessionData{}, fmt.Errorf("getting openid configuration: %w", err)
+	}
+
+	tokens, err := m.exchangeCode(ctx, openidConf, code, state.PKCEVerifier)
 	if err != nil {
 		return OIDCSessionData{}, fmt.Errorf("exchanging code for tokens: %w", err)
 	}
@@ -176,7 +181,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("parsing id token: %w", err)
 	}
 
-	keyset, err := m.getProviderKeySet(ctx, provider)
+	keyset, err := m.getProviderKeySet(ctx, openidConf)
 	if err != nil {
 		return OIDCSessionData{}, fmt.Errorf("getting jwks for a provider: %w", err)
 	}
@@ -217,9 +222,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 	}, nil
 }
 
-func (m *Manager) exchangeCode(ctx context.Context, provider oidc.Provider, code, codeVerifier string) (tokenResponse, error) {
-	tokenEndpoint := provider.IssuerURL + "/token"
-
+func (m *Manager) exchangeCode(ctx context.Context, openidConf oidc.Configuration, code, codeVerifier string) (tokenResponse, error) {
 	data := url.Values{}
 	data.Set("grant_type", "authorization_code")
 	data.Set("code", code)
@@ -227,7 +230,7 @@ func (m *Manager) exchangeCode(ctx context.Context, provider oidc.Provider, code
 	data.Set("redirect_uri", m.redirectURI)
 	data.Set("client_id", m.clientID)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenEndpoint, strings.NewReader(data.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, openidConf.TokenEndpoint, strings.NewReader(data.Encode()))
 	if err != nil {
 		return tokenResponse{}, fmt.Errorf("creating request: %w", err)
 	}
@@ -320,6 +323,37 @@ func (m *Manager) RefreshSession(ctx context.Context, s *Session, provider oidc.
 	s.AccessTokenExpiry = time.Now().Add(time.Duration(respData.ExpiresIn))
 
 	return nil
+}
+
+func (m *Manager) getOpenIDConfig(ctx context.Context, provider oidc.Provider) (oidc.Configuration, error) {
+	const wellKnownOpenIDConfigPath = "/.well-known/openid-configuration"
+
+	u, err := url.JoinPath(provider.IssuerURL, wellKnownOpenIDConfigPath)
+	if err != nil {
+		return oidc.Configuration{}, fmt.Errorf("building path to the well-known openid-config endpoint: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return oidc.Configuration{}, fmt.Errorf("creating an HTTP request: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return oidc.Configuration{}, fmt.Errorf("doing an HTTP request: %w", err)
+	}
+
+	var conf oidc.Configuration
+	if err := json.NewDecoder(resp.Body).Decode(&conf); err != nil {
+		return oidc.Configuration{}, fmt.Errorf("decoding a well-known openid config: %w", err)
+	}
+
+	// Validate the configuration
+	if conf.Issuer != provider.IssuerURL {
+		return oidc.Configuration{}, serviceerr.ErrConflict
+	}
+
+	return conf, nil
 }
 
 func shouldRefresh(s Session) bool {
