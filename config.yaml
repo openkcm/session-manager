@@ -15,6 +15,7 @@ grpc:
     flags:
         reflection: true
         health: true
+    maxRecvMsgSize: 4194304
 
 status:
     enabled: true

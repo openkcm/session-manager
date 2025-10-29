@@ -186,6 +186,7 @@ config:
     flags:
       reflection: true
       health: false
+    maxRecvMsgSize: 4194304
 
   # Expose the status port
   status:
