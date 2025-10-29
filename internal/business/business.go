@@ -58,19 +58,23 @@ func Main(ctx context.Context, cfg *config.Config) error {
 
 // publicMain starts the HTTP REST public API server.
 func publicMain(ctx context.Context, cfg *config.Config) error {
-	sessionManager, err := initSessionManager(ctx, cfg)
+	sessionManager, closeFn, err := initSessionManager(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("initialising the session manager: %w", err)
 	}
+
+	defer closeFn()
 
 	return server.StartHTTPServer(ctx, cfg, sessionManager)
 }
 
 func TokenRefresherMain(ctx context.Context, cfg *config.Config) error {
-	sessionManager, err := initSessionManager(ctx, cfg)
+	sessionManager, closeFn, err := initSessionManager(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("initialising the session manager: %w", err)
 	}
+
+	defer closeFn()
 
 	slogctx.Info(ctx, "Starting token refresh job")
 	return startTokenRefresher(ctx, sessionManager, cfg)
@@ -115,30 +119,30 @@ func startTokenRefresher(ctx context.Context, sessionManager *session.Manager, c
 	}
 }
 
-func initSessionManager(ctx context.Context, cfg *config.Config) (*session.Manager, error) {
+func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Manager, closeFn func(), _ error) {
 	connStr, err := config.MakeConnStr(cfg.Database)
 	if err != nil {
-		return nil, fmt.Errorf("making dsn from config: %w", err)
+		return nil, nil, fmt.Errorf("making dsn from config: %w", err)
 	}
 
 	db, err := pgxpool.New(ctx, connStr)
 	if err != nil {
-		return nil, fmt.Errorf("initialising pgxpool connection: %w", err)
+		return nil, nil, fmt.Errorf("initialising pgxpool connection: %w", err)
 	}
 
 	valkeyHost, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.Host)
 	if err != nil {
-		return nil, fmt.Errorf("loading valkey host: %w", err)
+		return nil, nil, fmt.Errorf("loading valkey host: %w", err)
 	}
 
 	valkeyUsername, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.User)
 	if err != nil {
-		return nil, fmt.Errorf("loading valkey username: %w", err)
+		return nil, nil, fmt.Errorf("loading valkey username: %w", err)
 	}
 
 	valkeyPassword, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.Password)
 	if err != nil {
-		return nil, fmt.Errorf("loading valkey password: %w", err)
+		return nil, nil, fmt.Errorf("loading valkey password: %w", err)
 	}
 
 	valkeyOpts := valkey.ClientOption{
@@ -150,7 +154,7 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (*session.Manag
 	if cfg.ValKey.SecretRef.Type == commoncfg.MTLSSecretType {
 		tlsConfig, err := commoncfg.LoadMTLSConfig(&cfg.ValKey.SecretRef.MTLS)
 		if err != nil {
-			return nil, fmt.Errorf("loading valkey mTLS config from secret ref: %w", err)
+			return nil, nil, fmt.Errorf("loading valkey mTLS config from secret ref: %w", err)
 		}
 
 		valkeyOpts.TLSConfig = tlsConfig
@@ -158,31 +162,29 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (*session.Manag
 
 	valkeyClient, err := valkey.NewClient(valkeyOpts)
 	if err != nil {
-		return nil, fmt.Errorf("creating a new valkey client: %w", err)
+		return nil, nil, fmt.Errorf("creating a new valkey client: %w", err)
 	}
-
-	defer valkeyClient.Close()
 
 	oidcProviderRepo := oidcsql.NewRepository(db)
 	sessionRepo := sessionvalkey.NewRepository(valkeyClient, cfg.ValKey.Prefix)
 
 	clientID, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.ClientID)
 	if err != nil {
-		return nil, fmt.Errorf("reading client id from source ref: %w", err)
+		return nil, nil, fmt.Errorf("reading client id from source ref: %w", err)
 	}
 
 	auditLogger, err := otlpaudit.NewLogger(&cfg.Audit)
 	if err != nil {
-		return nil, fmt.Errorf("creating audit logger: %w", err)
+		return nil, nil, fmt.Errorf("creating audit logger: %w", err)
 	}
 
 	csrfSecret, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.CSRFSecret)
 	if err != nil {
-		return nil, fmt.Errorf("loading csrf token from source ref: %w", err)
+		return nil, nil, fmt.Errorf("loading csrf token from source ref: %w", err)
 	}
 
 	if len(csrfSecret) < 32 {
-		return nil, errors.New("CSRF secret must be at least 32 bytes")
+		return nil, nil, errors.New("CSRF secret must be at least 32 bytes")
 	}
 
 	return session.NewManager(
@@ -194,5 +196,5 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (*session.Manag
 		string(clientID),
 		string(csrfSecret),
 		cfg.SessionManager.JWSSigAlgs,
-	), nil
+	), valkeyClient.Close, nil
 }
