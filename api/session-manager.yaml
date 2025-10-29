@@ -6,7 +6,7 @@ info:
 servers:
     - url: "https://localhost:8080"
 paths:
-    /auth:
+    /sm/auth:
         get:
             description: |
                 The CMK UI can't directly initiate the authorization code flow with the OIDC provider because it does not know the the provider for the CMK tenant. Instead, using this endpoint, the CMK UI can indirectly initiate the flow. Steps:
@@ -45,7 +45,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: "#/components/schemas/ErrorModel"
-    /callback:
+    /sm/callback:
         get:
             description: |
                 After creating the auth code, the OIDC provider calls this endpoint, delivering the code. The Session Manager can then requests the OIDC provider to exchange the code for a valid token, additionally providing the related PKCE verifier. Steps:
