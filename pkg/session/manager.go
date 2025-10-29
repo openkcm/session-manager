@@ -64,8 +64,8 @@ func NewManager(
 	}
 }
 
-// Auth returns an OIDC authorise URI.
-func (m *Manager) Auth(ctx context.Context, tenantID, fingerprint, requestURI string) (string, error) {
+// MakeAuthURI returns an OIDC authentication URI.
+func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, requestURI string) (string, error) {
 	provider, err := m.oidc.GetForTenant(ctx, tenantID)
 	if err != nil {
 		return "", fmt.Errorf("getting oidc provider: %w", err)
@@ -146,6 +146,8 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("loading state from the storage: %w", err)
 	}
 
+	ctx = slogctx.With(ctx, "tenant_id", state.TenantID)
+
 	if time.Now().After(state.Expiry) {
 		return OIDCSessionData{}, serviceerr.ErrStateExpired
 	}
@@ -163,6 +165,8 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 	if err != nil {
 		return OIDCSessionData{}, fmt.Errorf("exchanging code for tokens: %w", err)
 	}
+
+	slogctx.Info(ctx, "Exchanged the auth code for tokens")
 
 	sessionID := m.pkce.SessionID()
 	csrfToken := csrf.NewToken(sessionID, m.csrfSecret)

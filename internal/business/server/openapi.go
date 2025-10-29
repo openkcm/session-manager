@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	slogctx "github.com/veqryn/slog-context"
+
 	"github.com/openkcm/session-manager/internal/openapi"
 	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/pkg/fingerprint"
@@ -31,12 +33,27 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 	var extractFingerprint string
 	extractFingerprint, err := fingerprint.ExtractFingerprint(ctx)
 	if err != nil {
-		return nil, err
+		slogctx.Error(ctx, "Failed to extract fingerprint", "error", err)
+
+		body, status := s.toErrorModel(serviceerr.ErrUnknown)
+		return openapi.AuthdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
 	}
-	url, err := s.sManager.Auth(ctx, request.Params.TenantID, extractFingerprint, request.Params.RequestURI)
+
+	url, err := s.sManager.MakeAuthURI(ctx, request.Params.TenantID, extractFingerprint, request.Params.RequestURI)
 	if err != nil {
-		return nil, fmt.Errorf("authenticating with session manager: %w", err)
+		slogctx.Error(ctx, "Failed build auth URI", "error", err)
+
+		body, status := s.toErrorModel(err)
+		return openapi.AuthdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
 	}
+
+	slogctx.Info(ctx, "Redirecting user to the OIDC provider authentication URL")
 
 	return openapi.Auth302Response{
 		Headers: openapi.Auth302ResponseHeaders{
@@ -47,23 +64,33 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 
 // Callback implements openapi.StrictServerInterface.
 func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackRequestObject) (openapi.CallbackResponseObject, error) {
+	slogctx.Info(ctx, "Finalising OIDC flow")
+
 	var currentFingerprint string
 	currentFingerprint, err := fingerprint.ExtractFingerprint(ctx)
 	if err != nil {
-		return nil, err
-	}
-	result, err := s.sManager.FinaliseOIDCLogin(ctx, req.Params.State, req.Params.Code, currentFingerprint)
+		slogctx.Error(ctx, "Failed to extract fingerprint", "error", err)
 
+		body, status := s.toErrorModel(serviceerr.ErrUnknown)
+		return openapi.CallbackdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+
+	result, err := s.sManager.FinaliseOIDCLogin(ctx, req.Params.State, req.Params.Code, currentFingerprint)
 	if err != nil {
-		if errors.Is(err, serviceerr.ErrFingerprintMismatch) {
-			errorCode := 403
-			errorMsg := "fingerprint mismatch"
-			return openapi.Callback403JSONResponse{
-				ErrorCode: &errorCode,
-				ErrorMsg:  &errorMsg,
-			}, nil
+		slogctx.Error(ctx, "Failed to finalise OIDC login", "error", err)
+
+		body, status := s.toErrorModel(err)
+		if status == 403 {
+			return openapi.Callback403JSONResponse(body), nil
 		}
-		return nil, err
+
+		return openapi.CallbackdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
 	}
 
 	cookies := []string{
@@ -71,10 +98,24 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 		fmt.Sprintf("__Host-CSRF=%s; Path=/; Secure; SameSite=Strict", result.CSRFToken),
 	}
 
+	slogctx.Info(ctx, "Redirecting user to the request URI", "request_uri", result.RequestURI)
+
 	return openapi.Callback302Response{
 		Headers: openapi.Callback302ResponseHeaders{
 			Location:  result.RequestURI,
 			SetCookie: cookies,
 		},
 	}, nil
+}
+
+func (s *openAPIServer) toErrorModel(err error) (model openapi.ErrorModel, httpStatus int) {
+	var serviceErr *serviceerr.Error
+	if !errors.As(err, &serviceErr) {
+		serviceErr = serviceerr.ErrUnknown
+	}
+
+	return openapi.ErrorModel{
+		ErrorCode: (*int)(&serviceErr.Code),
+		ErrorMsg:  &serviceErr.Message,
+	}, serviceErr.HTTPStatus()
 }

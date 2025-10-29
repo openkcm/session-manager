@@ -115,7 +115,7 @@ func TestManager_Auth(t *testing.T) {
 			require.NoError(t, err)
 
 			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.redirectURI, tt.clientID, testCSRFSecret, []string{"RS256"})
-			got, err := m.Auth(t.Context(), tt.tenantID, tt.fingerprint, tt.requestURI)
+			got, err := m.MakeAuthURI(t.Context(), tt.tenantID, tt.fingerprint, tt.requestURI)
 
 			if !tt.errAssert(t, err, fmt.Sprintf("Manager.Auth() error = %v", err)) || err != nil {
 				return
