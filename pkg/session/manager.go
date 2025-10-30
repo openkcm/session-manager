@@ -32,6 +32,7 @@ type Manager struct {
 	sessionDuration time.Duration
 	redirectURI     string
 	clientID        string
+	secureClient    *http.Client
 
 	csrfSecret []byte
 	jwsSigAlgs []jose.SignatureAlgorithm
@@ -42,8 +43,9 @@ func NewManager(
 	sessions Repository,
 	auditLogger *otlpaudit.AuditLogger,
 	sessionDuration time.Duration,
-	redirectURI,
+	redirectURI string,
 	clientID string,
+	httpClient *http.Client,
 	csrfHMACSecret string,
 	jwsSigAlgs []string,
 ) *Manager {
@@ -59,6 +61,7 @@ func NewManager(
 		sessionDuration: sessionDuration,
 		redirectURI:     redirectURI,
 		clientID:        clientID,
+		secureClient:    httpClient,
 		csrfSecret:      []byte(csrfHMACSecret),
 		jwsSigAlgs:      algs,
 	}
@@ -236,7 +239,7 @@ func (m *Manager) exchangeCode(ctx context.Context, openidConf oidc.Configuratio
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := m.secureClient.Do(req)
 	if err != nil {
 		return tokenResponse{}, fmt.Errorf("executing request: %w", err)
 	}
@@ -302,7 +305,7 @@ func (m *Manager) RefreshSession(ctx context.Context, s *Session, provider oidc.
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := m.secureClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -338,7 +341,7 @@ func (m *Manager) getOpenIDConfig(ctx context.Context, provider oidc.Provider) (
 		return oidc.Configuration{}, fmt.Errorf("creating an HTTP request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := m.secureClient.Do(req)
 	if err != nil {
 		return oidc.Configuration{}, fmt.Errorf("doing an HTTP request: %w", err)
 	}
@@ -350,7 +353,7 @@ func (m *Manager) getOpenIDConfig(ctx context.Context, provider oidc.Provider) (
 
 	// Validate the configuration
 	if conf.Issuer != provider.IssuerURL {
-		return oidc.Configuration{}, serviceerr.ErrConflict
+		return oidc.Configuration{}, serviceerr.ErrInvalidOIDCProvider
 	}
 
 	return conf, nil

@@ -15,7 +15,6 @@ grpc:
     flags:
         reflection: true
         health: true
-    maxRecvMsgSize: 4194304
 
 status:
     enabled: true
@@ -220,10 +219,15 @@ valkey:
 
 sessionManager:
     sessionDuration: 12h
-    redirectURI: http://localhost:9092/callback
-    clientID:
-        source: embedded
-        value: my-client-id
+    redirectURI: http://localhost:8080/sm/callback
+    clientAuth:
+        clientID:
+            source: embedded
+            value: client-id
+        type: client_secret
+        clientSecret:
+            source: embedded
+            value: secret
     csrfSecret:
         source: embedded
         value: my-csrf-secret-at-least-thirty-two-bits-size

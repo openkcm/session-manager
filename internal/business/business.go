@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
@@ -167,10 +168,9 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Man
 
 	oidcProviderRepo := oidcsql.NewRepository(db)
 	sessionRepo := sessionvalkey.NewRepository(valkeyClient, cfg.ValKey.Prefix)
-
-	clientID, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.ClientID)
+	httpClient, clientID, err := loadHTTPClient(cfg)
 	if err != nil {
-		return nil, nil, fmt.Errorf("reading client id from source ref: %w", err)
+		return nil, nil, fmt.Errorf("loading http client: %w", err)
 	}
 
 	auditLogger, err := otlpaudit.NewLogger(&cfg.Audit)
@@ -193,8 +193,69 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Man
 		auditLogger,
 		cfg.SessionManager.SessionDuration,
 		cfg.SessionManager.RedirectURI,
-		string(clientID),
+		clientID,
+		httpClient,
 		string(csrfSecret),
 		cfg.SessionManager.JWSSigAlgs,
 	), valkeyClient.Close, nil
+}
+
+func loadHTTPClient(cfg *config.Config) (*http.Client, string, error) {
+	cID, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.ClientAuth.ClientID)
+	if err != nil {
+		return nil, "", fmt.Errorf("reading client id from source ref: %w", err)
+	}
+
+	clientID := string(cID)
+
+	switch cfg.SessionManager.ClientAuth.Type {
+	case "mtls":
+		tlsConfig, err := commoncfg.LoadMTLSConfig(cfg.SessionManager.ClientAuth.MTLS)
+		if err != nil {
+			return nil, "", fmt.Errorf("loading mTLS config: %w", err)
+		}
+
+		return &http.Client{
+			Transport: &clientAuthRoundTripper{
+				clientID: clientID,
+				next: &http.Transport{
+					TLSClientConfig: tlsConfig,
+				},
+			},
+		}, clientID, nil
+	case "client_secret":
+		secret, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.ClientAuth.ClientSecret)
+		if err != nil {
+			return nil, "", fmt.Errorf("loading client secret: %w", err)
+		}
+
+		return &http.Client{
+			Transport: &clientAuthRoundTripper{
+				clientID:     clientID,
+				clientSecret: string(secret),
+				next:         http.DefaultTransport,
+			},
+		}, clientID, nil
+	case "insecure":
+		return http.DefaultClient, clientID, nil
+	default:
+		return nil, "", errors.New("unknown Client Auth type")
+	}
+}
+
+type clientAuthRoundTripper struct {
+	clientID     string
+	clientSecret string
+	next         http.RoundTripper
+}
+
+func (t *clientAuthRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	q := req.URL.Query()
+	q.Set("client_id", t.clientID)
+
+	if t.clientSecret != "" {
+		q.Set("client_secret", t.clientSecret)
+	}
+
+	return t.next.RoundTrip(req)
 }
