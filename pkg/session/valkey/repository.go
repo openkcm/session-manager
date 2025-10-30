@@ -2,6 +2,7 @@ package sessionvalkey
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -40,7 +41,8 @@ func NewRepository(valkeyClient valkey.Client, prefix string) *Repository {
 	}
 }
 
-func (r *Repository) LoadState(ctx context.Context, stateID string) (state session.State, _ error) {
+func (r *Repository) LoadState(ctx context.Context, stateID string) (session.State, error) {
+	var state session.State
 	if err := r.store.Get(ctx, objectTypeState, stateID, &state); err != nil {
 		return session.State{}, fmt.Errorf("getting state from store: %w", err)
 	}
@@ -57,7 +59,8 @@ func (r *Repository) StoreState(ctx context.Context, state session.State) error 
 	return nil
 }
 
-func (r *Repository) LoadSession(ctx context.Context, sessionID string) (s session.Session, _ error) {
+func (r *Repository) LoadSession(ctx context.Context, sessionID string) (session.Session, error) {
+	var s session.Session
 	if err := r.store.Get(ctx, objectTypeSession, sessionID, &s); err != nil {
 		return session.Session{}, fmt.Errorf("getting session from store: %w", err)
 	}
@@ -65,7 +68,8 @@ func (r *Repository) LoadSession(ctx context.Context, sessionID string) (s sessi
 	return s, nil
 }
 
-func (r *Repository) GetSessIDByProviderID(ctx context.Context, providerID string) (s string, _ error) {
+func (r *Repository) GetSessIDByProviderID(ctx context.Context, providerID string) (string, error) {
+	var s string
 	if err := r.store.Get(ctx, objectTypeProviderSession, providerPrefix+providerID, &s); err != nil {
 		return "", fmt.Errorf("getting session from store: %w", err)
 	}
@@ -73,7 +77,8 @@ func (r *Repository) GetSessIDByProviderID(ctx context.Context, providerID strin
 	return s, nil
 }
 
-func (r *Repository) GetAccessTokenForSession(ctx context.Context, sessionID string) (accessToken string, _ error) {
+func (r *Repository) GetAccessTokenForSession(ctx context.Context, sessionID string) (string, error) {
+	var accessToken string
 	if err := r.store.Get(ctx, objectTypeAccessToken, accessTokenPrefix+sessionID, &accessToken); err != nil {
 		return "", fmt.Errorf("getting accessToken from store: %w", err)
 	}
@@ -81,7 +86,8 @@ func (r *Repository) GetAccessTokenForSession(ctx context.Context, sessionID str
 	return accessToken, nil
 }
 
-func (r *Repository) GetRefreshTokenForSession(ctx context.Context, sessionID string) (refreshToken string, _ error) {
+func (r *Repository) GetRefreshTokenForSession(ctx context.Context, sessionID string) (string, error) {
+	var refreshToken string
 	if err := r.store.Get(ctx, objectTypeRefreshToken, refreshTokenPrefix+sessionID, &refreshToken); err != nil {
 		return "", fmt.Errorf("getting refreshToken from store: %w", err)
 	}
@@ -108,12 +114,12 @@ func (r *Repository) StoreSession(ctx context.Context, s session.Session) error 
 		errs = append(errs, err)
 	}
 
-	if errs != nil && len(errs) > 0 {
+	if len(errs) > 0 {
 		err := r.DeleteSession(ctx, s)
 		if err != nil {
 			return err
 		}
-		return fmt.Errorf("storing session in store")
+		return errors.New("storing session in store")
 	}
 
 	return nil
