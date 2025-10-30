@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/openkcm/session-manager/compare/v0.4.0...v0.5.0) (2025-10-30)
+
+
+### Features
+
+* support client authentication ([#73](https://github.com/openkcm/session-manager/issues/73)) ([8209b0b](https://github.com/openkcm/session-manager/commit/8209b0bd543faff965c39b197436fe834e0367c0))
+
+
+### Bug Fixes
+
+* closed valkey connection ([#70](https://github.com/openkcm/session-manager/issues/70)) ([70aba4b](https://github.com/openkcm/session-manager/commit/70aba4b2c69b15249625288dd5bff8cb0bf5eca8))
+
 ## [0.4.0](https://github.com/openkcm/session-manager/compare/v0.3.0...v0.4.0) (2025-10-29)
 
 
