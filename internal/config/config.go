@@ -51,9 +51,16 @@ type ValKey struct {
 type SessionManager struct {
 	SessionDuration time.Duration       `yaml:"sessionDuration" default:"12h"`
 	RedirectURI     string              `yaml:"redirectURI" default:"https://api.cmk/callback"`
-	ClientID        commoncfg.SourceRef `yaml:"clientID"`
+	ClientAuth      ClientAuth          `yaml:"clientAuth"`
 	CSRFSecret      commoncfg.SourceRef `yaml:"csrfSecret"`
 	JWSSigAlgs      []string            `yaml:"jwsSigAlgs"` // A list of supported JWT signature algorithms
+}
+
+type ClientAuth struct {
+	Type         string              `yaml:"type" default:"mtls"`
+	ClientID     commoncfg.SourceRef `yaml:"clientID"`
+	MTLS         *commoncfg.MTLS     `yaml:"mTLS"`
+	ClientSecret commoncfg.SourceRef `yaml:"clientSecret"`
 }
 
 type Migrate struct {

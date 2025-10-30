@@ -13,7 +13,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/oapi-codegen/runtime v1.1.2
 	github.com/openkcm/api-sdk v0.9.0
-	github.com/openkcm/common-sdk v1.5.0
+	github.com/openkcm/common-sdk v1.5.1
 	github.com/pressly/goose/v3 v3.26.0
 	github.com/samber/oops v1.19.3
 	github.com/spf13/cobra v1.10.1
@@ -75,6 +75,7 @@ require (
 	github.com/lufia/plan9stats v0.0.0-20250827001030-24949be3fa54 // indirect
 	github.com/magiconair/properties v1.8.10 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
+	github.com/mcuadros/go-defaults v1.2.0 // indirect
 	github.com/mdelapenya/tlscert v0.2.0 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect

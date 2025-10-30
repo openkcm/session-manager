@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"testing"
 	"time"
@@ -24,15 +23,20 @@ import (
 
 func TestManager_Auth(t *testing.T) {
 	const (
-		redirectURI    = "http://sm.example.com/sm/callback"
-		requestURI     = "http://cmk.example.com/ui"
-		issuerURL      = "http://oidc.example.com"
+		redirectURI    = "http://localhost/sm/callback"
+		requestURI     = "http://localhost/request.jwt"
 		tenantID       = "tenant-id"
 		testCSRFSecret = "12345678901234567890123456789012"
 	)
 
+	oidcServer := StartOIDCServer(t, false)
+	defer oidcServer.Close()
+
+	auditServer := StartAuditServer(t)
+	defer auditServer.Close()
+
 	oidcProvider := oidc.Provider{
-		IssuerURL: issuerURL,
+		IssuerURL: oidcServer.URL,
 		Blocked:   false,
 		JWKSURIs:  []string{"http://jwks.example.com"},
 		Audiences: []string{requestURI},
@@ -66,7 +70,7 @@ func TestManager_Auth(t *testing.T) {
 			tenantID:    tenantID,
 			fingerprint: "fingerprint",
 			requestURI:  requestURI,
-			wantURL:     "http://oidc.example.com/?client_id=my-client-id&code_challenge=someChallenge&code_challenge_method=S256&redirect_uri=" + redirectURI + "&response_type=code&scope=openid&scope=profile&scope=email&scope=groups&state=someState",
+			wantURL:     oidcServer.URL + "/oauth2/authorize?client_id=my-client-id&code_challenge=someChallenge&code_challenge_method=S256&redirect_uri=" + redirectURI + "&response_type=code&scope=openid&scope=profile&scope=email&scope=groups&state=someState",
 			errAssert:   assert.NoError,
 		},
 		{
@@ -106,15 +110,10 @@ func TestManager_Auth(t *testing.T) {
 				kRedirectURI         = "redirect_uri"
 			)
 
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer server.Close()
-
-			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: server.URL})
+			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
 			require.NoError(t, err)
 
-			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.redirectURI, tt.clientID, testCSRFSecret, []string{"RS256"})
+			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.redirectURI, tt.clientID, http.DefaultClient, testCSRFSecret, []string{"RS256"})
 			got, err := m.MakeAuthURI(t.Context(), tt.tenantID, tt.fingerprint, tt.requestURI)
 
 			if !tt.errAssert(t, err, fmt.Sprintf("Manager.Auth() error = %v", err)) || err != nil {
@@ -132,6 +131,7 @@ func TestManager_Auth(t *testing.T) {
 			require.NoError(t, err, "parsing wanted URL")
 
 			assert.Equal(t, wantURL.Hostname(), u.Hostname(), "Hostname does not match")
+			assert.Equal(t, wantURL.Path, u.Path, "Path does not match")
 
 			q := u.Query()
 			wantQ := wantURL.Query()
@@ -154,7 +154,6 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 	const (
 		redirectURI    = "http://sm.example.com/sm/callback"
 		requestURI     = "http://cmk.example.com/ui"
-		issuerURL      = "http://oidc.example.com"
 		tenantID       = "tenant-id"
 		stateID        = "test-state-id"
 		code           = "auth-code"
@@ -315,7 +314,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 
 			tt.oidc.Add(tenantID, localOIDCProvider)
 
-			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, redirectURI, "client-id", testCSRFSecret, []string{"RS256"})
+			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, redirectURI, "client-id", http.DefaultClient, testCSRFSecret, []string{"RS256"})
 
 			result, err := m.FinaliseOIDCLogin(context.Background(), tt.stateID, tt.code, tt.fingerprint)
 
