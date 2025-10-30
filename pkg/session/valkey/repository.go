@@ -91,20 +91,29 @@ func (r *Repository) GetRefreshTokenForSession(ctx context.Context, sessionID st
 
 func (r *Repository) StoreSession(ctx context.Context, s session.Session) error {
 	duration := time.Until(s.Expiry)
+	var errs []error
 	if err := r.store.Set(ctx, objectTypeProviderSession, providerPrefix+s.ProviderID, s.ID, duration); err != nil {
-		return fmt.Errorf("storing session in store: %w", err)
+		errs = append(errs, err)
 	}
 
 	if err := r.store.Set(ctx, objectTypeAccessToken, accessTokenPrefix+s.ID, s.AccessToken, duration); err != nil {
-		return fmt.Errorf("storing session in store: %w", err)
+		errs = append(errs, err)
 	}
 
 	if err := r.store.Set(ctx, objectTypeRefreshToken, refreshTokenPrefix+s.ID, s.RefreshToken, duration); err != nil {
-		return fmt.Errorf("storing session in store: %w", err)
+		errs = append(errs, err)
 	}
 
 	if err := r.store.Set(ctx, objectTypeSession, s.ID, s, duration); err != nil {
-		return fmt.Errorf("setting session into storage: %w", err)
+		errs = append(errs, err)
+	}
+
+	if errs != nil && len(errs) > 0 {
+		err := r.DeleteSession(ctx, s)
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("storing session in store")
 	}
 
 	return nil
@@ -115,5 +124,25 @@ func (r *Repository) DeleteState(ctx context.Context, stateID string) error {
 		return fmt.Errorf("deleting state from store: %w", err)
 	}
 
+	return nil
+}
+
+func (r *Repository) DeleteSession(ctx context.Context, s session.Session) error {
+	err := r.store.Destroy(ctx, objectTypeSession, s.ID)
+	if err != nil {
+		return err
+	}
+	err = r.store.Destroy(ctx, objectTypeProviderSession, providerPrefix+s.ProviderID)
+	if err != nil {
+		return err
+	}
+	err = r.store.Destroy(ctx, objectTypeAccessToken, accessTokenPrefix+s.AccessToken)
+	if err != nil {
+		return err
+	}
+	err = r.store.Destroy(ctx, objectTypeRefreshToken, refreshTokenPrefix+s.RefreshToken)
+	if err != nil {
+		return err
+	}
 	return nil
 }

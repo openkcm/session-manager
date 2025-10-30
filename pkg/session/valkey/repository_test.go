@@ -234,7 +234,7 @@ func TestRepository_LoadSession(t *testing.T) {
 	}
 }
 
-func TestRepository_StoreSession(t *testing.T) {
+func TestRepository_StoreSession_Success(t *testing.T) {
 	const prefix = "session-manager-store-session-test"
 
 	const upsertTenantID = "tenant-id-upsert"
@@ -311,6 +311,44 @@ func TestRepository_StoreSession(t *testing.T) {
 			time.Sleep(duration)
 			_, err = r.LoadSession(t.Context(), tt.session.ID)
 			require.Error(t, err)
+		})
+	}
+}
+
+func TestRepository_StoreSession_Fail(t *testing.T) {
+	const prefix = "session-manager-store-session-cleanup-test"
+	tests := []struct {
+		name     string
+		tenantID string
+		session  session.Session
+	}{
+		{
+			name: "Successful_CleanUp_OnError",
+			session: session.Session{
+				ID:                "sessionid-id-store-session-successful-cleanup",
+				TenantID:          "tenant-id-store-session-successful-cleanup",
+				Fingerprint:       "fingerprint-upsert-new",
+				AccessToken:       "access-token-upsert-new",
+				RefreshToken:      "refresh-token-upsert-new",
+				Expiry:            time.Now().Add(-100 * time.Second).UTC(),
+				AccessTokenExpiry: testTime,
+			},
+			tenantID: "tenant-id-store-session-successful-cleanup",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := sessionvalkey.NewRepository(client, prefix)
+			err := r.StoreSession(t.Context(), tt.session)
+			assert.Error(t, err)
+			_, err = r.LoadSession(t.Context(), tt.session.ID)
+			assert.Error(t, err)
+			_, err = r.GetAccessTokenForSession(t.Context(), tt.session.ID)
+			assert.Error(t, err)
+			_, err = r.GetSessIDByProviderID(t.Context(), tt.session.ProviderID)
+			assert.Error(t, err)
+			_, err = r.GetRefreshTokenForSession(t.Context(), tt.session.ID)
+			assert.Error(t, err)
 		})
 	}
 }
