@@ -30,7 +30,7 @@ func TestGRPCServer(t *testing.T) {
 	port := 9091
 
 	// create grpc server
-	srv, terminateFn, err := startServer(t, port)
+	srv, service, terminateFn, err := startServer(t, port)
 	require.NoError(t, err)
 	defer srv.Stop()
 	defer terminateFn(ctx)
@@ -41,7 +41,6 @@ func TestGRPCServer(t *testing.T) {
 	defer conn.Close()
 
 	mappingClient := oidcmappingv1.NewServiceClient(conn)
-	providerClient := oidcproviderv1.NewServiceClient(conn)
 
 	t.Run("BlockOIDCMapping", func(t *testing.T) {
 		expJwks := []string{"jks"}
@@ -63,20 +62,20 @@ func TestGRPCServer(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, blockResp.GetSuccess())
 
-		providerResp, err := providerClient.GetOIDCProvider(ctx, &oidcproviderv1.GetOIDCProviderRequest{
-			Issuer: expIssuer,
-		})
+		actProvider, err := service.GetProvider(ctx, expIssuer)
 		assert.NoError(t, err)
-		assert.Equal(t, expIssuer, providerResp.GetIssuer())
-		assert.Equal(t, expAud, providerResp.GetAudiences())
-		assert.Equal(t, expJwks, providerResp.GetJwksUris())
+		assert.True(t, actProvider.Blocked)
+		assert.Equal(t, expIssuer, actProvider.IssuerURL)
+		assert.Equal(t, expAud, actProvider.Audiences)
+		assert.Equal(t, expJwks, actProvider.JWKSURIs)
 	})
 
 	t.Run("UnblockOIDCMapping", func(t *testing.T) {
 		expTenantID := uuid.NewString()
+		expIssuer1 := uuid.NewString()
 		applyRes, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
 			TenantId:  expTenantID,
-			Issuer:    uuid.NewString(),
+			Issuer:    expIssuer1,
 			JwksUris:  []string{"uris"},
 			Audiences: []string{"audience"},
 		})
@@ -89,11 +88,19 @@ func TestGRPCServer(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, blockRes.GetSuccess())
 
+		actProvider, err := service.GetProvider(ctx, expIssuer1)
+		assert.NoError(t, err)
+		assert.True(t, actProvider.Blocked)
+
 		unblockRes, err := mappingClient.UnblockOIDCMapping(ctx, &oidcmappingv1.UnblockOIDCMappingRequest{
 			TenantId: expTenantID,
 		})
 		assert.NoError(t, err)
 		assert.True(t, unblockRes.GetSuccess())
+
+		actProvider, err = service.GetProvider(ctx, expIssuer1)
+		assert.NoError(t, err)
+		assert.False(t, actProvider.Blocked)
 	})
 }
 
@@ -105,7 +112,7 @@ func createClientConn(t *testing.T, port int) (*stdgrpc.ClientConn, error) {
 	return conn, err
 }
 
-func startServer(t *testing.T, port int) (*stdgrpc.Server, func(context.Context), error) {
+func startServer(t *testing.T, port int) (*stdgrpc.Server, *oidc.Service, func(context.Context), error) {
 	t.Helper()
 	ctx := t.Context()
 	// start postgres
@@ -115,7 +122,7 @@ func startServer(t *testing.T, port int) (*stdgrpc.Server, func(context.Context)
 	lstConf := net.ListenConfig{}
 	lis, err := lstConf.Listen(ctx, "tcp", fmt.Sprintf("localhost:%d", port))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	srv := stdgrpc.NewServer()
@@ -128,5 +135,5 @@ func startServer(t *testing.T, port int) (*stdgrpc.Server, func(context.Context)
 		slogctx.Error(ctx, "error while starting server", "error", err)
 	}()
 
-	return srv, terminateFn, nil
+	return srv, service, terminateFn, nil
 }
