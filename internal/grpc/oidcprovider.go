@@ -15,7 +15,7 @@ import (
 )
 
 type OIDCProviderServer struct {
-	oidcproviderv1.UnimplementedOIDCProviderServer
+	oidcproviderv1.UnimplementedServiceServer
 
 	oidc *oidc.Service
 }

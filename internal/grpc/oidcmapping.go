@@ -12,7 +12,7 @@ import (
 )
 
 type OIDCMappingServer struct {
-	oidcmappingv1.UnimplementedOIDCMappingServer
+	oidcmappingv1.UnimplementedServiceServer
 
 	oidc *oidc.Service
 }
@@ -32,7 +32,7 @@ func (srv *OIDCMappingServer) ApplyOIDCMapping(ctx context.Context, req *oidcmap
 
 	provider := oidc.Provider{
 		IssuerURL: req.GetIssuer(),
-		Blocked:   req.GetBlocked(),
+		Blocked:   false,
 		JWKSURIs:  req.GetJwksUris(),
 		Audiences: req.GetAudiences(),
 	}
@@ -62,5 +62,35 @@ func (srv *OIDCMappingServer) RemoveOIDCMapping(ctx context.Context, req *oidcma
 
 	resp.Success = true
 
+	return resp, nil
+}
+
+// BlockOIDCMapping blocks the OIDC mapping for the specified tenant.
+// It calls the underlying service to set the mapping as blocked.
+// Returns a response containing an optional error message if blocking fails.
+func (srv *OIDCMappingServer) BlockOIDCMapping(ctx context.Context, req *oidcmappingv1.BlockOIDCMappingRequest) (*oidcmappingv1.BlockOIDCMappingResponse, error) {
+	resp := &oidcmappingv1.BlockOIDCMappingResponse{}
+	err := srv.oidc.BlockMapping(ctx, req.GetTenantId())
+	if err != nil {
+		msg := err.Error()
+		resp.Message = &msg
+		return resp, status.Error(codes.Internal, "failed to block OIDC mapping: "+msg)
+	}
+	resp.Success = true
+	return resp, nil
+}
+
+// UnblockOIDCMapping unblocks the OIDC mapping for the specified tenant.
+// It calls the underlying service to set the mapping as unblocked.
+// Returns a response containing an optional error message if unblocking fails.
+func (srv *OIDCMappingServer) UnblockOIDCMapping(ctx context.Context, req *oidcmappingv1.UnblockOIDCMappingRequest) (*oidcmappingv1.UnblockOIDCMappingResponse, error) {
+	resp := &oidcmappingv1.UnblockOIDCMappingResponse{}
+	err := srv.oidc.BlockMapping(ctx, req.GetTenantId())
+	if err != nil {
+		msg := err.Error()
+		resp.Message = &msg
+		return resp, status.Error(codes.Internal, "failed to unblock OIDC mapping: "+msg)
+	}
+	resp.Success = true
 	return resp, nil
 }

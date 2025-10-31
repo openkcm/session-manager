@@ -22,9 +22,9 @@ func StartGRPCServer(ctx context.Context, cfg *config.Config,
 	grpcServer := commongrpc.NewServer(ctx, &cfg.GRPC.GRPCServer)
 
 	// Register OIDC provider server for ExtAuthZ
-	oidcproviderv1.RegisterOIDCProviderServer(grpcServer, oidcprovidersrv)
+	oidcproviderv1.RegisterServiceServer(grpcServer, oidcprovidersrv)
 	// Register OIDC mapping server for the regional tenant manager
-	oidcmappingv1.RegisterOIDCMappingServer(grpcServer, oidcmappingsrv)
+	oidcmappingv1.RegisterServiceServer(grpcServer, oidcmappingsrv)
 
 	slogctx.Info(ctx, "Starting a listener", "address", cfg.GRPC.Address)
 

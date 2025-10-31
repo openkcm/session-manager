@@ -2,7 +2,10 @@ package oidc
 
 import (
 	"context"
+	"errors"
 	"fmt"
+
+	"github.com/openkcm/session-manager/internal/serviceerr"
 )
 
 type Service struct {
@@ -51,5 +54,55 @@ func (s *Service) RemoveMapping(ctx context.Context, tenantID string) error {
 		return fmt.Errorf("deleting provider for tenant: %w", err)
 	}
 
+	return nil
+}
+
+// BlockMapping sets the Blocked flag to true for the OIDC provider associated with the given tenantID.
+// If the provider is already blocked, it does nothing.
+// Returns an error if the provider cannot be retrieved or updated.
+func (s *Service) BlockMapping(ctx context.Context, tenantID string) error {
+	provider, err := s.repository.GetForTenant(ctx, tenantID)
+	if err != nil {
+		if errors.Is(err, serviceerr.ErrNotFound) {
+			return nil
+		}
+		return fmt.Errorf("getting provider for tenant: %w", err)
+	}
+	if provider.Blocked {
+		return nil
+	}
+	provider.Blocked = true
+	err = s.repository.Update(ctx, tenantID, provider)
+	if err != nil {
+		if errors.Is(err, serviceerr.ErrNotFound) {
+			return nil
+		}
+		return fmt.Errorf("updating provider for blocking tenant: %w", err)
+	}
+	return nil
+}
+
+// UnBlockMapping sets the Blocked flag to false for the OIDC provider associated with the given tenantID.
+// If the provider is not blocked, it does nothing.
+// Returns an error if the provider cannot be retrieved or updated.
+func (s *Service) UnBlockMapping(ctx context.Context, tenantID string) error {
+	provider, err := s.repository.GetForTenant(ctx, tenantID)
+	if err != nil {
+		if errors.Is(err, serviceerr.ErrNotFound) {
+			return nil
+		}
+		return fmt.Errorf("getting provider for tenant: %w", err)
+	}
+	if !provider.Blocked {
+		return nil
+	}
+	provider.Blocked = false
+	err = s.repository.Update(ctx, tenantID, provider)
+	if err != nil {
+		if errors.Is(err, serviceerr.ErrNotFound) {
+			return nil
+		}
+		return fmt.Errorf("updating provider for blocking tenant: %w", err)
+	}
 	return nil
 }
