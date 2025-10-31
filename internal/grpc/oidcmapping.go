@@ -85,7 +85,7 @@ func (srv *OIDCMappingServer) BlockOIDCMapping(ctx context.Context, req *oidcmap
 // Returns a response containing an optional error message if unblocking fails.
 func (srv *OIDCMappingServer) UnblockOIDCMapping(ctx context.Context, req *oidcmappingv1.UnblockOIDCMappingRequest) (*oidcmappingv1.UnblockOIDCMappingResponse, error) {
 	resp := &oidcmappingv1.UnblockOIDCMappingResponse{}
-	err := srv.oidc.BlockMapping(ctx, req.GetTenantId())
+	err := srv.oidc.UnBlockMapping(ctx, req.GetTenantId())
 	if err != nil {
 		msg := err.Error()
 		resp.Message = &msg
