@@ -70,7 +70,7 @@ func TestManager_Auth(t *testing.T) {
 			tenantID:    tenantID,
 			fingerprint: "fingerprint",
 			requestURI:  requestURI,
-			wantURL:     oidcServer.URL + "/oauth2/authorize?client_id=my-client-id&code_challenge=someChallenge&code_challenge_method=S256&redirect_uri=" + redirectURI + "&response_type=code&scope=openid&scope=profile&scope=email&scope=groups&state=someState",
+			wantURL:     oidcServer.URL + "/oauth2/authorize?client_id=my-client-id&code_challenge=someChallenge&code_challenge_method=S256&redirect_uri=" + redirectURI + "&response_type=code&scope=openid+profile+email+groups&state=someState",
 			errAssert:   assert.NoError,
 		},
 		{
@@ -142,6 +142,12 @@ func TestManager_Auth(t *testing.T) {
 			assert.Equal(t, wantQ.Get(kClientID), q.Get(kClientID), "Unexpected client id")
 			assert.Equal(t, wantQ.Get(kCodeChallengeMethod), q.Get(kCodeChallengeMethod), "Unexpected code challenge")
 			assert.Equal(t, wantQ.Get(kRedirectURI), q.Get(kRedirectURI), "Unexpected redirect URI")
+
+			// Check the scopes on the URL string to ensure we don't have
+			// something like scope=openid&scope=profile...
+			// but rather scope=openid profile email groups
+			scopeValues := url.Values{kScope: {"openid profile email groups"}}
+			assert.Contains(t, got, scopeValues.Encode())
 
 			// These values are generated randomly. So check if they aren't empty
 			assert.NotEmpty(t, q.Get(kState), "State is zero")

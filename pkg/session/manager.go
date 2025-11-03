@@ -110,7 +110,7 @@ func (m *Manager) authURI(openidConf oidc.Configuration, state State, pkce pkce.
 	}
 
 	q := u.Query()
-	q["scope"] = append(q["scope"], "openid", "profile", "email", "groups")
+	q.Set("scope", "openid profile email groups")
 	q.Set("response_type", "code")
 	q.Set("client_id", m.clientID)
 	q.Set("state", state.ID)
