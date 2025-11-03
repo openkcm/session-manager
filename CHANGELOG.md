@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0](https://github.com/openkcm/session-manager/compare/v0.5.0...v0.6.0) (2025-11-03)
+
+
+### Features
+
+* add block/unblock OIDC mapping endpoints  ([23050ec](https://github.com/openkcm/session-manager/commit/23050ecd2617bc5ed1685640a7d369ebfa7780d5))
+
+
+### Bug Fixes
+
+* scopes URL encoding ([#79](https://github.com/openkcm/session-manager/issues/79)) ([8807451](https://github.com/openkcm/session-manager/commit/88074514157a1b70ef8a448507e824f4c1738afd))
+
 ## [0.5.0](https://github.com/openkcm/session-manager/compare/v0.4.0...v0.5.0) (2025-10-30)
 
 
