@@ -184,6 +184,11 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("parsing id token: %w", err)
 	}
 
+	jws, err := jose.ParseSigned(tokens.IDToken, m.jwsSigAlgs)
+	if err != nil {
+		return OIDCSessionData{}, fmt.Errorf("parsing JWS: %w", err)
+	}
+
 	keyset, err := m.getProviderKeySet(ctx, openidConf)
 	if err != nil {
 		return OIDCSessionData{}, fmt.Errorf("getting jwks for a provider: %w", err)
@@ -200,6 +205,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		Fingerprint: fingerprint,
 		CSRFToken:   csrfToken,
 		Issuer:      provider.IssuerURL,
+		RawClaims:   string(jws.UnsafePayloadWithoutVerification()),
 		Claims: Claims{
 			Subject: claims.Subject,
 			Email:   "",         // TODO: extract email from claims
