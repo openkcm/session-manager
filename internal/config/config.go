@@ -57,9 +57,15 @@ type SessionManager struct {
 }
 
 type ClientAuth struct {
-	Type         string              `yaml:"type" default:"mtls"`
-	ClientID     commoncfg.SourceRef `yaml:"clientID"`
-	MTLS         *commoncfg.MTLS     `yaml:"mTLS"`
+	ClientID string `yaml:"clientID"`
+	// Type defines how to authenticate the client.
+	// Supported types are:
+	//   - mtls: Mutual TLS authentication
+	//   - clientSecret: Client Secret authentication
+	Type string `yaml:"type" default:"mtls"`
+	// MTLS contains the mTLS configuration when Type is set to "mtls".
+	MTLS *commoncfg.MTLS `yaml:"mTLS"`
+	// ClientSecret contains the client secret source reference when Type is set to "clientSecret".
 	ClientSecret commoncfg.SourceRef `yaml:"clientSecret"`
 }
 
