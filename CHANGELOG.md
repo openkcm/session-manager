@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0](https://github.com/openkcm/session-manager/compare/v0.6.0...v0.7.0) (2025-11-05)
+
+
+### Features
+
+* configure the clientID as plain string ([#84](https://github.com/openkcm/session-manager/issues/84)) ([be8eca3](https://github.com/openkcm/session-manager/commit/be8eca371ab597bc2d18212d42404486b65bceda))
+* store raw JSON claims from the ID token in the session ([#82](https://github.com/openkcm/session-manager/issues/82)) ([3acf92e](https://github.com/openkcm/session-manager/commit/3acf92ede3d3505ee4805d1a7bcf192e6fc985af))
+
+
+### Bug Fixes
+
+* Handle null values for optional OIDC columns ([#83](https://github.com/openkcm/session-manager/issues/83)) ([e15fec9](https://github.com/openkcm/session-manager/commit/e15fec948702089ee9807a8d57370edfd0fbb932))
+
 ## [0.6.0](https://github.com/openkcm/session-manager/compare/v0.5.0...v0.6.0) (2025-11-03)
 
 
