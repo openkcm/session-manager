@@ -117,7 +117,7 @@ func TestRepository_Create(t *testing.T) {
 		assertErr assert.ErrorAssertionFunc
 	}{
 		{
-			name:     "Create",
+			name:     "Create succeeds",
 			tenantID: "tenant-id-create-success",
 			provider: oidc.Provider{
 				IssuerURL: "http://oidc-success.example.com",
@@ -183,10 +183,7 @@ func TestRepository_Create(t *testing.T) {
 			provider, err := r.GetForTenant(t.Context(), tt.tenantID)
 			require.NoError(t, err)
 
-			assert.Equal(t, tt.provider.IssuerURL, provider.IssuerURL, "Inserted issuerURL does not match")
-			assert.Equal(t, tt.provider.Blocked, provider.Blocked, "Inserted Blocked does not match")
-			assert.ElementsMatch(t, tt.provider.JWKSURIs, provider.JWKSURIs, "Inserted JWKSURIs do not match")
-			assert.ElementsMatch(t, tt.provider.Audiences, provider.Audiences, "Inserted Audiences do not match")
+			assertEqualProviders(t, tt.provider, provider)
 		})
 	}
 }
@@ -261,7 +258,7 @@ func TestRepository_Update(t *testing.T) {
 		assertErr assert.ErrorAssertionFunc
 	}{
 		{
-			name:     "Success",
+			name:     "Update succeeds",
 			tenantID: tenantID,
 			provider: oidc.Provider{
 				IssuerURL: provider.IssuerURL,
@@ -283,7 +280,7 @@ func TestRepository_Update(t *testing.T) {
 			assertErr: assert.Error,
 		},
 		{
-			name:     "Success without JWKSURIs and Audiences",
+			name:     "Update without JWKSURIs and Audiences succeeds",
 			tenantID: tenantID,
 			provider: oidc.Provider{
 				IssuerURL: provider.IssuerURL,
@@ -292,7 +289,7 @@ func TestRepository_Update(t *testing.T) {
 			assertErr: assert.NoError,
 		},
 		{
-			name:     "Success without JWKSURIs",
+			name:     "Update without JWKSURIs succeeds",
 			tenantID: tenantID,
 			provider: oidc.Provider{
 				IssuerURL: provider.IssuerURL,
@@ -302,7 +299,7 @@ func TestRepository_Update(t *testing.T) {
 			assertErr: assert.NoError,
 		},
 		{
-			name:     "Success without Audiences",
+			name:     "Update without Audiences succeeds",
 			tenantID: tenantID,
 			provider: oidc.Provider{
 				IssuerURL: provider.IssuerURL,
@@ -322,10 +319,15 @@ func TestRepository_Update(t *testing.T) {
 			provider, err := r.GetForTenant(t.Context(), tt.tenantID)
 			require.NoError(t, err)
 
-			assert.Equal(t, tt.provider.IssuerURL, provider.IssuerURL, "Updated issuerURL does not match")
-			assert.Equal(t, tt.provider.Blocked, provider.Blocked, "Updated Blocked does not match")
-			assert.ElementsMatch(t, tt.provider.JWKSURIs, provider.JWKSURIs, "Updated JWKSURIs do not match")
-			assert.ElementsMatch(t, tt.provider.Audiences, provider.Audiences, "Updated Audiences do not match")
+			assertEqualProviders(t, tt.provider, provider)
 		})
 	}
+}
+
+func assertEqualProviders(t *testing.T, expected, actual oidc.Provider) {
+	t.Helper()
+	assert.Equal(t, expected.IssuerURL, actual.IssuerURL, "IssuerURL does not match")
+	assert.Equal(t, expected.Blocked, actual.Blocked, "Blocked does not match")
+	assert.ElementsMatch(t, expected.JWKSURIs, actual.JWKSURIs, "JWKSURIs do not match")
+	assert.ElementsMatch(t, expected.Audiences, actual.Audiences, "Audiences do not match")
 }
