@@ -40,6 +40,10 @@ func TestManager_Auth(t *testing.T) {
 		Blocked:   false,
 		JWKSURIs:  []string{"http://jwks.example.com"},
 		Audiences: []string{requestURI},
+		Properties: map[string]string{
+			"paramAuth1":  "paramAuth1",
+			"paramToken1": "paramToken1",
+		},
 	}
 	newOIDCRepo := func(getErr, getForTenantErr, createErr, deleteErr, updateErr error) *oidcmock.Repository {
 		oidcRepo := oidcmock.NewInMemRepository(getErr, getForTenantErr, createErr, deleteErr, updateErr)
@@ -49,29 +53,32 @@ func TestManager_Auth(t *testing.T) {
 	}
 
 	tests := []struct {
-		name        string
-		oidc        *oidcmock.Repository
-		sessions    *sessionmock.Repository
-		redirectURI string
-		clientID    string
-		tenantID    string
-		fingerprint string
-		requestURI  string
-		wantURL     string
-		errAssert   assert.ErrorAssertionFunc
-		provider    oidc.Provider
+		name               string
+		oidc               *oidcmock.Repository
+		sessions           *sessionmock.Repository
+		redirectURI        string
+		clientID           string
+		tenantID           string
+		fingerprint        string
+		requestURI         string
+		getParametersAuth  []string
+		getParametersToken []string
+		wantURL            string
+		errAssert          assert.ErrorAssertionFunc
+		provider           oidc.Provider
 	}{
 		{
-			name:        "Success",
-			oidc:        newOIDCRepo(nil, nil, nil, nil, nil),
-			sessions:    sessionmock.NewInMemRepository(nil, nil, nil, nil, nil),
-			redirectURI: redirectURI,
-			clientID:    "my-client-id",
-			tenantID:    tenantID,
-			fingerprint: "fingerprint",
-			requestURI:  requestURI,
-			wantURL:     oidcServer.URL + "/oauth2/authorize?client_id=my-client-id&code_challenge=someChallenge&code_challenge_method=S256&redirect_uri=" + redirectURI + "&response_type=code&scope=openid+profile+email+groups&state=someState",
-			errAssert:   assert.NoError,
+			name:              "Success",
+			oidc:              newOIDCRepo(nil, nil, nil, nil, nil),
+			sessions:          sessionmock.NewInMemRepository(nil, nil, nil, nil, nil),
+			redirectURI:       redirectURI,
+			clientID:          "my-client-id",
+			tenantID:          tenantID,
+			fingerprint:       "fingerprint",
+			requestURI:        requestURI,
+			getParametersAuth: []string{"paramAuth1"},
+			wantURL:           oidcServer.URL + "/oauth2/authorize?client_id=my-client-id&code_challenge=someChallenge&code_challenge_method=S256&redirect_uri=" + redirectURI + "&response_type=code&scope=openid+profile+email+groups&state=someState&paramAuth1=paramAuth1",
+			errAssert:         assert.NoError,
 		},
 		{
 			name:        "Get OIDC error",
@@ -108,12 +115,13 @@ func TestManager_Auth(t *testing.T) {
 				kCodeChallenge       = "code_challenge"
 				kCodeChallengeMethod = "code_challenge_method"
 				kRedirectURI         = "redirect_uri"
+				kParamAuth1          = "paramAuth1"
 			)
 
 			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
 			require.NoError(t, err)
 
-			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.redirectURI, tt.clientID, http.DefaultClient, testCSRFSecret, []string{"RS256"})
+			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.getParametersAuth, tt.getParametersToken, tt.redirectURI, tt.clientID, http.DefaultClient, testCSRFSecret, []string{"RS256"})
 			got, err := m.MakeAuthURI(t.Context(), tt.tenantID, tt.fingerprint, tt.requestURI)
 
 			if !tt.errAssert(t, err, fmt.Sprintf("Manager.Auth() error = %v", err)) || err != nil {
@@ -142,6 +150,7 @@ func TestManager_Auth(t *testing.T) {
 			assert.Equal(t, wantQ.Get(kClientID), q.Get(kClientID), "Unexpected client id")
 			assert.Equal(t, wantQ.Get(kCodeChallengeMethod), q.Get(kCodeChallengeMethod), "Unexpected code challenge")
 			assert.Equal(t, wantQ.Get(kRedirectURI), q.Get(kRedirectURI), "Unexpected redirect URI")
+			assert.Equal(t, wantQ.Get(kParamAuth1), q.Get(kParamAuth1), "Unexpected auth url")
 
 			// Check the scopes on the URL string to ensure we don't have
 			// something like scope=openid&scope=profile...
@@ -210,29 +219,32 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 	}
 
 	tests := []struct {
-		name            string
-		oidc            *oidcmock.Repository
-		sessions        *sessionmock.Repository
-		stateID         string
-		code            string
-		fingerprint     string
-		oidcServerFail  bool
-		wantSessionID   bool
-		wantCSRFToken   bool
-		wantRedirectURI string
-		errAssert       assert.ErrorAssertionFunc
+		name               string
+		oidc               *oidcmock.Repository
+		sessions           *sessionmock.Repository
+		stateID            string
+		code               string
+		fingerprint        string
+		getParametersAuth  []string
+		getParametersToken []string
+		oidcServerFail     bool
+		wantSessionID      bool
+		wantCSRFToken      bool
+		wantRedirectURI    string
+		errAssert          assert.ErrorAssertionFunc
 	}{
 		{
-			name:            "Success",
-			oidc:            oidcmock.NewInMemRepository(nil, nil, nil, nil, nil),
-			sessions:        newSessionRepo(nil, nil, nil, nil, nil, &validState),
-			stateID:         stateID,
-			code:            code,
-			fingerprint:     fingerprint,
-			wantSessionID:   true,
-			wantCSRFToken:   true,
-			wantRedirectURI: requestURI,
-			errAssert:       assert.NoError,
+			name:               "Success",
+			oidc:               oidcmock.NewInMemRepository(nil, nil, nil, nil, nil),
+			sessions:           newSessionRepo(nil, nil, nil, nil, nil, &validState),
+			stateID:            stateID,
+			code:               code,
+			fingerprint:        fingerprint,
+			getParametersToken: []string{"getParamToken1"},
+			wantSessionID:      true,
+			wantCSRFToken:      true,
+			wantRedirectURI:    requestURI,
+			errAssert:          assert.NoError,
 		},
 		{
 			name:            "State load error",
@@ -312,15 +324,16 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			require.NoError(t, err)
 
 			localOIDCProvider := oidc.Provider{
-				IssuerURL: oidcServer.URL,
-				Blocked:   false,
-				JWKSURIs:  []string{jwksURI},
-				Audiences: []string{requestURI},
+				IssuerURL:  oidcServer.URL,
+				Blocked:    false,
+				JWKSURIs:   []string{jwksURI},
+				Audiences:  []string{requestURI},
+				Properties: map[string]string{"getParamToken1": "getParamToken1"},
 			}
 
 			tt.oidc.Add(tenantID, localOIDCProvider)
 
-			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, redirectURI, "client-id", http.DefaultClient, testCSRFSecret, []string{"RS256"})
+			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.getParametersAuth, tt.getParametersToken, redirectURI, "client-id", http.DefaultClient, testCSRFSecret, []string{"RS256"})
 
 			result, err := m.FinaliseOIDCLogin(context.Background(), tt.stateID, tt.code, tt.fingerprint)
 

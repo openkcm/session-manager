@@ -1,8 +1,9 @@
 package oidc
 
 type Provider struct {
-	IssuerURL string
-	Blocked   bool
-	JWKSURIs  []string
-	Audiences []string
+	IssuerURL  string
+	Blocked    bool
+	JWKSURIs   []string
+	Audiences  []string
+	Properties map[string]string
 }
