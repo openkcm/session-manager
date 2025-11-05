@@ -201,12 +201,7 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Man
 }
 
 func loadHTTPClient(cfg *config.Config) (*http.Client, string, error) {
-	cID, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.ClientAuth.ClientID)
-	if err != nil {
-		return nil, "", fmt.Errorf("reading client id from source ref: %w", err)
-	}
-
-	clientID := string(cID)
+	clientID := cfg.SessionManager.ClientAuth.ClientID
 
 	switch cfg.SessionManager.ClientAuth.Type {
 	case "mtls":
