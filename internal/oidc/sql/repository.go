@@ -30,30 +30,13 @@ func (r *Repository) GetForTenant(ctx context.Context, tenantID string) (oidc.Pr
 	}
 	defer tx.Rollback(ctx)
 
-	var propsBytes []byte
-	var provider oidc.Provider
-	if err := tx.QueryRow(
+	row := tx.QueryRow(
 		ctx, `SELECT p.issuer_url, p.blocked, p.jwks_uris, p.audience, p.properties
-FROM oidc_providers p
-	JOIN oidc_provider_map m ON m.issuer_url = p.issuer_url
-WHERE m.tenant_id = $1;`, tenantID).
-		Scan(&provider.IssuerURL, &provider.Blocked, &provider.JWKSURIs, &provider.Audiences, &propsBytes); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return oidc.Provider{}, serviceerr.ErrNotFound
-		}
+		FROM oidc_providers p
+			JOIN oidc_provider_map m ON m.issuer_url = p.issuer_url
+		WHERE m.tenant_id = $1;`, tenantID)
 
-		return oidc.Provider{}, fmt.Errorf("selecting from oidc_providers: %w", err)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return oidc.Provider{}, fmt.Errorf("committing tx: %w", err)
-	}
-
-	if err := json.Unmarshal(propsBytes, &provider.Properties); err != nil {
-		return oidc.Provider{}, fmt.Errorf("unmarshalling properties: %w", err)
-	}
-
-	return provider, nil
+	return r.get(ctx, tx, row)
 }
 
 func (r *Repository) Get(ctx context.Context, issuerURL string) (oidc.Provider, error) {
@@ -62,26 +45,33 @@ func (r *Repository) Get(ctx context.Context, issuerURL string) (oidc.Provider, 
 		return oidc.Provider{}, fmt.Errorf("starting transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
+	row := tx.QueryRow(
+		ctx, `SELECT issuer_url, blocked, jwks_uris, audience, properties
+		FROM oidc_providers
+		WHERE issuer_url = $1;`, issuerURL)
+
+	return r.get(ctx, tx, row)
+}
+
+func (r *Repository) get(ctx context.Context, tx pgx.Tx, row pgx.Row) (oidc.Provider, error) {
 	var propsBytes []byte
 	var provider oidc.Provider
-	if err := tx.QueryRow(
-		ctx, `SELECT issuer_url, blocked, jwks_uris, audience, properties
-FROM oidc_providers
-WHERE issuer_url = $1;`, issuerURL).
-		Scan(&provider.IssuerURL, &provider.Blocked, &provider.JWKSURIs, &provider.Audiences, &propsBytes); err != nil {
+	if err := row.Scan(&provider.IssuerURL, &provider.Blocked, &provider.JWKSURIs, &provider.Audiences, &propsBytes); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return oidc.Provider{}, serviceerr.ErrNotFound
 		}
-
-		return oidc.Provider{}, fmt.Errorf("selecting from oidc_providers: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return oidc.Provider{}, fmt.Errorf("committing tx: %w", err)
 	}
 
-	if err := json.Unmarshal(propsBytes, &provider.Properties); err != nil {
-		return oidc.Provider{}, fmt.Errorf("unmarshalling properties: %w", err)
+	if len(propsBytes) > 0 {
+		if err := json.Unmarshal(propsBytes, &provider.Properties); err != nil {
+			return oidc.Provider{}, fmt.Errorf("unmarshalling properties: %w", err)
+		}
+	} else {
+		provider.Properties = make(map[string]string)
 	}
 
 	return provider, nil
