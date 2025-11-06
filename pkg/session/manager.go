@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
+	"github.com/google/uuid"
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 	slogctx "github.com/veqryn/slog-context"
@@ -149,28 +150,40 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("loading state from the storage: %w", err)
 	}
 
+	// audit log metadata
+	correlationId := uuid.NewString()
+	metadata, err := otlpaudit.NewEventMetadata("session manager", state.TenantID, correlationId)
+	if err != nil {
+		return OIDCSessionData{}, fmt.Errorf("creating audit metadata: %w", err)
+	}
+
 	ctx = slogctx.With(ctx, "tenant_id", state.TenantID)
 
 	if time.Now().After(state.Expiry) {
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "state expired")
 		return OIDCSessionData{}, serviceerr.ErrStateExpired
 	}
 
 	if state.Fingerprint != fingerprint {
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "fingerprint mismatch")
 		return OIDCSessionData{}, serviceerr.ErrFingerprintMismatch
 	}
 
 	provider, err := m.oidc.GetForTenant(ctx, state.TenantID)
 	if err != nil {
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get oidc provider")
 		return OIDCSessionData{}, fmt.Errorf("getting oidc provider: %w", err)
 	}
 
 	openidConf, err := m.getOpenIDConfig(ctx, provider)
 	if err != nil {
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get openid configuration")
 		return OIDCSessionData{}, fmt.Errorf("getting openid configuration: %w", err)
 	}
 
 	tokens, err := m.exchangeCode(ctx, openidConf, code, state.PKCEVerifier)
 	if err != nil {
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to exchange code for tokens")
 		return OIDCSessionData{}, fmt.Errorf("exchanging code for tokens: %w", err)
 	}
 
@@ -181,6 +194,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 
 	token, err := jwt.ParseSigned(tokens.IDToken, m.jwsSigAlgs)
 	if err != nil {
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to parse id token")
 		return OIDCSessionData{}, fmt.Errorf("parsing id token: %w", err)
 	}
 
@@ -191,11 +205,13 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 
 	keyset, err := m.getProviderKeySet(ctx, openidConf)
 	if err != nil {
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get jwks for provider")
 		return OIDCSessionData{}, fmt.Errorf("getting jwks for a provider: %w", err)
 	}
 
 	var claims jwt.Claims
 	if err := token.Claims(keyset, &claims); err != nil {
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get JWT claims")
 		return OIDCSessionData{}, fmt.Errorf("getting JWT claims: %w", err)
 	}
 
@@ -217,11 +233,23 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 	}
 
 	if err := m.sessions.StoreSession(ctx, session); err != nil {
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to store session")
 		return OIDCSessionData{}, fmt.Errorf("storing session: %w", err)
 	}
 
 	if err := m.sessions.DeleteState(ctx, stateID); err != nil {
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to delete state")
 		return OIDCSessionData{}, fmt.Errorf("deleting state: %w", err)
+	}
+
+	// audit userLoginSuccess
+	event, err := otlpaudit.NewUserLoginSuccessEvent(metadata, state.TenantID, otlpaudit.LOGINMETHOD_OPENIDCONNECT, otlpaudit.MFATYPE_NONE, otlpaudit.USERTYPE_BUSINESS, state.TenantID)
+	if err != nil {
+		return OIDCSessionData{}, fmt.Errorf("creating audit log: %w", err)
+	}
+	otlpauditErr := m.audit.SendEvent(ctx, event)
+	if otlpauditErr != nil {
+		slogctx.Error(ctx, "Failed to send audit log for user login success", "error", otlpauditErr)
 	}
 
 	return OIDCSessionData{
@@ -229,6 +257,26 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		CSRFToken:  csrfToken,
 		RequestURI: state.RequestURI,
 	}, nil
+}
+
+// sendUserLoginFailureAudit creates the user-login-failure audit event and sends it.
+// The function logs any errors encountered while creating or sending the event but
+// does not propagate them to the caller.
+func (m *Manager) sendUserLoginFailureAudit(ctx context.Context, metadata otlpaudit.EventMetadata, objectID, reason string) {
+	if m.audit == nil {
+		slogctx.Warn(ctx, "audit logger is nil; skipping user login failure event")
+		return
+	}
+
+	event, err := otlpaudit.NewUserLoginFailureEvent(metadata, objectID, otlpaudit.LOGINMETHOD_OPENIDCONNECT, otlpaudit.FailReason(reason), objectID)
+	if err != nil {
+		slogctx.Error(ctx, "creating audit log", "error", err)
+		return
+	}
+
+	if err := m.audit.SendEvent(ctx, event); err != nil {
+		slogctx.Error(ctx, "Failed to send audit log for user login failure", "error", err)
+	}
 }
 
 func (m *Manager) exchangeCode(ctx context.Context, openidConf oidc.Configuration, code, codeVerifier string) (tokenResponse, error) {
@@ -327,6 +375,10 @@ func (m *Manager) RefreshSession(ctx context.Context, s *Session, provider oidc.
 		ExpiresIn    int    `json:"expires_in"`
 	}
 
+	if err := json.NewDecoder(resp.Body).Decode(&respData); err != nil {
+		return fmt.Errorf("decoding token response: %w", err)
+	}
+
 	s.AccessToken = respData.AccessToken
 	s.RefreshToken = respData.RefreshToken
 	s.AccessTokenExpiry = time.Now().Add(time.Duration(respData.ExpiresIn))
@@ -351,6 +403,11 @@ func (m *Manager) getOpenIDConfig(ctx context.Context, provider oidc.Provider) (
 	if err != nil {
 		return oidc.Configuration{}, fmt.Errorf("doing an HTTP request: %w", err)
 	}
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			slogctx.Error(ctx, "closing response body", "error", cerr)
+		}
+	}()
 
 	var conf oidc.Configuration
 	if err := json.NewDecoder(resp.Body).Decode(&conf); err != nil {
