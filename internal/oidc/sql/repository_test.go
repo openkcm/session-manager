@@ -338,4 +338,5 @@ func assertEqualProviders(t *testing.T, expected, actual oidc.Provider) {
 	assert.Equal(t, expected.Blocked, actual.Blocked, "Blocked does not match")
 	assert.ElementsMatch(t, expected.JWKSURIs, actual.JWKSURIs, "JWKSURIs do not match")
 	assert.ElementsMatch(t, expected.Audiences, actual.Audiences, "Audiences do not match")
+	assert.Equal(t, expected.Properties, actual.Properties, "Properties do not match")
 }
