@@ -22,8 +22,7 @@ var testTime time.Time
 
 func init() {
 	now := time.Now()
-	//nolint:gosmopolitan
-	testTime = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Add(30 * 24 * time.Hour).Local()
+	testTime = time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), now.Nanosecond(), now.Location()).Add(30 * 24 * time.Hour)
 }
 
 func init() {
@@ -235,7 +234,7 @@ func TestRepository_LoadSession(t *testing.T) {
 	}
 }
 
-func TestRepository_StoreSession(t *testing.T) {
+func TestRepository_StoreSession_Success(t *testing.T) {
 	const prefix = "session-manager-store-session-test"
 
 	const upsertTenantID = "tenant-id-upsert"
@@ -266,7 +265,6 @@ func TestRepository_StoreSession(t *testing.T) {
 				Fingerprint:       "fingerprint-one",
 				AccessToken:       "access-token-one",
 				RefreshToken:      "refresh-token-one",
-				Expiry:            testTime,
 				AccessTokenExpiry: testTime,
 			},
 			assertErr: assert.NoError,
@@ -280,7 +278,6 @@ func TestRepository_StoreSession(t *testing.T) {
 				Fingerprint:       "fingerprint-upsert-new",
 				AccessToken:       "access-token-upsert-new",
 				RefreshToken:      "refresh-token-upsert-new",
-				Expiry:            testTime,
 				AccessTokenExpiry: testTime,
 			},
 			assertErr: assert.NoError,
@@ -288,16 +285,70 @@ func TestRepository_StoreSession(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			now := time.Now()
+			shortTestTime := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), now.Nanosecond(), now.Location()).Add(10 * time.Second).UTC()
+			tt.session.Expiry = shortTestTime
+			duration := time.Until(tt.session.Expiry)
 			r := sessionvalkey.NewRepository(client, prefix)
 			err := r.StoreSession(t.Context(), tt.session)
-			if tt.assertErr(t, err, fmt.Sprintf("Repository.StoreSession() error %v", err)) || err != nil {
-				return
-			}
-
+			tt.assertErr(t, err, fmt.Sprintf("Repository.StoreSession() error %v", err))
 			session, err := r.LoadSession(t.Context(), tt.session.ID)
 			require.NoError(t, err)
-
 			assert.Equal(t, tt.session, session, "Inserted session is not equal")
+			t.Log("test getting session ID by provider ID")
+			sessionID, err := r.GetSessIDByProviderID(t.Context(), tt.session.ProviderID)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.session.ID, sessionID)
+			t.Log("test getting access token")
+			accessToken, err := r.GetAccessTokenForSession(t.Context(), tt.session.ID)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.session.AccessToken, accessToken)
+			t.Log("test getting refresh token")
+			refreshToken, err := r.GetRefreshTokenForSession(t.Context(), tt.session.ID)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.session.RefreshToken, refreshToken)
+			t.Log("wait to see if session is deleted after expiration")
+			time.Sleep(duration)
+			_, err = r.LoadSession(t.Context(), tt.session.ID)
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestRepository_StoreSession_Fail(t *testing.T) {
+	const prefix = "session-manager-store-session-cleanup-test"
+	tests := []struct {
+		name     string
+		tenantID string
+		session  session.Session
+	}{
+		{
+			name: "Successful_CleanUp_OnError",
+			session: session.Session{
+				ID:                "sessionid-id-store-session-successful-cleanup",
+				TenantID:          "tenant-id-store-session-successful-cleanup",
+				Fingerprint:       "fingerprint-upsert-new",
+				AccessToken:       "access-token-upsert-new",
+				RefreshToken:      "refresh-token-upsert-new",
+				Expiry:            time.Now().Add(-100 * time.Second).UTC(),
+				AccessTokenExpiry: testTime,
+			},
+			tenantID: "tenant-id-store-session-successful-cleanup",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := sessionvalkey.NewRepository(client, prefix)
+			err := r.StoreSession(t.Context(), tt.session)
+			assert.Error(t, err)
+			_, err = r.LoadSession(t.Context(), tt.session.ID)
+			assert.Error(t, err)
+			_, err = r.GetAccessTokenForSession(t.Context(), tt.session.ID)
+			assert.Error(t, err)
+			_, err = r.GetSessIDByProviderID(t.Context(), tt.session.ProviderID)
+			assert.Error(t, err)
+			_, err = r.GetRefreshTokenForSession(t.Context(), tt.session.ID)
+			assert.Error(t, err)
 		})
 	}
 }
