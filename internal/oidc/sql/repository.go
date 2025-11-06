@@ -95,9 +95,9 @@ func (r *Repository) Create(ctx context.Context, tenantID string, provider oidc.
 
 	defer tx.Rollback(ctx)
 
-	propsBytes, err := json.Marshal(provider.Properties)
+	propsBytes, err := r.marshalProperties(err, provider)
 	if err != nil {
-		return fmt.Errorf("marshalling properties: %w", err)
+		return err
 	}
 
 	// JWKSURIs and Audiences are optional, so we use COALESCE to default to empty arrays if they are nil
@@ -162,9 +162,9 @@ func (r *Repository) Update(ctx context.Context, tenantID string, provider oidc.
 	}
 	defer tx.Rollback(ctx)
 
-	propsBytes, err := json.Marshal(provider.Properties)
+	propsBytes, err := r.marshalProperties(err, provider)
 	if err != nil {
-		return fmt.Errorf("marshalling properties: %w", err)
+		return err
 	}
 
 	// JWKSURIs and Audiences are optional, so we use COALESCE to default to empty arrays if they are nil
@@ -186,4 +186,12 @@ func (r *Repository) Update(ctx context.Context, tenantID string, provider oidc.
 	}
 
 	return nil
+}
+
+func (r *Repository) marshalProperties(err error, provider oidc.Provider) ([]byte, error) {
+	propsBytes, err := json.Marshal(provider.Properties)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling properties: %w", err)
+	}
+	return propsBytes, nil
 }
