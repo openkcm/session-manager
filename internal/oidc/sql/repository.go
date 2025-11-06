@@ -2,6 +2,7 @@ package oidcsql
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -29,13 +30,14 @@ func (r *Repository) GetForTenant(ctx context.Context, tenantID string) (oidc.Pr
 	}
 	defer tx.Rollback(ctx)
 
+	var propsBytes []byte
 	var provider oidc.Provider
 	if err := tx.QueryRow(
 		ctx, `SELECT p.issuer_url, p.blocked, p.jwks_uris, p.audience, p.properties
 FROM oidc_providers p
 	JOIN oidc_provider_map m ON m.issuer_url = p.issuer_url
 WHERE m.tenant_id = $1;`, tenantID).
-		Scan(&provider.IssuerURL, &provider.Blocked, &provider.JWKSURIs, &provider.Audiences, &provider.Properties); err != nil {
+		Scan(&provider.IssuerURL, &provider.Blocked, &provider.JWKSURIs, &provider.Audiences, &propsBytes); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return oidc.Provider{}, serviceerr.ErrNotFound
 		}
@@ -45,6 +47,10 @@ WHERE m.tenant_id = $1;`, tenantID).
 
 	if err := tx.Commit(ctx); err != nil {
 		return oidc.Provider{}, fmt.Errorf("committing tx: %w", err)
+	}
+
+	if err := json.Unmarshal(propsBytes, &provider.Properties); err != nil {
+		return oidc.Provider{}, fmt.Errorf("unmarshalling properties: %w", err)
 	}
 
 	return provider, nil
@@ -56,13 +62,13 @@ func (r *Repository) Get(ctx context.Context, issuerURL string) (oidc.Provider, 
 		return oidc.Provider{}, fmt.Errorf("starting transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
-
+	var propsBytes []byte
 	var provider oidc.Provider
 	if err := tx.QueryRow(
 		ctx, `SELECT issuer_url, blocked, jwks_uris, audience, properties
 FROM oidc_providers
 WHERE issuer_url = $1;`, issuerURL).
-		Scan(&provider.IssuerURL, &provider.Blocked, &provider.JWKSURIs, &provider.Audiences, &provider.Properties); err != nil {
+		Scan(&provider.IssuerURL, &provider.Blocked, &provider.JWKSURIs, &provider.Audiences, &propsBytes); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return oidc.Provider{}, serviceerr.ErrNotFound
 		}
@@ -72,6 +78,10 @@ WHERE issuer_url = $1;`, issuerURL).
 
 	if err := tx.Commit(ctx); err != nil {
 		return oidc.Provider{}, fmt.Errorf("committing tx: %w", err)
+	}
+
+	if err := json.Unmarshal(propsBytes, &provider.Properties); err != nil {
+		return oidc.Provider{}, fmt.Errorf("unmarshalling properties: %w", err)
 	}
 
 	return provider, nil
@@ -85,9 +95,14 @@ func (r *Repository) Create(ctx context.Context, tenantID string, provider oidc.
 
 	defer tx.Rollback(ctx)
 
+	propsBytes, err := json.Marshal(provider.Properties)
+	if err != nil {
+		return fmt.Errorf("marshalling properties: %w", err)
+	}
+
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO oidc_providers (issuer_url, blocked, jwks_uris, audience, properties) VALUES ($1, $2, $3, $4, $5);`,
-		provider.IssuerURL, provider.Blocked, provider.JWKSURIs, provider.Audiences, provider.Properties,
+		provider.IssuerURL, provider.Blocked, provider.JWKSURIs, provider.Audiences, propsBytes,
 	); err != nil {
 		if err, ok := handlePgError(err); ok {
 			return err

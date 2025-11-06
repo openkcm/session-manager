@@ -124,6 +124,9 @@ func TestRepository_Create(t *testing.T) {
 				Blocked:   false,
 				JWKSURIs:  []string{"jwks.example.com"},
 				Audiences: []string{"cmk.example.com"},
+				Properties: map[string]string{
+					"prop1": "prop1val",
+				},
 			},
 			assertErr: assert.NoError,
 		},
@@ -135,6 +138,9 @@ func TestRepository_Create(t *testing.T) {
 				Blocked:   false,
 				JWKSURIs:  []string{"jwks.example.com"},
 				Audiences: []string{"cmk.example.com"},
+				Properties: map[string]string{
+					"prop1": "prop1val",
+				},
 			},
 			assertErr: assert.Error,
 		},
