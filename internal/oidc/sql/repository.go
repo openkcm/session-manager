@@ -100,8 +100,10 @@ func (r *Repository) Create(ctx context.Context, tenantID string, provider oidc.
 		return fmt.Errorf("marshalling properties: %w", err)
 	}
 
+	// JWKSURIs and Audiences are optional, so we use COALESCE to default to empty arrays if they are nil
 	if _, err := tx.Exec(ctx,
-		`INSERT INTO oidc_providers (issuer_url, blocked, jwks_uris, audience, properties) VALUES ($1, $2, $3, $4, $5);`,
+		`INSERT INTO oidc_providers (issuer_url, blocked, jwks_uris, audience, properties) 
+			 VALUES ($1, $2, COALESCE($3, '{}'::text[]), COALESCE($4, '{}'::text[]), $5);`,
 		provider.IssuerURL, provider.Blocked, provider.JWKSURIs, provider.Audiences, propsBytes,
 	); err != nil {
 		if err, ok := handlePgError(err); ok {
@@ -160,8 +162,17 @@ func (r *Repository) Update(ctx context.Context, tenantID string, provider oidc.
 	}
 	defer tx.Rollback(ctx)
 
-	ct, err := tx.Exec(ctx, `UPDATE oidc_providers SET blocked = $1, jwks_uris = $2, audience = $3, properties = $4
-WHERE issuer_url = $5;`, provider.Blocked, provider.JWKSURIs, provider.Audiences, provider.Properties, provider.IssuerURL)
+	propsBytes, err := json.Marshal(provider.Properties)
+	if err != nil {
+		return fmt.Errorf("marshalling properties: %w", err)
+	}
+
+	// JWKSURIs and Audiences are optional, so we use COALESCE to default to empty arrays if they are nil
+	ct, err := tx.Exec(ctx,
+		`UPDATE oidc_providers 
+			 SET blocked = $1, jwks_uris = COALESCE($2, '{}'::text[]), audience = COALESCE($3, '{}'::text[]), properties = $4
+			 WHERE issuer_url = $5;`,
+		provider.Blocked, provider.JWKSURIs, provider.Audiences, propsBytes, provider.IssuerURL)
 	if err != nil {
 		return fmt.Errorf("updating oidc_providers: %w", err)
 	}
