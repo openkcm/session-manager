@@ -248,7 +248,7 @@ func (m *Manager) exchangeCode(ctx context.Context, openidConf oidc.Configuratio
 	for _, parameter := range m.getParametersToken {
 		value, ok := properties[parameter]
 		if !ok {
-			return tokenResponse{}, fmt.Errorf("missing auth parameter: %s", parameter)
+			return tokenResponse{}, fmt.Errorf("missing token parameter: %s", parameter)
 		}
 		data.Set(parameter, value)
 	}
