@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.0](https://github.com/openkcm/session-manager/compare/v0.7.0...v0.8.0) (2025-11-06)
+
+
+### Features
+
+* add custom parameters to Provider ([#88](https://github.com/openkcm/session-manager/issues/88)) ([fbf8a40](https://github.com/openkcm/session-manager/commit/fbf8a400b4d30a32a7f206089d74fa2e1e6c2154))
+* add valkey implementation ([#65](https://github.com/openkcm/session-manager/issues/65)) ([0486736](https://github.com/openkcm/session-manager/commit/04867366aa5442bf9ef3d20ad7440334279e73da))
+
 ## [0.7.0](https://github.com/openkcm/session-manager/compare/v0.6.0...v0.7.0) (2025-11-05)
 
 
