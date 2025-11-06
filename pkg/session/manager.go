@@ -29,10 +29,12 @@ type Manager struct {
 	pkce     pkce.Source
 	audit    *otlpaudit.AuditLogger
 
-	sessionDuration time.Duration
-	redirectURI     string
-	clientID        string
-	secureClient    *http.Client
+	sessionDuration    time.Duration
+	redirectURI        string
+	clientID           string
+	secureClient       *http.Client
+	getParametersAuth  []string
+	getParametersToken []string
 
 	csrfSecret []byte
 	jwsSigAlgs []jose.SignatureAlgorithm
@@ -43,6 +45,8 @@ func NewManager(
 	sessions Repository,
 	auditLogger *otlpaudit.AuditLogger,
 	sessionDuration time.Duration,
+	getParametersAuth []string,
+	getParametersToken []string,
 	redirectURI string,
 	clientID string,
 	httpClient *http.Client,
@@ -55,15 +59,17 @@ func NewManager(
 	}
 
 	return &Manager{
-		oidc:            oidc,
-		sessions:        sessions,
-		audit:           auditLogger,
-		sessionDuration: sessionDuration,
-		redirectURI:     redirectURI,
-		clientID:        clientID,
-		secureClient:    httpClient,
-		csrfSecret:      []byte(csrfHMACSecret),
-		jwsSigAlgs:      algs,
+		oidc:               oidc,
+		sessions:           sessions,
+		audit:              auditLogger,
+		sessionDuration:    sessionDuration,
+		getParametersAuth:  getParametersAuth,
+		getParametersToken: getParametersToken,
+		redirectURI:        redirectURI,
+		clientID:           clientID,
+		secureClient:       httpClient,
+		csrfSecret:         []byte(csrfHMACSecret),
+		jwsSigAlgs:         algs,
 	}
 }
 
@@ -95,7 +101,7 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 		return "", fmt.Errorf("storing session: %w", err)
 	}
 
-	u, err := m.authURI(openidConf, state, pkce)
+	u, err := m.authURI(openidConf, state, pkce, provider.Properties)
 	if err != nil {
 		return "", fmt.Errorf("generating auth uri: %w", err)
 	}
@@ -103,7 +109,7 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 	return u, nil
 }
 
-func (m *Manager) authURI(openidConf oidc.Configuration, state State, pkce pkce.PKCE) (string, error) {
+func (m *Manager) authURI(openidConf oidc.Configuration, state State, pkce pkce.PKCE, properties map[string]string) (string, error) {
 	u, err := url.Parse(openidConf.AuthorizationEndpoint)
 	if err != nil {
 		return "", fmt.Errorf("parsing authorisation endpoint url: %w", err)
@@ -117,6 +123,13 @@ func (m *Manager) authURI(openidConf oidc.Configuration, state State, pkce pkce.
 	q.Set("code_challenge", pkce.Challenge)
 	q.Set("code_challenge_method", pkce.Method)
 	q.Set("redirect_uri", m.redirectURI)
+	for _, parameter := range m.getParametersAuth {
+		value, ok := properties[parameter]
+		if !ok {
+			return "", fmt.Errorf("missing auth parameter: %s", parameter)
+		}
+		q.Set(parameter, value)
+	}
 
 	u.RawQuery = q.Encode()
 
@@ -169,7 +182,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("getting openid configuration: %w", err)
 	}
 
-	tokens, err := m.exchangeCode(ctx, openidConf, code, state.PKCEVerifier)
+	tokens, err := m.exchangeCode(ctx, openidConf, code, state.PKCEVerifier, provider.Properties)
 	if err != nil {
 		return OIDCSessionData{}, fmt.Errorf("exchanging code for tokens: %w", err)
 	}
@@ -231,13 +244,20 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 	}, nil
 }
 
-func (m *Manager) exchangeCode(ctx context.Context, openidConf oidc.Configuration, code, codeVerifier string) (tokenResponse, error) {
+func (m *Manager) exchangeCode(ctx context.Context, openidConf oidc.Configuration, code, codeVerifier string, properties map[string]string) (tokenResponse, error) {
 	data := url.Values{}
 	data.Set("grant_type", "authorization_code")
 	data.Set("code", code)
 	data.Set("code_verifier", codeVerifier)
 	data.Set("redirect_uri", m.redirectURI)
 	data.Set("client_id", m.clientID)
+	for _, parameter := range m.getParametersToken {
+		value, ok := properties[parameter]
+		if !ok {
+			return tokenResponse{}, fmt.Errorf("missing token parameter: %s", parameter)
+		}
+		data.Set(parameter, value)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, openidConf.TokenEndpoint, strings.NewReader(data.Encode()))
 	if err != nil {

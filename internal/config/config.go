@@ -49,11 +49,13 @@ type ValKey struct {
 }
 
 type SessionManager struct {
-	SessionDuration time.Duration       `yaml:"sessionDuration" default:"12h"`
-	RedirectURI     string              `yaml:"redirectURI" default:"https://api.cmk/callback"`
-	ClientAuth      ClientAuth          `yaml:"clientAuth"`
-	CSRFSecret      commoncfg.SourceRef `yaml:"csrfSecret"`
-	JWSSigAlgs      []string            `yaml:"jwsSigAlgs"` // A list of supported JWT signature algorithms
+	SessionDuration                  time.Duration       `yaml:"sessionDuration" default:"12h"`
+	RedirectURI                      string              `yaml:"redirectURI" default:"https://api.cmk/callback"`
+	ClientAuth                       ClientAuth          `yaml:"clientAuth"`
+	CSRFSecret                       commoncfg.SourceRef `yaml:"csrfSecret"`
+	JWSSigAlgs                       []string            `yaml:"jwsSigAlgs"` // A list of supported JWT signature algorithms
+	AdditionalGetParametersAuthorize []string            `yaml:"additionalGetParametersAuthorize"`
+	AdditionalGetParametersToken     []string            `yaml:"additionalGetParametersToken"`
 }
 
 type ClientAuth struct {

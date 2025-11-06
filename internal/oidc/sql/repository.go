@@ -2,6 +2,7 @@ package oidcsql
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -29,25 +30,13 @@ func (r *Repository) GetForTenant(ctx context.Context, tenantID string) (oidc.Pr
 	}
 	defer tx.Rollback(ctx)
 
-	var provider oidc.Provider
-	if err := tx.QueryRow(
-		ctx, `SELECT p.issuer_url, p.blocked, p.jwks_uris, p.audience
-FROM oidc_providers p
-	JOIN oidc_provider_map m ON m.issuer_url = p.issuer_url
-WHERE m.tenant_id = $1;`, tenantID).
-		Scan(&provider.IssuerURL, &provider.Blocked, &provider.JWKSURIs, &provider.Audiences); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return oidc.Provider{}, serviceerr.ErrNotFound
-		}
+	row := tx.QueryRow(
+		ctx, `SELECT p.issuer_url, p.blocked, p.jwks_uris, p.audience, p.properties
+		FROM oidc_providers p
+			JOIN oidc_provider_map m ON m.issuer_url = p.issuer_url
+		WHERE m.tenant_id = $1;`, tenantID)
 
-		return oidc.Provider{}, fmt.Errorf("selecting from oidc_providers: %w", err)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return oidc.Provider{}, fmt.Errorf("committing tx: %w", err)
-	}
-
-	return provider, nil
+	return r.get(ctx, tx, row)
 }
 
 func (r *Repository) Get(ctx context.Context, issuerURL string) (oidc.Provider, error) {
@@ -56,22 +45,33 @@ func (r *Repository) Get(ctx context.Context, issuerURL string) (oidc.Provider, 
 		return oidc.Provider{}, fmt.Errorf("starting transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
+	row := tx.QueryRow(
+		ctx, `SELECT issuer_url, blocked, jwks_uris, audience, properties
+		FROM oidc_providers
+		WHERE issuer_url = $1;`, issuerURL)
 
+	return r.get(ctx, tx, row)
+}
+
+func (r *Repository) get(ctx context.Context, tx pgx.Tx, row pgx.Row) (oidc.Provider, error) {
+	var propsBytes []byte
 	var provider oidc.Provider
-	if err := tx.QueryRow(
-		ctx, `SELECT issuer_url, blocked, jwks_uris, audience
-FROM oidc_providers
-WHERE issuer_url = $1;`, issuerURL).
-		Scan(&provider.IssuerURL, &provider.Blocked, &provider.JWKSURIs, &provider.Audiences); err != nil {
+	if err := row.Scan(&provider.IssuerURL, &provider.Blocked, &provider.JWKSURIs, &provider.Audiences, &propsBytes); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return oidc.Provider{}, serviceerr.ErrNotFound
 		}
-
-		return oidc.Provider{}, fmt.Errorf("selecting from oidc_providers: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return oidc.Provider{}, fmt.Errorf("committing tx: %w", err)
+	}
+
+	if len(propsBytes) > 0 {
+		if err := json.Unmarshal(propsBytes, &provider.Properties); err != nil {
+			return oidc.Provider{}, fmt.Errorf("unmarshalling properties: %w", err)
+		}
+	} else {
+		provider.Properties = make(map[string]string)
 	}
 
 	return provider, nil
@@ -85,11 +85,16 @@ func (r *Repository) Create(ctx context.Context, tenantID string, provider oidc.
 
 	defer tx.Rollback(ctx)
 
+	propsBytes, err := r.marshalProperties(provider)
+	if err != nil {
+		return err
+	}
+
 	// JWKSURIs and Audiences are optional, so we use COALESCE to default to empty arrays if they are nil
 	if _, err := tx.Exec(ctx,
-		`INSERT INTO oidc_providers (issuer_url, blocked, jwks_uris, audience) 
-			 VALUES ($1, $2, COALESCE($3, '{}'::text[]), COALESCE($4, '{}'::text[]));`,
-		provider.IssuerURL, provider.Blocked, provider.JWKSURIs, provider.Audiences,
+		`INSERT INTO oidc_providers (issuer_url, blocked, jwks_uris, audience, properties) 
+			 VALUES ($1, $2, COALESCE($3, '{}'::text[]), COALESCE($4, '{}'::text[]), $5);`,
+		provider.IssuerURL, provider.Blocked, provider.JWKSURIs, provider.Audiences, propsBytes,
 	); err != nil {
 		if err, ok := handlePgError(err); ok {
 			return err
@@ -147,12 +152,17 @@ func (r *Repository) Update(ctx context.Context, tenantID string, provider oidc.
 	}
 	defer tx.Rollback(ctx)
 
+	propsBytes, err := r.marshalProperties(provider)
+	if err != nil {
+		return err
+	}
+
 	// JWKSURIs and Audiences are optional, so we use COALESCE to default to empty arrays if they are nil
 	ct, err := tx.Exec(ctx,
 		`UPDATE oidc_providers 
-			 SET blocked = $1, jwks_uris = COALESCE($2, '{}'::text[]), audience = COALESCE($3, '{}'::text[])
-			 WHERE issuer_url = $4;`,
-		provider.Blocked, provider.JWKSURIs, provider.Audiences, provider.IssuerURL)
+			 SET blocked = $1, jwks_uris = COALESCE($2, '{}'::text[]), audience = COALESCE($3, '{}'::text[]), properties = $4
+			 WHERE issuer_url = $5;`,
+		provider.Blocked, provider.JWKSURIs, provider.Audiences, propsBytes, provider.IssuerURL)
 	if err != nil {
 		return fmt.Errorf("updating oidc_providers: %w", err)
 	}
@@ -166,4 +176,12 @@ func (r *Repository) Update(ctx context.Context, tenantID string, provider oidc.
 	}
 
 	return nil
+}
+
+func (r *Repository) marshalProperties(provider oidc.Provider) ([]byte, error) {
+	propsBytes, err := json.Marshal(provider.Properties)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling properties: %w", err)
+	}
+	return propsBytes, nil
 }

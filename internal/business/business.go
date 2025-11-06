@@ -192,6 +192,8 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Man
 		sessionRepo,
 		auditLogger,
 		cfg.SessionManager.SessionDuration,
+		cfg.SessionManager.AdditionalGetParametersAuthorize,
+		cfg.SessionManager.AdditionalGetParametersToken,
 		cfg.SessionManager.RedirectURI,
 		clientID,
 		httpClient,

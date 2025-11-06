@@ -31,10 +31,11 @@ func (srv *OIDCMappingServer) ApplyOIDCMapping(ctx context.Context, req *oidcmap
 	}
 
 	provider := oidc.Provider{
-		IssuerURL: req.GetIssuer(),
-		Blocked:   false,
-		JWKSURIs:  req.GetJwksUris(),
-		Audiences: req.GetAudiences(),
+		IssuerURL:  req.GetIssuer(),
+		Blocked:    false,
+		JWKSURIs:   req.GetJwksUris(),
+		Audiences:  req.GetAudiences(),
+		Properties: req.GetProperties(),
 	}
 	err := srv.oidc.ApplyMapping(ctx, req.GetTenantId(), provider)
 	if err != nil {

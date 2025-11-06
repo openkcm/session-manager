@@ -42,10 +42,11 @@ func TestRepository_GetForTenant(t *testing.T) {
 			name:     "Success",
 			tenantID: "tenant1-id",
 			wantProvider: oidc.Provider{
-				IssuerURL: "url-one",
-				Blocked:   false,
-				JWKSURIs:  make([]string, 0),
-				Audiences: make([]string, 0),
+				IssuerURL:  "url-one",
+				Blocked:    false,
+				JWKSURIs:   make([]string, 0),
+				Audiences:  make([]string, 0),
+				Properties: make(map[string]string),
 			},
 			assertErr: assert.NoError,
 		},
@@ -81,10 +82,11 @@ func TestRepository_Get(t *testing.T) {
 			name:      "Success",
 			issuerURL: "url-one",
 			wantProvider: oidc.Provider{
-				IssuerURL: "url-one",
-				Blocked:   false,
-				JWKSURIs:  make([]string, 0),
-				Audiences: make([]string, 0),
+				IssuerURL:  "url-one",
+				Blocked:    false,
+				JWKSURIs:   make([]string, 0),
+				Audiences:  make([]string, 0),
+				Properties: make(map[string]string),
 			},
 			assertErr: assert.NoError,
 		},
@@ -124,6 +126,9 @@ func TestRepository_Create(t *testing.T) {
 				Blocked:   false,
 				JWKSURIs:  []string{"jwks.example.com"},
 				Audiences: []string{"cmk.example.com"},
+				Properties: map[string]string{
+					"prop1": "prop1val",
+				},
 			},
 			assertErr: assert.NoError,
 		},
@@ -135,6 +140,9 @@ func TestRepository_Create(t *testing.T) {
 				Blocked:   false,
 				JWKSURIs:  []string{"jwks.example.com"},
 				Audiences: []string{"cmk.example.com"},
+				Properties: map[string]string{
+					"prop1": "prop1val",
+				},
 			},
 			assertErr: assert.Error,
 		},
@@ -330,4 +338,5 @@ func assertEqualProviders(t *testing.T, expected, actual oidc.Provider) {
 	assert.Equal(t, expected.Blocked, actual.Blocked, "Blocked does not match")
 	assert.ElementsMatch(t, expected.JWKSURIs, actual.JWKSURIs, "JWKSURIs do not match")
 	assert.ElementsMatch(t, expected.Audiences, actual.Audiences, "Audiences do not match")
+	assert.Equal(t, expected.Properties, actual.Properties, "Properties do not match")
 }
