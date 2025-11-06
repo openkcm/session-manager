@@ -95,7 +95,7 @@ func (r *Repository) Create(ctx context.Context, tenantID string, provider oidc.
 
 	defer tx.Rollback(ctx)
 
-	propsBytes, err := r.marshalProperties(err, provider)
+	propsBytes, err := r.marshalProperties(provider)
 	if err != nil {
 		return err
 	}
@@ -162,7 +162,7 @@ func (r *Repository) Update(ctx context.Context, tenantID string, provider oidc.
 	}
 	defer tx.Rollback(ctx)
 
-	propsBytes, err := r.marshalProperties(err, provider)
+	propsBytes, err := r.marshalProperties(provider)
 	if err != nil {
 		return err
 	}
@@ -188,7 +188,7 @@ func (r *Repository) Update(ctx context.Context, tenantID string, provider oidc.
 	return nil
 }
 
-func (r *Repository) marshalProperties(err error, provider oidc.Provider) ([]byte, error) {
+func (r *Repository) marshalProperties(provider oidc.Provider) ([]byte, error) {
 	propsBytes, err := json.Marshal(provider.Properties)
 	if err != nil {
 		return nil, fmt.Errorf("marshalling properties: %w", err)
