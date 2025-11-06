@@ -221,9 +221,7 @@ sessionManager:
     sessionDuration: 12h
     redirectURI: http://localhost:8080/sm/callback
     clientAuth:
-        clientID:
-            source: embedded
-            value: client-id
+        clientID: "client-id"
         type: client_secret
         clientSecret:
             source: embedded
