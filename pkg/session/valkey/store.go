@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/valkey-io/valkey-go"
 
@@ -26,26 +27,26 @@ func newStore(valkeyClient valkey.Client, prefix string) *store {
 	}
 }
 
-func (s *store) Get(ctx context.Context, objectType, objectID string, decodeInto any) error {
+func (s *store) Get(ctx context.Context, objectType ObjectType, objectID string, decodeInto any) error {
 	key := s.key(objectType, objectID)
 	return s.get(ctx, key, decodeInto)
 }
 
-func (s *store) Set(ctx context.Context, objectType, id string, val any) error {
+func (s *store) Set(ctx context.Context, objectType ObjectType, id string, val any, duration time.Duration) error {
 	key := s.key(objectType, id)
 	bytes, err := s.encode(val)
 	if err != nil {
 		return fmt.Errorf("encoding data: %w", err)
 	}
 
-	if err := s.valkey.Do(ctx, s.valkey.B().Set().Key(key).Value(valkey.BinaryString(bytes)).Build()).Error(); err != nil {
+	if err := s.valkey.Do(ctx, s.valkey.B().Set().Key(key).Value(valkey.BinaryString(bytes)).Ex(duration).Build()).Error(); err != nil {
 		return fmt.Errorf("executing set command: %w", err)
 	}
 
 	return nil
 }
 
-func (s *store) Destroy(ctx context.Context, objectType, id string) error {
+func (s *store) Destroy(ctx context.Context, objectType ObjectType, id string) error {
 	key := s.key(objectType, id)
 	if err := s.valkey.Do(ctx, s.valkey.B().Del().Key(key).Build()).Error(); err != nil {
 		return fmt.Errorf("executing del command: %w", err)
@@ -72,7 +73,7 @@ func (s *store) get(ctx context.Context, key string, decodeInto any) error {
 	return nil
 }
 
-func (s *store) key(objectType string, objectID string) string {
+func (s *store) key(objectType ObjectType, objectID string) string {
 	return fmt.Sprintf("%s:%s:%s", s.prefix, objectType, objectID)
 }
 
@@ -93,7 +94,7 @@ func (s *store) decode(data []byte, into any) error {
 	return nil
 }
 
-func getStoreObjects[T any](ctx context.Context, s *store, objectType string, objectID string, decodeInto *[]T) error {
+func getStoreObjects[T any](ctx context.Context, s *store, objectType ObjectType, objectID string, decodeInto *[]T) error {
 	key := s.key(objectType, objectID)
 	var cursor uint64
 	for {
