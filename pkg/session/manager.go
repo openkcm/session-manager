@@ -1,48 +1,48 @@
 package session
 
 import (
-	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/go-jose/go-jose/v4"
-	"github.com/go-jose/go-jose/v4/jwt"
+	"github.com/zitadel/oidc/v3/pkg/client/rp"
+	"github.com/zitadel/oidc/v3/pkg/oidc"
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 	slogctx "github.com/veqryn/slog-context"
 
-	"github.com/openkcm/session-manager/internal/oidc"
-	"github.com/openkcm/session-manager/internal/pkce"
+	oidcprovider "github.com/openkcm/session-manager/internal/oidc"
 	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/pkg/csrf"
 )
 
 type Manager struct {
-	oidc     oidc.ProviderRepository
+	oidc     oidcprovider.ProviderRepository
 	sessions Repository
-	pkce     pkce.Source
 	audit    *otlpaudit.AuditLogger
 
 	sessionDuration    time.Duration
 	redirectURI        string
 	clientID           string
+	clientSecret       string
 	secureClient       *http.Client
 	getParametersAuth  []string
 	getParametersToken []string
 	authContextKeys    []string
-
-	csrfSecret []byte
-	jwsSigAlgs []jose.SignatureAlgorithm
+	csrfSecret         []byte
+	relyingParty       map[string]rp.RelyingParty
 }
 
 func NewManager(
-	oidc oidc.ProviderRepository,
+	oidc oidcprovider.ProviderRepository,
 	sessions Repository,
 	auditLogger *otlpaudit.AuditLogger,
 	sessionDuration time.Duration,
@@ -51,15 +51,10 @@ func NewManager(
 	authContextKeys []string,
 	redirectURI string,
 	clientID string,
+	clientSecret string,
 	httpClient *http.Client,
 	csrfHMACSecret string,
-	jwsSigAlgs []string,
 ) *Manager {
-	algs := make([]jose.SignatureAlgorithm, 0, len(jwsSigAlgs))
-	for _, alg := range jwsSigAlgs {
-		algs = append(algs, jose.SignatureAlgorithm(alg))
-	}
-
 	return &Manager{
 		oidc:               oidc,
 		sessions:           sessions,
@@ -70,10 +65,39 @@ func NewManager(
 		authContextKeys:    authContextKeys,
 		redirectURI:        redirectURI,
 		clientID:           clientID,
+		clientSecret:       clientSecret,
 		secureClient:       httpClient,
 		csrfSecret:         []byte(csrfHMACSecret),
-		jwsSigAlgs:         algs,
+		relyingParty:       make(map[string]rp.RelyingParty),
 	}
+}
+
+var (
+	codeVerifierStore = make(map[string]string)
+	codeVerifierMu    sync.Mutex
+)
+
+// getRelyingParty creates or returns cached Zitadel OIDC client
+func (m *Manager) getRelyingParty(ctx context.Context, provider oidcprovider.Provider) (rp.RelyingParty, error) {
+	if rpInst, exists := m.relyingParty[provider.IssuerURL]; exists {
+		return rpInst, nil
+	}
+
+	scopes := []string{oidc.ScopeOpenID, oidc.ScopeProfile, oidc.ScopeEmail, "groups"}
+	relyingParty, err := rp.NewRelyingPartyOIDC(
+		ctx,
+		provider.IssuerURL,
+		m.clientID,
+		m.clientSecret,
+		m.redirectURI,
+		scopes,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("creating relying party: %w", err)
+	}
+
+	m.relyingParty[provider.IssuerURL] = relyingParty
+	return relyingParty, nil
 }
 
 // MakeAuthURI returns an OIDC authentication URI.
@@ -83,80 +107,31 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 		return "", fmt.Errorf("getting oidc provider: %w", err)
 	}
 
-	openidConf, err := m.getOpenIDConfig(ctx, provider)
+	relyingParty, err := m.getRelyingParty(ctx, provider)
 	if err != nil {
 		return "", fmt.Errorf("getting an openid config: %w", err)
 	}
 
-	stateID := m.pkce.State()
-	pkce := m.pkce.PKCE()
-
+	stateID := generateStateID()
 	state := State{
-		ID:           stateID,
-		TenantID:     tenantID,
-		Fingerprint:  fingerprint,
-		PKCEVerifier: pkce.Verifier,
-		RequestURI:   requestURI,
-		Expiry:       time.Now().Add(m.sessionDuration),
+		ID:          stateID,
+		TenantID:    tenantID,
+		Fingerprint: fingerprint,
+		RequestURI:  requestURI,
+		Expiry:      time.Now().Add(m.sessionDuration),
 	}
 
 	if err := m.sessions.StoreState(ctx, state); err != nil {
 		return "", fmt.Errorf("storing session: %w", err)
 	}
 
-	u, err := m.authURI(openidConf, state, pkce, provider.Properties)
-	if err != nil {
-		return "", fmt.Errorf("generating auth uri: %w", err)
-	}
+	// Generate code verifier and challenge for PKCE
+	codeVerifier := generateCodeVerifier()
+	codeChallenge := generateS256Challenge(codeVerifier)
+	storeCodeVerifier(stateID, codeVerifier)
 
-	return u, nil
-}
-
-func (m *Manager) authURI(openidConf oidc.Configuration, state State, pkce pkce.PKCE, properties map[string]string) (string, error) {
-	u, err := url.Parse(openidConf.AuthorizationEndpoint)
-	if err != nil {
-		return "", fmt.Errorf("parsing authorisation endpoint url: %w", err)
-	}
-
-	q := u.Query()
-	q.Set("scope", "openid profile email groups")
-	q.Set("response_type", "code")
-	q.Set("client_id", m.clientID)
-	q.Set("state", state.ID)
-	q.Set("code_challenge", pkce.Challenge)
-	q.Set("code_challenge_method", pkce.Method)
-	q.Set("redirect_uri", m.redirectURI)
-	for _, parameter := range m.getParametersAuth {
-		value, ok := properties[parameter]
-		if !ok {
-			return "", fmt.Errorf("missing auth parameter: %s", parameter)
-		}
-		q.Set(parameter, value)
-	}
-
-	u.RawQuery = q.Encode()
-
-	return u.String(), nil
-}
-
-func (m *Manager) getProviderKeySet(ctx context.Context, oidcConf oidc.Configuration) (*jose.JSONWebKeySet, error) {
-	var keySet jose.JSONWebKeySet
-	uri := oidcConf.JwksURI
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
-	if err != nil {
-		return nil, fmt.Errorf("creating a new HTTP request: %w", err)
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("executing an http request: %w", err)
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&keySet); err != nil {
-		return nil, fmt.Errorf("decoding keyset response: %w", err)
-	}
-
-	return &keySet, nil
+	authURL := rp.AuthURL(stateID, relyingParty, rp.WithCodeChallenge(codeChallenge))
+	return authURL, nil
 }
 
 func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerprint string) (OIDCSessionData, error) {
@@ -180,39 +155,28 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("getting oidc provider: %w", err)
 	}
 
-	openidConf, err := m.getOpenIDConfig(ctx, provider)
+	relyingParty, err := m.getRelyingParty(ctx, provider)
 	if err != nil {
-		return OIDCSessionData{}, fmt.Errorf("getting openid configuration: %w", err)
+		return OIDCSessionData{}, fmt.Errorf("getting relying party: %w", err)
 	}
 
-	tokens, err := m.exchangeCode(ctx, openidConf, code, state.PKCEVerifier, provider.Properties)
+	codeVerifier := getCodeVerifier(stateID)
+	tokens, err := rp.CodeExchange[*oidc.IDTokenClaims](ctx, code, relyingParty, rp.WithCodeVerifier(codeVerifier))
 	if err != nil {
 		return OIDCSessionData{}, fmt.Errorf("exchanging code for tokens: %w", err)
 	}
 
-	slogctx.Info(ctx, "Exchanged the auth code for tokens")
+	claims, err := rp.VerifyTokens[*oidc.IDTokenClaims](ctx, tokens.AccessToken, tokens.IDToken, relyingParty.IDTokenVerifier())
+	if err != nil {
+		return OIDCSessionData{}, fmt.Errorf("verifying tokens: %w", err)
+	}
 
-	sessionID := m.pkce.SessionID()
+	sessionID := generateSessionID()
 	csrfToken := csrf.NewToken(sessionID, m.csrfSecret)
 
-	token, err := jwt.ParseSigned(tokens.IDToken, m.jwsSigAlgs)
+	userInfo, err := rp.Userinfo[*oidc.UserInfo](ctx, tokens.AccessToken, tokens.TokenType, claims.GetSubject(), relyingParty)
 	if err != nil {
-		return OIDCSessionData{}, fmt.Errorf("parsing id token: %w", err)
-	}
-
-	jws, err := jose.ParseSigned(tokens.IDToken, m.jwsSigAlgs)
-	if err != nil {
-		return OIDCSessionData{}, fmt.Errorf("parsing JWS: %w", err)
-	}
-
-	keyset, err := m.getProviderKeySet(ctx, openidConf)
-	if err != nil {
-		return OIDCSessionData{}, fmt.Errorf("getting jwks for a provider: %w", err)
-	}
-
-	var claims jwt.Claims
-	if err := token.Claims(keyset, &claims); err != nil {
-		return OIDCSessionData{}, fmt.Errorf("getting JWT claims: %w", err)
+		slogctx.Warn(ctx, "Failed to get user info", "error", err)
 	}
 
 	// prepare the auth context used by ExtAuthZ
@@ -234,16 +198,16 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		Fingerprint: fingerprint,
 		CSRFToken:   csrfToken,
 		Issuer:      provider.IssuerURL,
-		RawClaims:   string(jws.UnsafePayloadWithoutVerification()),
+		RawClaims:   tokens.IDToken,
 		Claims: Claims{
-			Subject: claims.Subject,
-			Email:   "",         // TODO: extract email from claims
-			Groups:  []string{}, // TODO: extract groups from claims
+			Subject: claims.GetSubject(),
+			Email:   getEmailFromUserInfo(userInfo),
+			Groups:  getGroupsFromUserInfo(userInfo),
 		},
-		AccessToken:  tokens.AccessToken,
-		RefreshToken: tokens.RefreshToken,
-		Expiry:       time.Now().Add(m.sessionDuration),
-		AuthContext:  authContext,
+		AccessToken:       tokens.AccessToken,
+		RefreshToken:      tokens.RefreshToken,
+		AuthContext:       authContext,
+		Expiry:            time.Now().Add(m.sessionDuration),
 	}
 
 	if err := m.sessions.StoreSession(ctx, session); err != nil {
@@ -259,45 +223,6 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		CSRFToken:  csrfToken,
 		RequestURI: state.RequestURI,
 	}, nil
-}
-
-func (m *Manager) exchangeCode(ctx context.Context, openidConf oidc.Configuration, code, codeVerifier string, properties map[string]string) (tokenResponse, error) {
-	data := url.Values{}
-	data.Set("grant_type", "authorization_code")
-	data.Set("code", code)
-	data.Set("code_verifier", codeVerifier)
-	data.Set("redirect_uri", m.redirectURI)
-	data.Set("client_id", m.clientID)
-	for _, parameter := range m.getParametersToken {
-		value, ok := properties[parameter]
-		if !ok {
-			return tokenResponse{}, fmt.Errorf("missing token parameter: %s", parameter)
-		}
-		data.Set(parameter, value)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, openidConf.TokenEndpoint, strings.NewReader(data.Encode()))
-	if err != nil {
-		return tokenResponse{}, fmt.Errorf("creating request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := m.secureClient.Do(req)
-	if err != nil {
-		return tokenResponse{}, fmt.Errorf("executing request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return tokenResponse{}, fmt.Errorf("token exchange failed with status: %d", resp.StatusCode)
-	}
-
-	var tokens tokenResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tokens); err != nil {
-		return tokenResponse{}, fmt.Errorf("decoding response: %w", err)
-	}
-
-	return tokens, nil
 }
 
 func (m *Manager) ValidateCSRFToken(token, sessionID string) bool {
@@ -330,79 +255,99 @@ func (m *Manager) RefreshExpiringSessions(ctx context.Context) error {
 	return nil
 }
 
-// RefreshSession refreshes the access token using the given refresh token for the tenant.
-func (m *Manager) RefreshSession(ctx context.Context, s *Session, provider oidc.Provider) error {
-	data := url.Values{}
-	data.Set("grant_type", "refresh_token")
-	data.Set("refresh_token", s.RefreshToken)
-	data.Set("client_id", m.clientID)
-
-	tokenEndpoint, err := url.JoinPath(provider.IssuerURL, "/token")
+// RefreshSession using Zitadel library
+func (m *Manager) RefreshSession(ctx context.Context, s *Session, provider oidcprovider.Provider) error {
+	relyingParty, err := m.getRelyingParty(ctx, provider)
 	if err != nil {
-		return fmt.Errorf("making issuer token path: %w", err)
+		return fmt.Errorf("getting relying party: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenEndpoint, bytes.NewBufferString(data.Encode()))
+	newTokens, err := rp.RefreshTokens[*oidc.IDTokenClaims](ctx, relyingParty, s.RefreshToken, "", "")
 	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := m.secureClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return errors.New("token endpoint returned non-200 status")
+		return fmt.Errorf("refreshing tokens: %w", err)
 	}
 
-	var respData struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		ExpiresIn    int    `json:"expires_in"`
-	}
-
-	s.AccessToken = respData.AccessToken
-	s.RefreshToken = respData.RefreshToken
-	s.AccessTokenExpiry = time.Now().Add(time.Duration(respData.ExpiresIn))
+	s.AccessToken = newTokens.AccessToken
+	s.RefreshToken = newTokens.RefreshToken
+	s.AccessTokenExpiry = newTokens.Expiry
 
 	return nil
 }
 
-func (m *Manager) getOpenIDConfig(ctx context.Context, provider oidc.Provider) (oidc.Configuration, error) {
-	const wellKnownOpenIDConfigPath = "/.well-known/openid-configuration"
-
-	u, err := url.JoinPath(provider.IssuerURL, wellKnownOpenIDConfigPath)
-	if err != nil {
-		return oidc.Configuration{}, fmt.Errorf("building path to the well-known openid-config endpoint: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return oidc.Configuration{}, fmt.Errorf("creating an HTTP request: %w", err)
-	}
-
-	resp, err := m.secureClient.Do(req)
-	if err != nil {
-		return oidc.Configuration{}, fmt.Errorf("doing an HTTP request: %w", err)
-	}
-
-	var conf oidc.Configuration
-	if err := json.NewDecoder(resp.Body).Decode(&conf); err != nil {
-		return oidc.Configuration{}, fmt.Errorf("decoding a well-known openid config: %w", err)
-	}
-
-	// Validate the configuration
-	if conf.Issuer != provider.IssuerURL {
-		return oidc.Configuration{}, serviceerr.ErrInvalidOIDCProvider
-	}
-
-	return conf, nil
+func shouldRefresh(s Session) bool {
+	return time.Until(s.AccessTokenExpiry) < 5*time.Minute
 }
 
-func shouldRefresh(s Session) bool {
-	// refresh if token expires in less than 5 minutes
-	return time.Until(s.AccessTokenExpiry) < 5*time.Minute
+// Helper functions to implement
+func generateStateID() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("state-%d", time.Now().UnixNano())
+	}
+	return "state-" + hex.EncodeToString(b)
+}
+
+func generateSessionID() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("session-%d", time.Now().UnixNano())
+	}
+	return "session-" + hex.EncodeToString(b)
+}
+
+func generateCodeVerifier() string {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "dummy_verifier"
+	}
+	return hex.EncodeToString(b)
+}
+
+func storeCodeVerifier(stateID, codeVerifier string) {
+	codeVerifierMu.Lock()
+	defer codeVerifierMu.Unlock()
+	codeVerifierStore[stateID] = codeVerifier
+}
+
+func getCodeVerifier(stateID string) string {
+	codeVerifierMu.Lock()
+	defer codeVerifierMu.Unlock()
+	return codeVerifierStore[stateID]
+}
+
+func getEmailFromUserInfo(userInfo *oidc.UserInfo) string {
+	if userInfo != nil && userInfo.Email != "" {
+		return userInfo.Email
+	}
+	return ""
+}
+
+func generateS256Challenge(verifier string) string {
+	hash := sha256.Sum256([]byte(verifier))
+	return strings.TrimRight(base64.URLEncoding.EncodeToString(hash[:]), "=")
+}
+
+func getGroupsFromUserInfo(userInfo *oidc.UserInfo) []string {
+	if userInfo == nil {
+		return nil
+	}
+	// Marshal userInfo to JSON, then unmarshal to map to access custom claims
+	data, err := json.Marshal(userInfo)
+	if err != nil {
+		return nil
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil
+	}
+	if groups, ok := raw["groups"].([]interface{}); ok {
+		result := make([]string, 0, len(groups))
+		for _, g := range groups {
+			if s, ok := g.(string); ok {
+				result = append(result, s)
+			}
+		}
+		return result
+	}
+	return nil
 }

@@ -58,6 +58,7 @@ func TestManager_Auth(t *testing.T) {
 		sessions           *sessionmock.Repository
 		redirectURI        string
 		clientID           string
+		clientSecret       string
 		tenantID           string
 		fingerprint        string
 		requestURI         string
@@ -74,36 +75,39 @@ func TestManager_Auth(t *testing.T) {
 			sessions:          sessionmock.NewInMemRepository(nil, nil, nil, nil, nil),
 			redirectURI:       redirectURI,
 			clientID:          "my-client-id",
+			clientSecret:      "my-client-secret",
 			tenantID:          tenantID,
 			fingerprint:       "fingerprint",
 			requestURI:        requestURI,
 			getParametersAuth: []string{"paramAuth1"},
-			wantURL:           oidcServer.URL + "/oauth2/authorize?client_id=my-client-id&code_challenge=someChallenge&code_challenge_method=S256&redirect_uri=" + redirectURI + "&response_type=code&scope=openid+profile+email+groups&state=someState&paramAuth1=paramAuth1",
+			wantURL:           oidcServer.URL + "/oauth2/authorize?client_id=my-client-id&code_challenge=someChallenge&code_challenge_method=S256&redirect_uri=" + redirectURI + "&response_type=code&scope=openid+profile+email+groups&state=someState",
 			errAssert:         assert.NoError,
 		},
 		{
-			name:        "Get OIDC error",
-			oidc:        newOIDCRepo(nil, errors.New("faield to get oidc provider"), nil, nil, nil),
-			sessions:    sessionmock.NewInMemRepository(nil, nil, nil, nil, nil),
-			redirectURI: redirectURI,
-			clientID:    "my-client-id",
-			tenantID:    tenantID,
-			fingerprint: "fingerprint",
-			requestURI:  requestURI,
-			wantURL:     "",
-			errAssert:   assert.Error,
+			name:         "Get OIDC error",
+			oidc:         newOIDCRepo(nil, errors.New("faield to get oidc provider"), nil, nil, nil),
+			sessions:     sessionmock.NewInMemRepository(nil, nil, nil, nil, nil),
+			redirectURI:  redirectURI,
+			clientID:     "my-client-id",
+			clientSecret: "my-client-secret",
+			tenantID:     tenantID,
+			fingerprint:  "fingerprint",
+			requestURI:   requestURI,
+			wantURL:      "",
+			errAssert:    assert.Error,
 		},
 		{
-			name:        "Save state error",
-			oidc:        newOIDCRepo(nil, nil, nil, nil, nil),
-			sessions:    sessionmock.NewInMemRepository(nil, errors.New("failed to save state"), nil, nil, nil),
-			redirectURI: redirectURI,
-			clientID:    "my-client-id",
-			tenantID:    tenantID,
-			fingerprint: "fingerprint",
-			requestURI:  requestURI,
-			wantURL:     "",
-			errAssert:   assert.Error,
+			name:         "Save state error",
+			oidc:         newOIDCRepo(nil, nil, nil, nil, nil),
+			sessions:     sessionmock.NewInMemRepository(nil, errors.New("failed to save state"), nil, nil, nil),
+			redirectURI:  redirectURI,
+			clientID:     "my-client-id",
+			clientSecret: "my-client-secret",
+			tenantID:     tenantID,
+			fingerprint:  "fingerprint",
+			requestURI:   requestURI,
+			wantURL:      "",
+			errAssert:    assert.Error,
 		},
 	}
 	for _, tt := range tests {
@@ -122,7 +126,7 @@ func TestManager_Auth(t *testing.T) {
 			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
 			require.NoError(t, err)
 
-			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.getParametersAuth, tt.getParametersToken, tt.authContextKeys, tt.redirectURI, tt.clientID, http.DefaultClient, testCSRFSecret, []string{"RS256"})
+			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.getParametersAuth, tt.getParametersToken,tt.authContextKeys, tt.redirectURI, tt.clientID,tt.clientSecret, http.DefaultClient, testCSRFSecret)
 			got, err := m.MakeAuthURI(t.Context(), tt.tenantID, tt.fingerprint, tt.requestURI)
 
 			if !tt.errAssert(t, err, fmt.Sprintf("Manager.Auth() error = %v", err)) || err != nil {
@@ -344,7 +348,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 				IssuerURL: oidcServer.URL,
 				Blocked:   false,
 				JWKSURIs:  []string{jwksURI},
-				Audiences: []string{requestURI},
+				Audiences: []string{"client-id"},
 				Properties: map[string]string{
 					"getParamToken1":  "getParamToken1",
 					"authContextKey1": "authContextValue1",
@@ -353,7 +357,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 
 			tt.oidc.Add(tenantID, localOIDCProvider)
 
-			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.getParametersAuth, tt.getParametersToken, tt.authContextKeys, redirectURI, "client-id", http.DefaultClient, testCSRFSecret, []string{"RS256"})
+			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.getParametersAuth, tt.getParametersToken, tt.authContextKeys, redirectURI, "client-id","client-secret", http.DefaultClient, testCSRFSecret, []string{"RS256"})
 
 			result, err := m.FinaliseOIDCLogin(context.Background(), tt.stateID, tt.code, tt.fingerprint)
 
