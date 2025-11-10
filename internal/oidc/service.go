@@ -47,6 +47,9 @@ func (s *Service) ApplyMapping(ctx context.Context, tenantID string, provider Pr
 func (s *Service) RemoveMapping(ctx context.Context, tenantID string) error {
 	provider, err := s.repository.GetForTenant(ctx, tenantID)
 	if err != nil {
+		if errors.Is(err, serviceerr.ErrNotFound) {
+			return nil
+		}
 		return fmt.Errorf("getting provider for tenant: %w", err)
 	}
 	err = s.repository.Delete(ctx, tenantID, provider)

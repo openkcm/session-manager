@@ -51,9 +51,7 @@ func (srv *OIDCMappingServer) ApplyOIDCMapping(ctx context.Context, req *oidcmap
 }
 
 func (srv *OIDCMappingServer) RemoveOIDCMapping(ctx context.Context, req *oidcmappingv1.RemoveOIDCMappingRequest) (*oidcmappingv1.RemoveOIDCMappingResponse, error) {
-	resp := &oidcmappingv1.RemoveOIDCMappingResponse{
-		Success: false,
-	}
+	resp := &oidcmappingv1.RemoveOIDCMappingResponse{}
 	err := srv.oidc.RemoveMapping(ctx, req.GetTenantId())
 	if err != nil {
 		msg := err.Error()

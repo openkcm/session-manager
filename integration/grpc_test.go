@@ -22,6 +22,7 @@ import (
 	"github.com/openkcm/session-manager/internal/grpc"
 	"github.com/openkcm/session-manager/internal/oidc"
 	oidcsql "github.com/openkcm/session-manager/internal/oidc/sql"
+	"github.com/openkcm/session-manager/internal/serviceerr"
 )
 
 func TestGRPCServer(t *testing.T) {
@@ -101,6 +102,28 @@ func TestGRPCServer(t *testing.T) {
 		actProvider, err = service.GetProvider(ctx, expIssuer1)
 		assert.NoError(t, err)
 		assert.False(t, actProvider.Blocked)
+	})
+
+	t.Run("RemoveOIDCMapping", func(t *testing.T) {
+		expTenantID := uuid.NewString()
+		expIssuer := uuid.NewString()
+		applyRes, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
+			TenantId:  expTenantID,
+			Issuer:    expIssuer,
+			JwksUris:  []string{"uris"},
+			Audiences: []string{"audience"},
+		})
+		assert.NoError(t, err)
+		assert.True(t, applyRes.GetSuccess())
+
+		removeRes, err := mappingClient.RemoveOIDCMapping(ctx, &oidcmappingv1.RemoveOIDCMappingRequest{
+			TenantId: expTenantID,
+		})
+		assert.NoError(t, err)
+		assert.True(t, removeRes.GetSuccess())
+
+		_, err = service.GetProvider(ctx, expIssuer)
+		assert.ErrorIs(t, err, serviceerr.ErrNotFound)
 	})
 }
 
