@@ -15,6 +15,7 @@ import (
 
 	"github.com/openkcm/session-manager/internal/oidc"
 	oidcmock "github.com/openkcm/session-manager/internal/oidc/mock"
+	"github.com/openkcm/session-manager/internal/serviceerr"
 )
 
 var (
@@ -127,41 +128,6 @@ func TestService_ApplyMapping(t *testing.T) {
 	}
 }
 
-func TestService_RemoveMapping(t *testing.T) {
-	tests := []struct {
-		name     string
-		tenant   string
-		oidcRepo *oidcmock.Repository
-		wantErr  assert.ErrorAssertionFunc
-	}{
-		{
-			name:     "Success",
-			tenant:   tenantID,
-			oidcRepo: newOIDCRepo(nil, nil, nil, nil, nil),
-			wantErr:  assert.NoError,
-		},
-		{
-			name:     "GetForTenant error",
-			tenant:   tenantID,
-			oidcRepo: newOIDCRepo(nil, errors.New("getForTenant failed"), nil, nil, nil),
-			wantErr:  assert.Error,
-		},
-		{
-			name:     "Delete error",
-			tenant:   tenantID,
-			oidcRepo: newOIDCRepo(nil, nil, nil, errors.New("delete failed"), nil),
-			wantErr:  assert.Error,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := oidc.NewService(tt.oidcRepo)
-			err := s.RemoveMapping(t.Context(), tt.tenant)
-			tt.wantErr(t, err)
-		})
-	}
-}
-
 func TestService_BlockMapping(t *testing.T) {
 	ctx := t.Context()
 
@@ -195,7 +161,7 @@ func TestService_BlockMapping(t *testing.T) {
 			assert.Equal(t, expUnblockedProvider.JWKSURIs, actProvider.JWKSURIs)
 		})
 
-		t.Run("the provider is blocked then it should nt call Update", func(t *testing.T) {
+		t.Run("the provider is blocked then it should not call Update", func(t *testing.T) {
 			// given
 			expTenantID := uuid.NewString()
 			expBlockedProvider := oidc.Provider{
@@ -361,7 +327,7 @@ func TestService_UnBlockMapping(t *testing.T) {
 			assert.Equal(t, expBlockedProvider.JWKSURIs, actProvider.JWKSURIs)
 		})
 
-		t.Run("the provider is unblocked then it should nt call Update", func(t *testing.T) {
+		t.Run("the provider is unblocked then it should not call Update", func(t *testing.T) {
 			// given
 			expTenantID := uuid.NewString()
 			expUnblockedProvider := oidc.Provider{
@@ -489,6 +455,100 @@ func TestService_UnBlockMapping(t *testing.T) {
 			actProvider, err := repoWrapper.Repo.GetForTenant(ctx, expTenantIDtoUpdate)
 			assert.NoError(t, err)
 			assert.Equal(t, expBlockedProvider, actProvider)
+		})
+	})
+}
+
+func TestService_RemoveMapping(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("success if ", func(t *testing.T) {
+		t.Run("the mapping and provider exist", func(t *testing.T) {
+			// given
+			expTenantID := uuid.NewString()
+			expProvider := oidc.Provider{
+				IssuerURL: uuid.NewString(),
+			}
+
+			wrapper := &RepoWrapper{Repo: repo}
+			err := wrapper.Repo.Create(ctx, expTenantID, expProvider)
+			require.NoError(t, err)
+			subj := oidc.NewService(wrapper)
+
+			// when
+			err = subj.RemoveMapping(ctx, expTenantID)
+
+			// then
+			assert.NoError(t, err)
+			_, err = wrapper.Repo.GetForTenant(ctx, expTenantID)
+			assert.ErrorIs(t, err, serviceerr.ErrNotFound)
+		})
+
+		t.Run("the provider is not found", func(t *testing.T) {
+			// given
+			wrapper := &RepoWrapper{Repo: repo}
+			noOfCalls := 0
+			wrapper.MockDelete = func(ctx context.Context, tenantID string, provider oidc.Provider) error {
+				noOfCalls++
+				return nil
+			}
+			subj := oidc.NewService(wrapper)
+
+			// when
+			err := subj.RemoveMapping(ctx, uuid.NewString())
+
+			// then
+			assert.NoError(t, err)
+			assert.Equal(t, 0, noOfCalls)
+		})
+	})
+
+	t.Run("should return error if", func(t *testing.T) {
+		t.Run("GetForTenant returns an error", func(t *testing.T) {
+			// given
+			expTenantID := uuid.NewString()
+
+			wrapper := &RepoWrapper{Repo: repo}
+			noOfCalls := 0
+			wrapper.MockGetForTenant = func(ctx context.Context, tenantID string) (oidc.Provider, error) {
+				assert.Equal(t, expTenantID, tenantID)
+				noOfCalls++
+				return oidc.Provider{}, assert.AnError
+			}
+			subj := oidc.NewService(wrapper)
+
+			// when
+			err := subj.RemoveMapping(ctx, expTenantID)
+
+			// then
+			assert.ErrorIs(t, err, assert.AnError)
+			assert.Equal(t, 1, noOfCalls)
+		})
+
+		t.Run("Delete returns an error", func(t *testing.T) {
+			// given
+			expTenantID := uuid.NewString()
+			expProvider := oidc.Provider{
+				IssuerURL: uuid.NewString(),
+			}
+
+			wrapper := &RepoWrapper{Repo: repo}
+			err := wrapper.Repo.Create(ctx, expTenantID, expProvider)
+			require.NoError(t, err)
+			noOfCalls := 0
+			wrapper.MockDelete = func(ctx context.Context, tenantID string, provider oidc.Provider) error {
+				assert.Equal(t, expTenantID, tenantID)
+				noOfCalls++
+				return assert.AnError
+			}
+			subj := oidc.NewService(wrapper)
+
+			// when
+			err = subj.RemoveMapping(ctx, expTenantID)
+
+			// then
+			assert.ErrorIs(t, err, assert.AnError)
+			assert.Equal(t, 1, noOfCalls)
 		})
 	})
 }
