@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.0](https://github.com/openkcm/session-manager/compare/v0.8.0...v0.9.0) (2025-11-11)
+
+
+### Features
+
+* define auth context in session ([#96](https://github.com/openkcm/session-manager/issues/96)) ([8a79b01](https://github.com/openkcm/session-manager/commit/8a79b0101a7d0d8151ef58c9f0d96a77af5f3078))
+* make oidc mapping removal idempotent ([5906e27](https://github.com/openkcm/session-manager/commit/5906e277b9da176c36b500fb0e36a4e60ddf4a36)), closes [#95](https://github.com/openkcm/session-manager/issues/95)
+
 ## [0.8.0](https://github.com/openkcm/session-manager/compare/v0.7.0...v0.8.0) (2025-11-06)
 
 
