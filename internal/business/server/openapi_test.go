@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,8 +22,8 @@ func TestOpenAPIServer_Auth_ContextCanceled(t *testing.T) {
 
 	// Already asserted above
 	r, _ := resp.(openapi.AuthdefaultJSONResponse)
-	assert.Equal(t, int(serviceerr.CodeUnknown), *r.Body.ErrorCode)
-	assert.Equal(t, http.StatusInternalServerError, r.StatusCode)
+	assert.Equal(t, int(serviceerr.CodeUnauthorized), *r.Body.ErrorCode)
+	assert.Equal(t, int(serviceerr.CodeUnauthorized), r.StatusCode)
 }
 
 func TestOpenAPIServer_Callback_ContextCanceled(t *testing.T) {
@@ -39,6 +38,6 @@ func TestOpenAPIServer_Callback_ContextCanceled(t *testing.T) {
 
 	// Already asserted above
 	r, _ := resp.(openapi.CallbackdefaultJSONResponse)
-	assert.Equal(t, int(serviceerr.CodeUnknown), *r.Body.ErrorCode)
-	assert.Equal(t, http.StatusInternalServerError, r.StatusCode)
+	assert.Equal(t, int(serviceerr.CodeUnauthorized), *r.Body.ErrorCode)
+	assert.Equal(t, int(serviceerr.CodeUnauthorized), r.StatusCode)
 }

@@ -11,6 +11,7 @@ const (
 	CodeFingerprintMismatch
 	CodeStateExpired
 	CodeInvalidOIDCProvider
+	CodeUnauthorized
 )
 
 var ErrUnknown = newErr("unknown error", CodeUnknown)
@@ -19,6 +20,7 @@ var ErrNotFound = newErr("not found", CodeNotFound)
 var ErrFingerprintMismatch = newErr("fingerprint mismatch", CodeFingerprintMismatch)
 var ErrStateExpired = newErr("state expired", CodeStateExpired)
 var ErrInvalidOIDCProvider = newErr("invalid OIDC provider", CodeInvalidOIDCProvider)
+var ErrUnauthorized = newErr("unauthorized", CodeUnauthorized)
 
 //nolint:recvcheck
 type Error struct {
@@ -51,6 +53,8 @@ func (e Error) HTTPStatus() int {
 		return http.StatusGone
 	case CodeInvalidOIDCProvider:
 		return http.StatusPreconditionFailed
+	case CodeUnauthorized:
+		return http.StatusUnauthorized
 	default:
 		return http.StatusInternalServerError
 	}

@@ -34,23 +34,29 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 	var extractFingerprint string
 	extractFingerprint, err := fingerprint.ExtractFingerprint(ctx)
 	if err != nil {
+		message, code := s.toErrorModel(serviceerr.ErrUnauthorized)
 		slogctx.Error(ctx, "Failed to extract fingerprint", "error", err)
 
-		body, status := s.toErrorModel(serviceerr.ErrUnknown)
 		return openapi.AuthdefaultJSONResponse{
-			Body:       body,
-			StatusCode: status,
+			Body: openapi.ErrorModel{
+				ErrorCode: &code,
+				ErrorMsg:  &message,
+			},
+			StatusCode: code,
 		}, nil
 	}
 
 	url, err := s.sManager.MakeAuthURI(ctx, request.Params.TenantID, extractFingerprint, request.Params.RequestURI)
 	if err != nil {
+		message, code := s.toErrorModel(serviceerr.ErrUnauthorized)
 		slogctx.Error(ctx, "Failed build auth URI", "error", err)
 
-		body, status := s.toErrorModel(err)
 		return openapi.AuthdefaultJSONResponse{
-			Body:       body,
-			StatusCode: status,
+			Body: openapi.ErrorModel{
+				ErrorCode: &code,
+				ErrorMsg:  &message,
+			},
+			StatusCode: code,
 		}, nil
 	}
 
@@ -69,27 +75,33 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 
 	currentFingerprint, err := fingerprint.ExtractFingerprint(ctx)
 	if err != nil {
-		slogctx.Error(ctx, "Failed to extract fingerprint", "error", err)
+		message, code := s.toErrorModel(serviceerr.ErrUnauthorized)
+		slogctx.Error(ctx, "Failed to finalise OIDC login", "error", err)
 
-		body, status := s.toErrorModel(serviceerr.ErrUnknown)
 		return openapi.CallbackdefaultJSONResponse{
-			Body:       body,
-			StatusCode: status,
+			Body: openapi.ErrorModel{
+				ErrorCode: &code,
+				ErrorMsg:  &message,
+			},
+			StatusCode: code,
 		}, nil
 	}
 
 	result, err := s.sManager.FinaliseOIDCLogin(ctx, req.Params.State, req.Params.Code, currentFingerprint)
 	if err != nil {
-		slogctx.Error(ctx, "Failed to finalise OIDC login", "error", err)
-
-		body, status := s.toErrorModel(err)
-		if status == 403 {
+		message, code := s.toErrorModel(err)
+		slogctx.Error(ctx, message, "error", err)
+		body := openapi.ErrorModel{
+			ErrorCode: &code,
+			ErrorMsg:  &message,
+		}
+		if code == 403 {
 			return openapi.Callback403JSONResponse(body), nil
 		}
 
 		return openapi.CallbackdefaultJSONResponse{
 			Body:       body,
-			StatusCode: status,
+			StatusCode: code,
 		}, nil
 	}
 
@@ -117,10 +129,14 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 	if err != nil {
 		slogctx.Error(ctx, "Failed to get response writer from context")
 
-		body, status := s.toErrorModel(serviceerr.ErrUnknown)
+		message, code := s.toErrorModel(serviceerr.ErrUnauthorized)
+
 		return openapi.CallbackdefaultJSONResponse{
-			Body:       body,
-			StatusCode: status,
+			Body: openapi.ErrorModel{
+				ErrorCode: &code,
+				ErrorMsg:  &message,
+			},
+			StatusCode: code,
 		}, nil
 	}
 
@@ -152,14 +168,11 @@ func (s *openAPIServer) Redirect(ctx context.Context, req openapi.RedirectReques
 	}, nil
 }
 
-func (s *openAPIServer) toErrorModel(err error) (model openapi.ErrorModel, httpStatus int) {
+func (s *openAPIServer) toErrorModel(err error) (string, int) {
 	var serviceErr *serviceerr.Error
 	if !errors.As(err, &serviceErr) {
 		serviceErr = serviceerr.ErrUnknown
 	}
 
-	return openapi.ErrorModel{
-		ErrorCode: (*int)(&serviceErr.Code),
-		ErrorMsg:  &serviceErr.Message,
-	}, serviceErr.HTTPStatus()
+	return serviceErr.Message, int(serviceErr.Code)
 }
