@@ -243,6 +243,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			code:               code,
 			fingerprint:        fingerprint,
 			getParametersToken: []string{"getParamToken1"},
+			authContextKeys:    []string{"authContextKey1"},
 			wantSessionID:      true,
 			wantCSRFToken:      true,
 			wantRedirectURI:    requestURI,
@@ -309,6 +310,20 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			wantRedirectURI: "",
 			errAssert:       assert.Error,
 		},
+		{
+			name:               "Auth context error",
+			oidc:               oidcmock.NewInMemRepository(nil, nil, nil, nil, nil),
+			sessions:           newSessionRepo(nil, nil, nil, nil, nil, &validState),
+			stateID:            stateID,
+			code:               code,
+			fingerprint:        fingerprint,
+			getParametersToken: []string{"getParamToken1"},
+			authContextKeys:    []string{"doesNotExist"},
+			wantSessionID:      true,
+			wantCSRFToken:      true,
+			wantRedirectURI:    requestURI,
+			errAssert:          assert.Error,
+		},
 	}
 
 	for _, tt := range tests {
@@ -326,11 +341,14 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			require.NoError(t, err)
 
 			localOIDCProvider := oidc.Provider{
-				IssuerURL:  oidcServer.URL,
-				Blocked:    false,
-				JWKSURIs:   []string{jwksURI},
-				Audiences:  []string{requestURI},
-				Properties: map[string]string{"getParamToken1": "getParamToken1"},
+				IssuerURL: oidcServer.URL,
+				Blocked:   false,
+				JWKSURIs:  []string{jwksURI},
+				Audiences: []string{requestURI},
+				Properties: map[string]string{
+					"getParamToken1":  "getParamToken1",
+					"authContextKey1": "authContextValue1",
+				},
 			}
 
 			tt.oidc.Add(tenantID, localOIDCProvider)
@@ -349,6 +367,14 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			}
 
 			require.NotNil(t, result, "Result should not be nil on success")
+
+			sess := tt.sessions.Sessions[result.SessionID]
+			assert.NotNil(t, sess.AuthContext)
+			expKeys := []string{"issuer", "client_id"}
+			for _, k := range expKeys {
+				_, ok := sess.AuthContext[k]
+				assert.True(t, ok)
+			}
 
 			if tt.wantSessionID {
 				assert.NotEmpty(t, result.SessionID, "SessionID should not be empty")
