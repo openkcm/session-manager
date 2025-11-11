@@ -35,6 +35,7 @@ type Manager struct {
 	secureClient       *http.Client
 	getParametersAuth  []string
 	getParametersToken []string
+	authContextKeys    []string
 
 	csrfSecret []byte
 	jwsSigAlgs []jose.SignatureAlgorithm
@@ -47,6 +48,7 @@ func NewManager(
 	sessionDuration time.Duration,
 	getParametersAuth []string,
 	getParametersToken []string,
+	authContextKeys []string,
 	redirectURI string,
 	clientID string,
 	httpClient *http.Client,
@@ -65,6 +67,7 @@ func NewManager(
 		sessionDuration:    sessionDuration,
 		getParametersAuth:  getParametersAuth,
 		getParametersToken: getParametersToken,
+		authContextKeys:    authContextKeys,
 		redirectURI:        redirectURI,
 		clientID:           clientID,
 		secureClient:       httpClient,
@@ -212,6 +215,19 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("getting JWT claims: %w", err)
 	}
 
+	// prepare the auth context used by ExtAuthZ
+	authContext := map[string]string{
+		"issuer":    provider.IssuerURL,
+		"client_id": m.clientID,
+	}
+	for _, parameter := range m.authContextKeys {
+		value, ok := provider.Properties[parameter]
+		if !ok {
+			return OIDCSessionData{}, fmt.Errorf("missing auth context parameter: %s", parameter)
+		}
+		authContext[parameter] = value
+	}
+
 	session := Session{
 		ID:          sessionID,
 		TenantID:    state.TenantID,
@@ -227,6 +243,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		AccessToken:  tokens.AccessToken,
 		RefreshToken: tokens.RefreshToken,
 		Expiry:       time.Now().Add(m.sessionDuration),
+		AuthContext:  authContext,
 	}
 
 	if err := m.sessions.StoreSession(ctx, session); err != nil {

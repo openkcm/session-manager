@@ -56,6 +56,7 @@ type SessionManager struct {
 	JWSSigAlgs                       []string            `yaml:"jwsSigAlgs"` // A list of supported JWT signature algorithms
 	AdditionalGetParametersAuthorize []string            `yaml:"additionalGetParametersAuthorize"`
 	AdditionalGetParametersToken     []string            `yaml:"additionalGetParametersToken"`
+	AdditionalAuthContextKeys        []string            `yaml:"additionalAuthContextKeys"`
 }
 
 type ClientAuth struct {

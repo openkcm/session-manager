@@ -63,6 +63,7 @@ func TestManager_Auth(t *testing.T) {
 		requestURI         string
 		getParametersAuth  []string
 		getParametersToken []string
+		authContextKeys    []string
 		wantURL            string
 		errAssert          assert.ErrorAssertionFunc
 		provider           oidc.Provider
@@ -121,7 +122,7 @@ func TestManager_Auth(t *testing.T) {
 			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
 			require.NoError(t, err)
 
-			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.getParametersAuth, tt.getParametersToken, tt.redirectURI, tt.clientID, http.DefaultClient, testCSRFSecret, []string{"RS256"})
+			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.getParametersAuth, tt.getParametersToken, tt.authContextKeys, tt.redirectURI, tt.clientID, http.DefaultClient, testCSRFSecret, []string{"RS256"})
 			got, err := m.MakeAuthURI(t.Context(), tt.tenantID, tt.fingerprint, tt.requestURI)
 
 			if !tt.errAssert(t, err, fmt.Sprintf("Manager.Auth() error = %v", err)) || err != nil {
@@ -227,6 +228,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 		fingerprint        string
 		getParametersAuth  []string
 		getParametersToken []string
+		authContextKeys    []string
 		oidcServerFail     bool
 		wantSessionID      bool
 		wantCSRFToken      bool
@@ -333,7 +335,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 
 			tt.oidc.Add(tenantID, localOIDCProvider)
 
-			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.getParametersAuth, tt.getParametersToken, redirectURI, "client-id", http.DefaultClient, testCSRFSecret, []string{"RS256"})
+			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.getParametersAuth, tt.getParametersToken, tt.authContextKeys, redirectURI, "client-id", http.DefaultClient, testCSRFSecret, []string{"RS256"})
 
 			result, err := m.FinaliseOIDCLogin(context.Background(), tt.stateID, tt.code, tt.fingerprint)
 
