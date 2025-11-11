@@ -63,6 +63,7 @@ func TestManager_Auth(t *testing.T) {
 		requestURI         string
 		getParametersAuth  []string
 		getParametersToken []string
+		authContextKeys    []string
 		wantURL            string
 		errAssert          assert.ErrorAssertionFunc
 		provider           oidc.Provider
@@ -121,7 +122,7 @@ func TestManager_Auth(t *testing.T) {
 			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
 			require.NoError(t, err)
 
-			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.getParametersAuth, tt.getParametersToken, tt.redirectURI, tt.clientID, http.DefaultClient, testCSRFSecret, []string{"RS256"})
+			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.getParametersAuth, tt.getParametersToken, tt.authContextKeys, tt.redirectURI, tt.clientID, http.DefaultClient, testCSRFSecret, []string{"RS256"})
 			got, err := m.MakeAuthURI(t.Context(), tt.tenantID, tt.fingerprint, tt.requestURI)
 
 			if !tt.errAssert(t, err, fmt.Sprintf("Manager.Auth() error = %v", err)) || err != nil {
@@ -227,6 +228,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 		fingerprint        string
 		getParametersAuth  []string
 		getParametersToken []string
+		authContextKeys    []string
 		oidcServerFail     bool
 		wantSessionID      bool
 		wantCSRFToken      bool
@@ -241,6 +243,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			code:               code,
 			fingerprint:        fingerprint,
 			getParametersToken: []string{"getParamToken1"},
+			authContextKeys:    []string{"authContextKey1"},
 			wantSessionID:      true,
 			wantCSRFToken:      true,
 			wantRedirectURI:    requestURI,
@@ -307,6 +310,20 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			wantRedirectURI: "",
 			errAssert:       assert.Error,
 		},
+		{
+			name:               "Auth context error",
+			oidc:               oidcmock.NewInMemRepository(nil, nil, nil, nil, nil),
+			sessions:           newSessionRepo(nil, nil, nil, nil, nil, &validState),
+			stateID:            stateID,
+			code:               code,
+			fingerprint:        fingerprint,
+			getParametersToken: []string{"getParamToken1"},
+			authContextKeys:    []string{"doesNotExist"},
+			wantSessionID:      true,
+			wantCSRFToken:      true,
+			wantRedirectURI:    requestURI,
+			errAssert:          assert.Error,
+		},
 	}
 
 	for _, tt := range tests {
@@ -324,16 +341,19 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			require.NoError(t, err)
 
 			localOIDCProvider := oidc.Provider{
-				IssuerURL:  oidcServer.URL,
-				Blocked:    false,
-				JWKSURIs:   []string{jwksURI},
-				Audiences:  []string{requestURI},
-				Properties: map[string]string{"getParamToken1": "getParamToken1"},
+				IssuerURL: oidcServer.URL,
+				Blocked:   false,
+				JWKSURIs:  []string{jwksURI},
+				Audiences: []string{requestURI},
+				Properties: map[string]string{
+					"getParamToken1":  "getParamToken1",
+					"authContextKey1": "authContextValue1",
+				},
 			}
 
 			tt.oidc.Add(tenantID, localOIDCProvider)
 
-			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.getParametersAuth, tt.getParametersToken, redirectURI, "client-id", http.DefaultClient, testCSRFSecret, []string{"RS256"})
+			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.getParametersAuth, tt.getParametersToken, tt.authContextKeys, redirectURI, "client-id", http.DefaultClient, testCSRFSecret, []string{"RS256"})
 
 			result, err := m.FinaliseOIDCLogin(context.Background(), tt.stateID, tt.code, tt.fingerprint)
 
@@ -347,6 +367,14 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			}
 
 			require.NotNil(t, result, "Result should not be nil on success")
+
+			sess := tt.sessions.Sessions[result.SessionID]
+			assert.NotNil(t, sess.AuthContext)
+			expKeys := []string{"issuer", "client_id"}
+			for _, k := range expKeys {
+				_, ok := sess.AuthContext[k]
+				assert.True(t, ok)
+			}
 
 			if tt.wantSessionID {
 				assert.NotEmpty(t, result.SessionID, "SessionID should not be empty")

@@ -67,7 +67,7 @@ func newTraceMiddleware(cfg *config.Config) nethttp.StrictHTTPMiddlewareFunc {
 		traceAttrs := otlp.CreateAttributesFrom(cfg.Application, attribute.String(commoncfg.AttrOperation, operationID))
 		tracer := otel.Tracer(operationID, trace.WithInstrumentationAttributes(traceAttrs...))
 
-		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error) {
 			ctx = slogctx.With(ctx,
 				commoncfg.AttrRequestID, uuid.NewString(),
 				commoncfg.AttrOperation, operationID,
