@@ -3,10 +3,11 @@ package server
 import (
 	"context"
 	"errors"
-	"fmt"
+	"net/http"
 
 	slogctx "github.com/veqryn/slog-context"
 
+	"github.com/openkcm/session-manager/internal/domain"
 	"github.com/openkcm/session-manager/internal/openapi"
 	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/pkg/fingerprint"
@@ -66,7 +67,18 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackRequestObject) (openapi.CallbackResponseObject, error) {
 	slogctx.Info(ctx, "Finalising OIDC flow")
 
-	var currentFingerprint string
+	// Get the request domain used for the cookie from the context
+	cookieDomain, err := domain.DomainFromContext(ctx)
+	if err != nil {
+		slogctx.Error(ctx, "Failed to get domain from context", "error", err)
+
+		body, status := s.toErrorModel(serviceerr.ErrUnknown)
+		return openapi.CallbackdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+
 	currentFingerprint, err := fingerprint.ExtractFingerprint(ctx)
 	if err != nil {
 		slogctx.Error(ctx, "Failed to extract fingerprint", "error", err)
@@ -94,8 +106,23 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 	}
 
 	cookies := []string{
-		fmt.Sprintf("__Host-Http-SESSION=%s; Path=/; Secure; HttpOnly; SameSite=Strict", result.SessionID),
-		fmt.Sprintf("__Host-CSRF=%s; Path=/; Secure; SameSite=Strict", result.CSRFToken),
+		(&http.Cookie{ // Session cookie
+			Name:     "__Host-Http-SESSION",
+			Value:    result.SessionID,
+			Domain:   cookieDomain,
+			Path:     "/",
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+			HttpOnly: true,
+		}).String(),
+		(&http.Cookie{ // CSRF cookie
+			Name:     "__Host-CSRF",
+			Value:    result.CSRFToken,
+			Domain:   cookieDomain,
+			Path:     "/",
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+		}).String(),
 	}
 
 	slogctx.Info(ctx, "Redirecting user to the request URI", "request_uri", result.RequestURI)
