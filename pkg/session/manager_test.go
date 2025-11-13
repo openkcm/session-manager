@@ -80,7 +80,7 @@ func TestManager_Auth(t *testing.T) {
 			fingerprint:       "fingerprint",
 			requestURI:        requestURI,
 			getParametersAuth: []string{"paramAuth1"},
-			wantURL:           oidcServer.URL + "/oauth2/authorize?client_id=my-client-id&code_challenge=someChallenge&code_challenge_method=S256&redirect_uri=" + redirectURI + "&response_type=code&scope=openid+profile+email+groups&state=someState",
+			wantURL:           oidcServer.URL + "/oauth2/authorize?client_id=my-client-id&code_challenge=someChallenge&code_challenge_method=S256&paramAuth1=paramAuth1&redirect_uri=" + redirectURI + "&response_type=code&scope=openid+profile+email+groups&state=someState",
 			errAssert:         assert.NoError,
 		},
 		{

@@ -8,7 +8,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"golang.org/x/oauth2"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -131,7 +133,23 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 	storeCodeVerifier(stateID, codeVerifier)
 
 	authURL := rp.AuthURL(stateID, relyingParty, rp.WithCodeChallenge(codeChallenge))
-	return authURL, nil
+
+	// Add custom parameters from provider properties
+	u, err := url.Parse(authURL)
+	if err != nil {
+		return "", fmt.Errorf("parsing auth url: %w", err)
+	}
+	q := u.Query()
+	for _, parameter := range m.getParametersAuth {
+		value, ok := provider.Properties[parameter]
+		if !ok {
+			return "", fmt.Errorf("missing auth parameter: %s", parameter)
+		}
+		q.Set(parameter, value)
+	}
+	u.RawQuery = q.Encode()
+
+	return u.String(), nil
 }
 
 func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerprint string) (OIDCSessionData, error) {
@@ -161,7 +179,24 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 	}
 
 	codeVerifier := getCodeVerifier(stateID)
-	tokens, err := rp.CodeExchange[*oidc.IDTokenClaims](ctx, code, relyingParty, rp.WithCodeVerifier(codeVerifier))
+
+	var codeOpts []rp.CodeExchangeOpt
+	codeOpts = append(codeOpts, rp.WithCodeVerifier(codeVerifier))
+
+	// Add custom token parameters from provider properties
+	for _, parameter := range m.getParametersToken {
+		value, ok := provider.Properties[parameter]
+		if !ok {
+			return OIDCSessionData{}, fmt.Errorf("missing token parameter: %s", parameter)
+		}
+		codeOpts = append(codeOpts, func(key, val string) rp.CodeExchangeOpt {
+			return func() []oauth2.AuthCodeOption {
+				return []oauth2.AuthCodeOption{oauth2.SetAuthURLParam(key, val)}
+			}
+		}(parameter, value))
+	}
+
+	tokens, err := rp.CodeExchange[*oidc.IDTokenClaims](ctx, code, relyingParty, codeOpts...)
 	if err != nil {
 		return OIDCSessionData{}, fmt.Errorf("exchanging code for tokens: %w", err)
 	}
