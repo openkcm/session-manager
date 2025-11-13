@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"golang.org/x/oauth2"
 	"net/http"
 	"net/url"
 	"strings"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/zitadel/oidc/v3/pkg/client/rp"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
+	"golang.org/x/oauth2"
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 	slogctx "github.com/veqryn/slog-context"
@@ -180,7 +180,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 
 	codeVerifier := getCodeVerifier(stateID)
 
-	var codeOpts []rp.CodeExchangeOpt
+	codeOpts := make([]rp.CodeExchangeOpt, 0, 1+len(m.getParametersToken))
 	codeOpts = append(codeOpts, rp.WithCodeVerifier(codeVerifier))
 
 	// Add custom token parameters from provider properties
