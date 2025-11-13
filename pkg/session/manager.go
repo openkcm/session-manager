@@ -204,10 +204,10 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 			Email:   getEmailFromUserInfo(userInfo),
 			Groups:  getGroupsFromUserInfo(userInfo),
 		},
-		AccessToken:       tokens.AccessToken,
-		RefreshToken:      tokens.RefreshToken,
-		AuthContext:       authContext,
-		Expiry:            time.Now().Add(m.sessionDuration),
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
+		AuthContext:  authContext,
+		Expiry:       time.Now().Add(m.sessionDuration),
 	}
 
 	if err := m.sessions.StoreSession(ctx, session); err != nil {

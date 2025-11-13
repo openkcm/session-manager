@@ -126,7 +126,7 @@ func TestManager_Auth(t *testing.T) {
 			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
 			require.NoError(t, err)
 
-			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.getParametersAuth, tt.getParametersToken,tt.authContextKeys, tt.redirectURI, tt.clientID,tt.clientSecret, http.DefaultClient, testCSRFSecret)
+			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.getParametersAuth, tt.getParametersToken, tt.authContextKeys, tt.redirectURI, tt.clientID, tt.clientSecret, http.DefaultClient, testCSRFSecret)
 			got, err := m.MakeAuthURI(t.Context(), tt.tenantID, tt.fingerprint, tt.requestURI)
 
 			if !tt.errAssert(t, err, fmt.Sprintf("Manager.Auth() error = %v", err)) || err != nil {
@@ -357,7 +357,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 
 			tt.oidc.Add(tenantID, localOIDCProvider)
 
-			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.getParametersAuth, tt.getParametersToken, tt.authContextKeys, redirectURI, "client-id","client-secret", http.DefaultClient, testCSRFSecret, []string{"RS256"})
+			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.getParametersAuth, tt.getParametersToken, tt.authContextKeys, redirectURI, "client-id", "client-secret", http.DefaultClient, testCSRFSecret)
 
 			result, err := m.FinaliseOIDCLogin(context.Background(), tt.stateID, tt.code, tt.fingerprint)
 
