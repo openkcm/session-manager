@@ -13,6 +13,7 @@ import (
 // Using an unexported type prevents key collisions from other packages.
 type contextKey string
 
+// DomainKey is the context key used to store the domain of the original request.
 const DomainKey contextKey = "domain"
 
 // DomainMiddleware is an http.Handler middleware that injects the domain
@@ -35,6 +36,9 @@ func DomainFromContext(ctx context.Context) (string, error) {
 	return dom, nil
 }
 
+// domainFromRequest constructs the domain string from the given URL
+// by combining its scheme and host and omitting any other parts like
+// path, query parameters, or fragments.
 func domainFromRequest(requrl *url.URL) string {
 	return fmt.Sprintf("%s://%s", requrl.Scheme, requrl.Host)
 }
