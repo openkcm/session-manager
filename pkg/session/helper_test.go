@@ -1,10 +1,17 @@
 package session_test
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
+
+	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/openkcm/session-manager/internal/oidc"
 	"github.com/openkcm/session-manager/pkg/session"
@@ -12,6 +19,9 @@ import (
 
 func StartOIDCServer(t *testing.T, fail bool) *httptest.Server {
 	t.Helper()
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	assert.NoError(t, err)
+	kid := "test-kid"
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if fail {
@@ -30,18 +40,46 @@ func StartOIDCServer(t *testing.T, fail bool) *httptest.Server {
 				JwksURI:               server.URL + "/.well-known/jwks.json",
 			})
 		case "/.well-known/jwks.json":
-			_, _ = w.Write([]byte(`{"keys":[{"kty": "RSA", "e": "AQAB", "use": "sig", "kid": "7cdrxOwDtBcW6ZmoW1CHjx2f74xqS6GAwJXOUd_oECw", "alg": "RS256", "n": "nMds_LftGh9YWfCuKfTU9rHezOPOUzooalZXIXMBnj4Xd7EQieVH4acwIlGQDsy9FasnSUzok4eeuJR1nmz7I5d0qIDjw_SItsFe83KetfFBLPsoCrR3kzcuof8KG3_N7pTGWMyl9cb8QTMzRYgzSrfgMJgi1TCHQq5uE-CWdjaCTklJgvnUb9QjYoyf3CkGz6hjlfu1TPw2CQfVXy0fW5jT9S6d10zYfYXnfeYxZFiKBgv2YNUPtwnejs0mZcE7lLyURf1tgkgZheHNde6Nz8UC0HEbGKBT6I-WXaFUJsmI5GDsQXTNfp6YmdYk_s-rM4bz-Hg51XI0JWk4J2bUyQ"}]}`))
-		case "/oauth2/token":
+			jwk := jose.JSONWebKey{Key: &priv.PublicKey, KeyID: kid, Algorithm: string(jose.RS256), Use: "sig"}
+			jwkSet := jose.JSONWebKeySet{Keys: []jose.JSONWebKey{jwk}}
+			jwkSetBytes, err := json.Marshal(jwkSet)
+			if err != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
+			assert.NoError(t, err)
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			tokenResponse := session.TokenResponse{
+			_, _ = w.Write(jwkSetBytes)
+
+		case "/oauth2/token":
+			now := time.Now()
+			claims := map[string]any{
+				"sub": "jwt-test",
+				"iss": server.URL,
+				"aud": []string{"client-id"},
+				"iat": now.Unix(),
+				"exp": now.Add(time.Hour).Unix(),
+				"nbf": now.Unix(),
+				"jti": "test-jti",
+			}
+			signer, err := jose.NewSigner(
+				jose.SigningKey{Algorithm: jose.RS256, Key: priv},
+				(&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", kid),
+			)
+			assert.NoError(t, err)
+			rawJWT, err := jwt.Signed(signer).Claims(claims).Serialize()
+			assert.NoError(t, err)
+
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(session.TokenResponse{
 				AccessToken:  "access-token",
 				RefreshToken: "refresh-token",
-				IDToken:      "eyJhbGciOiJSUzI1NiIsImtpZCI6IjdjZHJ4T3dEdEJjVzZabW9XMUNIangyZjc0eHFTNkdBd0pYT1VkX29FQ3ciLCJ0eXAiOiJKV1QifQ.eyJzdWIiOiJqd3QtdGVzdCIsImp0aSI6IjIzNDE0MzUiLCJuYmYiOjE3NjA1NzcwMjgsImV4cCI6MTc2MDU4NzgyOCwiaWF0IjoxNzYwNTc3MDI4LCJpc3MiOiJkYXJ3aW5MYWJzIiwiYXVkIjoiaHR0cDovL3d3dy5kYXJ3aW4tbGFicy5jb20ifQ.TbUiSRxNE-x2NYc_9CkLt59caV_CeOxaaHjbtBekWeKSnYXlZIOqf6qikdVhKwN3IdssUi5af6E2tVEvM4fAZuCGKy7qkHXqvitxm2XLfZPvQzscrN7L476rjUaEr2HcjqoOmhPwcgTfeJJRp9o_JIqvtb-NXhIZPbPBkinTWFIArLfcJ1WZx4fYbXY7nixunJfQqYYtZSP_OukzRbAK5qwPj55USPFhh3IBWrUsS4x_YOiF8PITldLhCYIFNmhI5vkT6KwaWVYAVZPnwLARSW0nZAKnv_qAuhwHbhP8Et746Qw-WF-5K2Ij3YlgsNG-6_c0ID2MwBhoqpg-1sFcug",
+				IDToken:      rawJWT,
 				TokenType:    "Bearer",
 				ExpiresIn:    3600,
-			}
-			_ = json.NewEncoder(w).Encode(tokenResponse)
+			})
+		default:
+			http.NotFound(w, r)
 		}
 	}))
 
