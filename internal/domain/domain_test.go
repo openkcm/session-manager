@@ -18,7 +18,7 @@ func TestDomainFromRequest(t *testing.T) {
 				Scheme: "https",
 				Host:   "example.com",
 			},
-			want: "https://example.com",
+			want: "example.com",
 		}, {
 			name: "more complex url",
 			url: &url.URL{
@@ -28,7 +28,7 @@ func TestDomainFromRequest(t *testing.T) {
 				Path:     "/foo",
 				Fragment: "section1",
 			},
-			want: "https://example.com",
+			want: "example.com",
 		},
 	}
 	// run the tests
