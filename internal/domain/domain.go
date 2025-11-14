@@ -5,7 +5,6 @@ package domain
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 )
@@ -36,5 +35,5 @@ func DomainFromContext(ctx context.Context) (string, error) {
 }
 
 func domainFromRequest(requrl *url.URL) string {
-	return fmt.Sprintf("%s://%s", requrl.Scheme, requrl.Host)
+	return requrl.Host
 }

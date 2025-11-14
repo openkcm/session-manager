@@ -320,7 +320,7 @@ type CallbackResponseObject interface {
 
 type Callback302ResponseHeaders struct {
 	Location  string
-	SetCookie []string
+	SetCookie string
 }
 
 type Callback302Response struct {

@@ -105,32 +105,35 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 		}, nil
 	}
 
-	cookies := []string{
-		(&http.Cookie{ // Session cookie
-			Name:     "__Host-Http-SESSION",
-			Value:    result.SessionID,
-			Domain:   cookieDomain,
-			Path:     "/",
-			Secure:   true,
-			SameSite: http.SameSiteStrictMode,
-			HttpOnly: true,
-		}).String(),
-		(&http.Cookie{ // CSRF cookie
-			Name:     "__Host-CSRF",
-			Value:    result.CSRFToken,
-			Domain:   cookieDomain,
-			Path:     "/",
-			Secure:   true,
-			SameSite: http.SameSiteStrictMode,
-		}).String(),
-	}
+	// Session cookie
+	cookie := (&http.Cookie{
+		Name:     "__Host-Http-SESSION",
+		Value:    result.SessionID,
+		Domain:   cookieDomain,
+		Path:     "/",
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		HttpOnly: true,
+	}).String()
+
+	// It seems that we can't have multiple Set-Cookie headers in the response.
+	// See https://github.com/OAI/OpenAPI-Specification/issues/1237
+
+	// (&http.Cookie{ // CSRF cookie
+	// 	Name:     "__Host-CSRF",
+	// 	Value:    result.CSRFToken,
+	// 	Domain:   cookieDomain,
+	// 	Path:     "/",
+	// 	Secure:   true,
+	// 	SameSite: http.SameSiteStrictMode,
+	// }).String(),
 
 	slogctx.Info(ctx, "Redirecting user to the request URI", "request_uri", result.RequestURI)
 
 	return openapi.Callback302Response{
 		Headers: openapi.Callback302ResponseHeaders{
 			Location:  result.RequestURI,
-			SetCookie: cookies,
+			SetCookie: cookie,
 		},
 	}, nil
 }
