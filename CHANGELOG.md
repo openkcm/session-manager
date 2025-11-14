@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/openkcm/session-manager/compare/v0.9.0...v0.9.1) (2025-11-14)
+
+
+### Bug Fixes
+
+* set the cookies for the correct domain ([#101](https://github.com/openkcm/session-manager/issues/101)) ([df8f896](https://github.com/openkcm/session-manager/commit/df8f89626860f10a47bd6741c47e4b4e3a276c1e))
+
 ## [0.9.0](https://github.com/openkcm/session-manager/compare/v0.8.0...v0.9.0) (2025-11-11)
 
 
