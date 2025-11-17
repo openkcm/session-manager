@@ -319,8 +319,7 @@ type CallbackResponseObject interface {
 }
 
 type Callback302ResponseHeaders struct {
-	Location  string
-	SetCookie []string
+	Location string
 }
 
 type Callback302Response struct {
@@ -329,7 +328,6 @@ type Callback302Response struct {
 
 func (response Callback302Response) VisitCallbackResponse(w http.ResponseWriter) error {
 	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
-	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
 	w.WriteHeader(302)
 	return nil
 }
