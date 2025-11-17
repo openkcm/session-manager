@@ -7,7 +7,6 @@ import (
 
 	slogctx "github.com/veqryn/slog-context"
 
-	"github.com/openkcm/session-manager/internal/middleware/domain"
 	"github.com/openkcm/session-manager/internal/middleware/responsewriter"
 	"github.com/openkcm/session-manager/internal/openapi"
 	"github.com/openkcm/session-manager/internal/serviceerr"
@@ -94,23 +93,10 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 		}, nil
 	}
 
-	// Get the request domain used for the cookie from the context
-	cookieDomain, err := domain.DomainFromContext(ctx)
-	if err != nil {
-		slogctx.Error(ctx, "Failed to get domain from context", "error", err)
-
-		body, status := s.toErrorModel(serviceerr.ErrUnknown)
-		return openapi.CallbackdefaultJSONResponse{
-			Body:       body,
-			StatusCode: status,
-		}, nil
-	}
-
 	// Session cookie
 	sessionCookie := &http.Cookie{
 		Name:     "__Host-Http-SESSION",
 		Value:    result.SessionID,
-		Domain:   cookieDomain,
 		Path:     "/",
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
@@ -121,7 +107,6 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 	csrfCookie := &http.Cookie{
 		Name:     "__Host-CSRF",
 		Value:    result.CSRFToken,
-		Domain:   cookieDomain,
 		Path:     "/",
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
@@ -146,11 +131,23 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 	http.SetCookie(rw, sessionCookie)
 	http.SetCookie(rw, csrfCookie) // NOSONAR
 
-	slogctx.Info(ctx, "Redirecting user to the request URI", "request_uri", result.RequestURI)
+	redirectURL := s.sManager.MakeRedirectURL(result.RequestURI)
+	slogctx.Info(ctx, "Redirecting user to the redirect endpoint", "redirectURL", redirectURL)
 
 	return openapi.Callback302Response{
 		Headers: openapi.Callback302ResponseHeaders{
-			Location: result.RequestURI,
+			Location: redirectURL,
+		},
+	}, nil
+}
+
+// Redirect implements openapi.StrictServerInterface.
+func (s *openAPIServer) Redirect(ctx context.Context, req openapi.RedirectRequestObject) (openapi.RedirectResponseObject, error) {
+	slogctx.Info(ctx, "Redirecting user to the request URI", "request_uri", req.Params.To)
+
+	return openapi.Redirect302Response{
+		Headers: openapi.Redirect302ResponseHeaders{
+			Location: req.Params.To,
 		},
 	}, nil
 }

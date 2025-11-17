@@ -49,8 +49,12 @@ type ValKey struct {
 }
 
 type SessionManager struct {
-	SessionDuration                  time.Duration       `yaml:"sessionDuration" default:"12h"`
-	RedirectURI                      string              `yaml:"redirectURI" default:"https://api.cmk/callback"`
+	SessionDuration time.Duration `yaml:"sessionDuration" default:"12h"`
+	// CallbackURL is the URL path for the OAuth2 callback endpoint, where we receive the authorization code.
+	CallbackURL string `yaml:"callbackURL" default:"/sm/callback"`
+	// RedirectURL is the URL path for redirecting after the authorization code flow finished. We can't let
+	// the callback handler redirect as this needs to set cookies for the right domain.
+	RedirectURL                      string              `yaml:"redirectURL" default:"/sm/redirect"`
 	ClientAuth                       ClientAuth          `yaml:"clientAuth"`
 	CSRFSecret                       commoncfg.SourceRef `yaml:"csrfSecret"`
 	JWSSigAlgs                       []string            `yaml:"jwsSigAlgs"` // A list of supported JWT signature algorithms

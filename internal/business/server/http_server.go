@@ -12,7 +12,6 @@ import (
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/session-manager/internal/config"
-	"github.com/openkcm/session-manager/internal/middleware/domain"
 	"github.com/openkcm/session-manager/internal/middleware/responsewriter"
 	"github.com/openkcm/session-manager/internal/openapi"
 	"github.com/openkcm/session-manager/pkg/fingerprint"
@@ -31,7 +30,6 @@ func createHTTPServer(_ context.Context, cfg *config.Config, sManager *session.M
 
 	handler := fingerprint.FingerprintCtxMiddleware(openapi.Handler(strictHandler))
 	handler = responsewriter.ResponseWriterMiddleware(handler)
-	handler = domain.DomainMiddleware(handler)
 
 	return &http.Server{
 		Addr:    cfg.HTTP.Address,

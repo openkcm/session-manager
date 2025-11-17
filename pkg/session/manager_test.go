@@ -15,18 +15,55 @@ import (
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 
+	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/oidc"
 	oidcmock "github.com/openkcm/session-manager/internal/oidc/mock"
 	"github.com/openkcm/session-manager/pkg/session"
 	sessionmock "github.com/openkcm/session-manager/pkg/session/mock"
 )
 
+const (
+	testCSRFSecret = "12345678901234567890123456789012" // NOSONAR
+	testClientID   = "my-client-id"
+)
+
+func TestMakeRedirectURL(t *testing.T) {
+	m, err := session.NewManager(&config.SessionManager{
+		RedirectURL: "http://example.com/redirect",
+		CSRFSecret:  commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
+	}, nil, nil, nil, nil)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name       string
+		requestURI string
+		want       string
+	}{
+		{
+			name:       "Basic redirect URL",
+			requestURI: "http://example.com/request",
+			want:       "http://example.com/redirect?redirect_uri=http%3A%2F%2Fexample.com%2Frequest",
+		}, {
+			name:       "Different domain",
+			requestURI: "http://ui.example.com/request",
+			want:       "http://example.com/redirect?redirect_uri=http%3A%2F%2Fui.example.com%2Frequest",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := m.MakeRedirectURL(tt.requestURI)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestManager_Auth(t *testing.T) {
 	const (
-		redirectURI    = "http://localhost/sm/callback"
-		requestURI     = "http://localhost/request.jwt"
-		tenantID       = "tenant-id"
-		testCSRFSecret = "12345678901234567890123456789012"
+		requestURI  = "http://localhost/request.jwt"
+		callbackURL = "http://localhost/sm/callback"
+		redirectURL = "http://localhost/sm/redirect"
+		tenantID    = "tenant-id"
 	)
 
 	oidcServer := StartOIDCServer(t, false)
@@ -53,55 +90,67 @@ func TestManager_Auth(t *testing.T) {
 	}
 
 	tests := []struct {
-		name               string
-		oidc               *oidcmock.Repository
-		sessions           *sessionmock.Repository
-		redirectURI        string
-		clientID           string
-		tenantID           string
-		fingerprint        string
-		requestURI         string
-		getParametersAuth  []string
-		getParametersToken []string
-		authContextKeys    []string
-		wantURL            string
-		errAssert          assert.ErrorAssertionFunc
-		provider           oidc.Provider
+		name        string
+		oidc        *oidcmock.Repository
+		sessions    *sessionmock.Repository
+		requestURI  string
+		cfg         *config.SessionManager
+		tenantID    string
+		fingerprint string
+		wantURL     string
+		errAssert   assert.ErrorAssertionFunc
+		provider    oidc.Provider
 	}{
 		{
-			name:              "Success",
-			oidc:              newOIDCRepo(nil, nil, nil, nil, nil),
-			sessions:          sessionmock.NewInMemRepository(nil, nil, nil, nil, nil),
-			redirectURI:       redirectURI,
-			clientID:          "my-client-id",
-			tenantID:          tenantID,
-			fingerprint:       "fingerprint",
-			requestURI:        requestURI,
-			getParametersAuth: []string{"paramAuth1"},
-			wantURL:           oidcServer.URL + "/oauth2/authorize?client_id=my-client-id&code_challenge=someChallenge&code_challenge_method=S256&redirect_uri=" + redirectURI + "&response_type=code&scope=openid+profile+email+groups&state=someState&paramAuth1=paramAuth1",
-			errAssert:         assert.NoError,
-		},
-		{
-			name:        "Get OIDC error",
-			oidc:        newOIDCRepo(nil, errors.New("faield to get oidc provider"), nil, nil, nil),
-			sessions:    sessionmock.NewInMemRepository(nil, nil, nil, nil, nil),
-			redirectURI: redirectURI,
-			clientID:    "my-client-id",
+			name:       "Success",
+			oidc:       newOIDCRepo(nil, nil, nil, nil, nil),
+			sessions:   sessionmock.NewInMemRepository(nil, nil, nil, nil, nil),
+			requestURI: requestURI,
+			cfg: &config.SessionManager{
+				SessionDuration:                  time.Hour,
+				CallbackURL:                      callbackURL,
+				RedirectURL:                      redirectURL,
+				AdditionalGetParametersAuthorize: []string{"paramAuth1"},
+				JWSSigAlgs:                       []string{"RS256"},
+				ClientAuth: config.ClientAuth{
+					ClientID: testClientID,
+				},
+				CSRFSecret: commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
+			},
 			tenantID:    tenantID,
 			fingerprint: "fingerprint",
-			requestURI:  requestURI,
+			wantURL:     oidcServer.URL + "/oauth2/authorize?client_id=my-client-id&code_challenge=someChallenge&code_challenge_method=S256&redirect_uri=" + callbackURL + "&response_type=code&scope=openid+profile+email+groups&state=someState&paramAuth1=paramAuth1",
+			errAssert:   assert.NoError,
+		},
+		{
+			name:       "Get OIDC error",
+			oidc:       newOIDCRepo(nil, errors.New("faield to get oidc provider"), nil, nil, nil),
+			sessions:   sessionmock.NewInMemRepository(nil, nil, nil, nil, nil),
+			requestURI: requestURI,
+			cfg: &config.SessionManager{
+				SessionDuration: time.Hour,
+				CallbackURL:     callbackURL,
+				RedirectURL:     redirectURL,
+				CSRFSecret:      commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
+			},
+			tenantID:    tenantID,
+			fingerprint: "fingerprint",
 			wantURL:     "",
 			errAssert:   assert.Error,
 		},
 		{
-			name:        "Save state error",
-			oidc:        newOIDCRepo(nil, nil, nil, nil, nil),
-			sessions:    sessionmock.NewInMemRepository(nil, errors.New("failed to save state"), nil, nil, nil),
-			redirectURI: redirectURI,
-			clientID:    "my-client-id",
+			name:       "Save state error",
+			oidc:       newOIDCRepo(nil, nil, nil, nil, nil),
+			sessions:   sessionmock.NewInMemRepository(nil, errors.New("failed to save state"), nil, nil, nil),
+			requestURI: requestURI,
+			cfg: &config.SessionManager{
+				SessionDuration: time.Hour,
+				CallbackURL:     callbackURL,
+				RedirectURL:     redirectURL,
+				CSRFSecret:      commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
+			},
 			tenantID:    tenantID,
 			fingerprint: "fingerprint",
-			requestURI:  requestURI,
 			wantURL:     "",
 			errAssert:   assert.Error,
 		},
@@ -122,7 +171,8 @@ func TestManager_Auth(t *testing.T) {
 			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
 			require.NoError(t, err)
 
-			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.getParametersAuth, tt.getParametersToken, tt.authContextKeys, tt.redirectURI, tt.clientID, http.DefaultClient, testCSRFSecret, []string{"RS256"})
+			m, err := session.NewManager(tt.cfg, tt.oidc, tt.sessions, auditLogger, http.DefaultClient)
+			require.NoError(t, err)
 			got, err := m.MakeAuthURI(t.Context(), tt.tenantID, tt.fingerprint, tt.requestURI)
 
 			if !tt.errAssert(t, err, fmt.Sprintf("Manager.Auth() error = %v", err)) || err != nil {
@@ -168,14 +218,14 @@ func TestManager_Auth(t *testing.T) {
 
 func TestManager_FinaliseOIDCLogin(t *testing.T) {
 	const (
-		redirectURI    = "http://sm.example.com/sm/callback"
-		requestURI     = "http://cmk.example.com/ui"
-		tenantID       = "tenant-id"
-		stateID        = "test-state-id"
-		code           = "auth-code"
-		fingerprint    = "test-fingerprint"
-		pkceVerifier   = "test-verifier"
-		testCSRFSecret = "12345678901234567890123456789012"
+		requestURI   = "http://cmk.example.com/ui"
+		callbackURL  = "http://sm.example.com/sm/callback"
+		redirectURL  = "http://sm.example.com/sm/redirect"
+		tenantID     = "tenant-id"
+		stateID      = "test-state-id"
+		code         = "auth-code"
+		fingerprint  = "test-fingerprint"
+		pkceVerifier = "test-verifier"
 	)
 
 	validState := session.State{
@@ -220,90 +270,115 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 	}
 
 	tests := []struct {
-		name               string
-		oidc               *oidcmock.Repository
-		sessions           *sessionmock.Repository
-		stateID            string
-		code               string
-		fingerprint        string
-		getParametersAuth  []string
-		getParametersToken []string
-		authContextKeys    []string
-		oidcServerFail     bool
-		wantSessionID      bool
-		wantCSRFToken      bool
-		wantRedirectURI    string
-		errAssert          assert.ErrorAssertionFunc
+		name            string
+		oidc            *oidcmock.Repository
+		sessions        *sessionmock.Repository
+		stateID         string
+		code            string
+		fingerprint     string
+		cfg             *config.SessionManager
+		oidcServerFail  bool
+		wantSessionID   bool
+		wantCSRFToken   bool
+		wantRedirectURI string
+		errAssert       assert.ErrorAssertionFunc
 	}{
 		{
-			name:               "Success",
-			oidc:               oidcmock.NewInMemRepository(nil, nil, nil, nil, nil),
-			sessions:           newSessionRepo(nil, nil, nil, nil, nil, &validState),
-			stateID:            stateID,
-			code:               code,
-			fingerprint:        fingerprint,
-			getParametersToken: []string{"getParamToken1"},
-			authContextKeys:    []string{"authContextKey1"},
-			wantSessionID:      true,
-			wantCSRFToken:      true,
-			wantRedirectURI:    requestURI,
-			errAssert:          assert.NoError,
+			name:        "Success",
+			oidc:        oidcmock.NewInMemRepository(nil, nil, nil, nil, nil),
+			sessions:    newSessionRepo(nil, nil, nil, nil, nil, &validState),
+			stateID:     stateID,
+			code:        code,
+			fingerprint: fingerprint,
+			cfg: &config.SessionManager{
+				SessionDuration:              time.Hour,
+				CallbackURL:                  callbackURL,
+				RedirectURL:                  redirectURL,
+				AdditionalGetParametersToken: []string{"getParamToken1"},
+				AdditionalAuthContextKeys:    []string{"authContextKey1"},
+				JWSSigAlgs:                   []string{"RS256"},
+				CSRFSecret:                   commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
+			},
+			wantSessionID:   true,
+			wantCSRFToken:   true,
+			wantRedirectURI: requestURI,
+			errAssert:       assert.NoError,
 		},
 		{
-			name:            "State load error",
-			oidc:            oidcmock.NewInMemRepository(nil, nil, nil, nil, nil),
-			sessions:        newSessionRepo(errors.New("state not found"), nil, nil, nil, nil, nil),
-			stateID:         stateID,
-			code:            code,
-			fingerprint:     fingerprint,
+			name:        "State load error",
+			oidc:        oidcmock.NewInMemRepository(nil, nil, nil, nil, nil),
+			sessions:    newSessionRepo(errors.New("state not found"), nil, nil, nil, nil, nil),
+			stateID:     stateID,
+			code:        code,
+			fingerprint: fingerprint,
+			cfg: &config.SessionManager{
+				SessionDuration: time.Hour,
+				CSRFSecret:      commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
+			},
 			wantSessionID:   false,
 			wantCSRFToken:   false,
 			wantRedirectURI: "",
 			errAssert:       assert.Error,
 		},
 		{
-			name:            "State expired",
-			oidc:            oidcmock.NewInMemRepository(nil, nil, nil, nil, nil),
-			sessions:        newSessionRepo(nil, nil, nil, nil, nil, &expiredState),
-			stateID:         stateID,
-			code:            code,
-			fingerprint:     fingerprint,
+			name:        "State expired",
+			oidc:        oidcmock.NewInMemRepository(nil, nil, nil, nil, nil),
+			sessions:    newSessionRepo(nil, nil, nil, nil, nil, &expiredState),
+			stateID:     stateID,
+			code:        code,
+			fingerprint: fingerprint,
+			cfg: &config.SessionManager{
+				JWSSigAlgs: []string{"RS256"},
+				CSRFSecret: commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
+			},
 			wantSessionID:   false,
 			wantCSRFToken:   false,
 			wantRedirectURI: "",
 			errAssert:       assert.Error,
 		},
 		{
-			name:            "Fingerprint mismatch",
-			oidc:            oidcmock.NewInMemRepository(nil, nil, nil, nil, nil),
-			sessions:        newSessionRepo(nil, nil, nil, nil, nil, &mismatchState),
-			stateID:         stateID,
-			code:            code,
-			fingerprint:     fingerprint,
+			name:        "Fingerprint mismatch",
+			oidc:        oidcmock.NewInMemRepository(nil, nil, nil, nil, nil),
+			sessions:    newSessionRepo(nil, nil, nil, nil, nil, &mismatchState),
+			stateID:     stateID,
+			code:        code,
+			fingerprint: fingerprint,
+			cfg: &config.SessionManager{
+				JWSSigAlgs: []string{"RS256"},
+				CSRFSecret: commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
+			},
 			wantSessionID:   false,
 			wantCSRFToken:   false,
 			wantRedirectURI: "",
 			errAssert:       assert.Error,
 		},
 		{
-			name:            "OIDC provider get error",
-			oidc:            oidcmock.NewInMemRepository(nil, errors.New("provider not found"), nil, nil, nil),
-			sessions:        newSessionRepo(nil, nil, nil, nil, nil, &validState),
-			stateID:         stateID,
-			code:            code,
-			fingerprint:     fingerprint,
+			name:        "OIDC provider get error",
+			oidc:        oidcmock.NewInMemRepository(nil, errors.New("provider not found"), nil, nil, nil),
+			sessions:    newSessionRepo(nil, nil, nil, nil, nil, &validState),
+			stateID:     stateID,
+			code:        code,
+			fingerprint: fingerprint,
+			cfg: &config.SessionManager{
+				JWSSigAlgs: []string{"RS256"},
+				CSRFSecret: commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
+			},
 			wantSessionID:   false,
 			wantCSRFToken:   false,
 			wantRedirectURI: "",
 			errAssert:       assert.Error,
 		},
 		{
-			name:            "Token exchange error",
-			oidc:            oidcmock.NewInMemRepository(nil, nil, nil, nil, nil),
-			sessions:        newSessionRepo(nil, nil, nil, nil, nil, &validState),
-			stateID:         stateID,
-			code:            code,
-			fingerprint:     fingerprint,
+			name:        "Token exchange error",
+			oidc:        oidcmock.NewInMemRepository(nil, nil, nil, nil, nil),
+			sessions:    newSessionRepo(nil, nil, nil, nil, nil, &validState),
+			stateID:     stateID,
+			code:        code,
+			fingerprint: fingerprint,
+			cfg: &config.SessionManager{
+				JWSSigAlgs: []string{"RS256"},
+				CSRFSecret: commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
+			},
 			oidcServerFail:  true,
 			wantSessionID:   false,
 			wantCSRFToken:   false,
@@ -311,18 +386,25 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			errAssert:       assert.Error,
 		},
 		{
-			name:               "Auth context error",
-			oidc:               oidcmock.NewInMemRepository(nil, nil, nil, nil, nil),
-			sessions:           newSessionRepo(nil, nil, nil, nil, nil, &validState),
-			stateID:            stateID,
-			code:               code,
-			fingerprint:        fingerprint,
-			getParametersToken: []string{"getParamToken1"},
-			authContextKeys:    []string{"doesNotExist"},
-			wantSessionID:      true,
-			wantCSRFToken:      true,
-			wantRedirectURI:    requestURI,
-			errAssert:          assert.Error,
+			name:        "Auth context error",
+			oidc:        oidcmock.NewInMemRepository(nil, nil, nil, nil, nil),
+			sessions:    newSessionRepo(nil, nil, nil, nil, nil, &validState),
+			stateID:     stateID,
+			code:        code,
+			fingerprint: fingerprint,
+			cfg: &config.SessionManager{
+				SessionDuration:              time.Hour,
+				CallbackURL:                  callbackURL,
+				RedirectURL:                  redirectURL,
+				AdditionalGetParametersToken: []string{"getParamToken1"},
+				AdditionalAuthContextKeys:    []string{"doesNotExist"},
+				JWSSigAlgs:                   []string{"RS256"},
+				CSRFSecret:                   commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
+			},
+			wantSessionID:   true,
+			wantCSRFToken:   true,
+			wantRedirectURI: requestURI,
+			errAssert:       assert.Error,
 		},
 	}
 
@@ -353,7 +435,8 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 
 			tt.oidc.Add(tenantID, localOIDCProvider)
 
-			m := session.NewManager(tt.oidc, tt.sessions, auditLogger, time.Hour, tt.getParametersAuth, tt.getParametersToken, tt.authContextKeys, redirectURI, "client-id", http.DefaultClient, testCSRFSecret, []string{"RS256"})
+			m, err := session.NewManager(tt.cfg, tt.oidc, tt.sessions, auditLogger, http.DefaultClient)
+			require.NoError(t, err)
 
 			result, err := m.FinaliseOIDCLogin(context.Background(), tt.stateID, tt.code, tt.fingerprint)
 
