@@ -43,6 +43,33 @@ func TestGRPCServer(t *testing.T) {
 
 	mappingClient := oidcmappingv1.NewServiceClient(conn)
 
+	t.Run("ApplyOIDCMapping", func(t *testing.T) {
+		expJwks := []string{"jks"}
+		expAud := []string{"aud"}
+		expTenantID := uuid.NewString()
+		expIssuer := uuid.NewString()
+		applyResp, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
+			TenantId:  expTenantID,
+			Issuer:    expIssuer,
+			JwksUris:  expJwks,
+			Audiences: expAud,
+		})
+		assert.NoError(t, err)
+		assert.True(t, applyResp.GetSuccess())
+
+		// changing the issuer will result in a unsuccessful apply
+		expIssuer = uuid.NewString()
+		applyResp, err = mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
+			TenantId:  expTenantID,
+			Issuer:    expIssuer,
+			JwksUris:  expJwks,
+			Audiences: expAud,
+		})
+		assert.NoError(t, err)
+		assert.False(t, applyResp.GetSuccess())
+		assert.Equal(t, serviceerr.ErrNotFound.Error(), *applyResp.Message)
+	})
+
 	t.Run("BlockOIDCMapping", func(t *testing.T) {
 		expJwks := []string{"jks"}
 		expAud := []string{"aud"}
