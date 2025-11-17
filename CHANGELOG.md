@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.4](https://github.com/openkcm/session-manager/compare/v0.9.3...v0.9.4) (2025-11-17)
+
+
+### Bug Fixes
+
+* redirect get parameter ([#110](https://github.com/openkcm/session-manager/issues/110)) ([d6c003a](https://github.com/openkcm/session-manager/commit/d6c003abd7cee03d76a4fb439126a09ea7f634d3))
+
 ## [0.9.3](https://github.com/openkcm/session-manager/compare/v0.9.2...v0.9.3) (2025-11-17)
 
 
