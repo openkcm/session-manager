@@ -187,6 +187,10 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Man
 		return nil, nil, errors.New("CSRF secret must be at least 32 bytes")
 	}
 
+	clientSecret, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.ClientAuth.ClientSecret)
+	if err != nil {
+		return nil, nil, fmt.Errorf("loading client secret: %w", err)
+	}
 	return session.NewManager(
 		oidcProviderRepo,
 		sessionRepo,
@@ -197,9 +201,9 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Man
 		cfg.SessionManager.AdditionalAuthContextKeys,
 		cfg.SessionManager.RedirectURI,
 		clientID,
+		string(clientSecret),
 		httpClient,
 		string(csrfSecret),
-		cfg.SessionManager.JWSSigAlgs,
 	), valkeyClient.Close, nil
 }
 
