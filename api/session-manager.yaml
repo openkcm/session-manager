@@ -77,12 +77,14 @@ paths:
                       type: string
             responses:
                 "302":
-                    description: Redirect to original request URI with session and CSRF cookies set
+                    description: |
+                        Redirect to original request URI with session and CSRF cookies set.
+                        There is a limitation of OpenAPI that does not allow setting multiple cookies
+                        with the strict handlers. Therefore, we do not define the Set-Cookie header
+                        in the yaml spec. However, in the actual implementation both cookies are set.
+                        See https://github.com/OAI/OpenAPI-Specification/issues/1237 for details.
                     headers:
                         Location:
-                            schema:
-                                type: string
-                        Set-Cookie:
                             schema:
                                 type: string
                 "403":

@@ -7,7 +7,8 @@ import (
 
 	slogctx "github.com/veqryn/slog-context"
 
-	"github.com/openkcm/session-manager/internal/domain"
+	"github.com/openkcm/session-manager/internal/middleware/domain"
+	"github.com/openkcm/session-manager/internal/middleware/responsewriter"
 	"github.com/openkcm/session-manager/internal/openapi"
 	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/pkg/fingerprint"
@@ -67,18 +68,6 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackRequestObject) (openapi.CallbackResponseObject, error) {
 	slogctx.Info(ctx, "Finalising OIDC flow")
 
-	// Get the request domain used for the cookie from the context
-	cookieDomain, err := domain.DomainFromContext(ctx)
-	if err != nil {
-		slogctx.Error(ctx, "Failed to get domain from context", "error", err)
-
-		body, status := s.toErrorModel(serviceerr.ErrUnknown)
-		return openapi.CallbackdefaultJSONResponse{
-			Body:       body,
-			StatusCode: status,
-		}, nil
-	}
-
 	currentFingerprint, err := fingerprint.ExtractFingerprint(ctx)
 	if err != nil {
 		slogctx.Error(ctx, "Failed to extract fingerprint", "error", err)
@@ -105,8 +94,20 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 		}, nil
 	}
 
+	// Get the request domain used for the cookie from the context
+	cookieDomain, err := domain.DomainFromContext(ctx)
+	if err != nil {
+		slogctx.Error(ctx, "Failed to get domain from context", "error", err)
+
+		body, status := s.toErrorModel(serviceerr.ErrUnknown)
+		return openapi.CallbackdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+
 	// Session cookie
-	cookie := (&http.Cookie{
+	sessionCookie := &http.Cookie{
 		Name:     "__Host-Http-SESSION",
 		Value:    result.SessionID,
 		Domain:   cookieDomain,
@@ -114,26 +115,42 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
 		HttpOnly: true,
-	}).String()
+	}
 
-	// It seems that we can't have multiple Set-Cookie headers in the response.
-	// See https://github.com/OAI/OpenAPI-Specification/issues/1237
+	// CSRF cookie
+	csrfCookie := &http.Cookie{
+		Name:     "__Host-CSRF",
+		Value:    result.CSRFToken,
+		Domain:   cookieDomain,
+		Path:     "/",
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	}
 
-	// (&http.Cookie{ // CSRF cookie
-	// 	Name:     "__Host-CSRF",
-	// 	Value:    result.CSRFToken,
-	// 	Domain:   cookieDomain,
-	// 	Path:     "/",
-	// 	Secure:   true,
-	// 	SameSite: http.SameSiteStrictMode,
-	// }).String(),
+	// Get the response writer from the context
+	rw, err := responsewriter.ResponseWriterFromContext(ctx)
+	if err != nil {
+		slogctx.Error(ctx, "Failed to get response writer from context")
+
+		body, status := s.toErrorModel(serviceerr.ErrUnknown)
+		return openapi.CallbackdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+
+	// There is a limitation of OpenAPI that does not allow setting multiple cookies
+	// with the strict handlers. Therefore, we do not define the Set-Cookie header
+	// in the yaml spec. However, in the actual implementation both cookies are set.
+	// See https://github.com/OAI/OpenAPI-Specification/issues/1237 for details.
+	http.SetCookie(rw, sessionCookie)
+	http.SetCookie(rw, csrfCookie) // NOSONAR
 
 	slogctx.Info(ctx, "Redirecting user to the request URI", "request_uri", result.RequestURI)
 
 	return openapi.Callback302Response{
 		Headers: openapi.Callback302ResponseHeaders{
-			Location:  result.RequestURI,
-			SetCookie: cookie,
+			Location: result.RequestURI,
 		},
 	}, nil
 }
