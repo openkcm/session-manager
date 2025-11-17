@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.2](https://github.com/openkcm/session-manager/compare/v0.9.1...v0.9.2) (2025-11-17)
+
+
+### Bug Fixes
+
+* cookie handling with OpenAPI ([#104](https://github.com/openkcm/session-manager/issues/104)) ([2996a3b](https://github.com/openkcm/session-manager/commit/2996a3b9b4b1c8e3a0a9c8a535596ea0689b384e))
+
 ## [0.9.1](https://github.com/openkcm/session-manager/compare/v0.9.0...v0.9.1) (2025-11-14)
 
 
