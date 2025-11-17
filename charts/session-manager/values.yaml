@@ -311,7 +311,8 @@ config:
 
   sessionManager:
     sessionDuration: 12h
-    redirectURI: http://localhost:8080/sm/callback
+    callbackURL: http://localhost:8080/sm/callback
+    redirectURL: http://localhost:8080/sm/redirect
     clientAuth:
       clientID: "client-id"
       type: client_secret

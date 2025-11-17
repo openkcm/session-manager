@@ -99,6 +99,32 @@ paths:
                         application/json:
                             schema:
                                 $ref: "#/components/schemas/ErrorModel"
+    /sm/redirect:
+        get:
+            description: |
+                After the callback, which sets the cookies to the correct domain,
+                the browser is redirected to this endpoint to finally reach the
+                original request URI.
+            operationId: redirect
+            parameters:
+                - name: to
+                  in: query
+                  required: true
+                  schema:
+                      type: string
+            responses:
+                "302":
+                    description: Redirect to original request URI
+                    headers:
+                        Location:
+                            schema:
+                                type: string
+                default:
+                    description: Unexpected error
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorModel"
 
 components:
     schemas:

@@ -168,7 +168,7 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Man
 
 	oidcProviderRepo := oidcsql.NewRepository(db)
 	sessionRepo := sessionvalkey.NewRepository(valkeyClient, cfg.ValKey.Prefix)
-	httpClient, clientID, err := loadHTTPClient(cfg)
+	httpClient, err := loadHTTPClient(cfg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("loading http client: %w", err)
 	}
@@ -178,39 +178,28 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Man
 		return nil, nil, fmt.Errorf("creating audit logger: %w", err)
 	}
 
-	csrfSecret, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.CSRFSecret)
-	if err != nil {
-		return nil, nil, fmt.Errorf("loading csrf token from source ref: %w", err)
-	}
-
-	if len(csrfSecret) < 32 {
-		return nil, nil, errors.New("CSRF secret must be at least 32 bytes")
-	}
-
-	return session.NewManager(
+	sessManager, err := session.NewManager(
+		&cfg.SessionManager,
 		oidcProviderRepo,
 		sessionRepo,
 		auditLogger,
-		cfg.SessionManager.SessionDuration,
-		cfg.SessionManager.AdditionalGetParametersAuthorize,
-		cfg.SessionManager.AdditionalGetParametersToken,
-		cfg.SessionManager.AdditionalAuthContextKeys,
-		cfg.SessionManager.RedirectURI,
-		clientID,
 		httpClient,
-		string(csrfSecret),
-		cfg.SessionManager.JWSSigAlgs,
-	), valkeyClient.Close, nil
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("creating session manager: %w", err)
+	}
+
+	return sessManager, valkeyClient.Close, nil
 }
 
-func loadHTTPClient(cfg *config.Config) (*http.Client, string, error) {
+func loadHTTPClient(cfg *config.Config) (*http.Client, error) {
 	clientID := cfg.SessionManager.ClientAuth.ClientID
 
 	switch cfg.SessionManager.ClientAuth.Type {
 	case "mtls":
 		tlsConfig, err := commoncfg.LoadMTLSConfig(cfg.SessionManager.ClientAuth.MTLS)
 		if err != nil {
-			return nil, "", fmt.Errorf("loading mTLS config: %w", err)
+			return nil, fmt.Errorf("loading mTLS config: %w", err)
 		}
 
 		return &http.Client{
@@ -220,11 +209,11 @@ func loadHTTPClient(cfg *config.Config) (*http.Client, string, error) {
 					TLSClientConfig: tlsConfig,
 				},
 			},
-		}, clientID, nil
+		}, nil
 	case "client_secret":
 		secret, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.ClientAuth.ClientSecret)
 		if err != nil {
-			return nil, "", fmt.Errorf("loading client secret: %w", err)
+			return nil, fmt.Errorf("loading client secret: %w", err)
 		}
 
 		return &http.Client{
@@ -233,11 +222,11 @@ func loadHTTPClient(cfg *config.Config) (*http.Client, string, error) {
 				clientSecret: string(secret),
 				next:         http.DefaultTransport,
 			},
-		}, clientID, nil
+		}, nil
 	case "insecure":
-		return http.DefaultClient, clientID, nil
+		return http.DefaultClient, nil
 	default:
-		return nil, "", errors.New("unknown Client Auth type")
+		return nil, errors.New("unknown Client Auth type")
 	}
 }
 

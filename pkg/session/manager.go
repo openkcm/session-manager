@@ -13,10 +13,12 @@ import (
 
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
+	"github.com/openkcm/common-sdk/pkg/commoncfg"
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 	slogctx "github.com/veqryn/slog-context"
 
+	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/oidc"
 	"github.com/openkcm/session-manager/internal/pkce"
 	"github.com/openkcm/session-manager/internal/serviceerr"
@@ -24,15 +26,16 @@ import (
 )
 
 type Manager struct {
-	oidc     oidc.ProviderRepository
-	sessions Repository
-	pkce     pkce.Source
-	audit    *otlpaudit.AuditLogger
+	oidc         oidc.ProviderRepository
+	sessions     Repository
+	pkce         pkce.Source
+	audit        *otlpaudit.AuditLogger
+	secureClient *http.Client
 
 	sessionDuration    time.Duration
-	redirectURI        string
+	callbackURL        *url.URL
+	redirectURL        *url.URL
 	clientID           string
-	secureClient       *http.Client
 	getParametersAuth  []string
 	getParametersToken []string
 	authContextKeys    []string
@@ -42,38 +45,59 @@ type Manager struct {
 }
 
 func NewManager(
+	cfg *config.SessionManager,
 	oidc oidc.ProviderRepository,
 	sessions Repository,
 	auditLogger *otlpaudit.AuditLogger,
-	sessionDuration time.Duration,
-	getParametersAuth []string,
-	getParametersToken []string,
-	authContextKeys []string,
-	redirectURI string,
-	clientID string,
 	httpClient *http.Client,
-	csrfHMACSecret string,
-	jwsSigAlgs []string,
-) *Manager {
-	algs := make([]jose.SignatureAlgorithm, 0, len(jwsSigAlgs))
-	for _, alg := range jwsSigAlgs {
+) (*Manager, error) {
+	algs := make([]jose.SignatureAlgorithm, 0, len(cfg.JWSSigAlgs))
+	for _, alg := range cfg.JWSSigAlgs {
 		algs = append(algs, jose.SignatureAlgorithm(alg))
+	}
+
+	csrfSecret, err := commoncfg.LoadValueFromSourceRef(cfg.CSRFSecret)
+	if err != nil {
+		return nil, fmt.Errorf("loading csrf token from source ref: %w", err)
+	}
+	if len(csrfSecret) < 32 {
+		return nil, errors.New("CSRF secret must be at least 32 bytes")
+	}
+
+	callbackURL, err := url.Parse(cfg.CallbackURL)
+	if err != nil {
+		return nil, fmt.Errorf("parsing callback URL: %w", err)
+	}
+
+	redirectURL, err := url.Parse(cfg.RedirectURL)
+	if err != nil {
+		return nil, fmt.Errorf("parsing redirect URL: %w", err)
 	}
 
 	return &Manager{
 		oidc:               oidc,
 		sessions:           sessions,
 		audit:              auditLogger,
-		sessionDuration:    sessionDuration,
-		getParametersAuth:  getParametersAuth,
-		getParametersToken: getParametersToken,
-		authContextKeys:    authContextKeys,
-		redirectURI:        redirectURI,
-		clientID:           clientID,
+		sessionDuration:    cfg.SessionDuration,
+		getParametersAuth:  cfg.AdditionalGetParametersAuthorize,
+		getParametersToken: cfg.AdditionalGetParametersToken,
+		authContextKeys:    cfg.AdditionalAuthContextKeys,
+		callbackURL:        callbackURL,
+		redirectURL:        redirectURL,
+		clientID:           cfg.ClientAuth.ClientID,
 		secureClient:       httpClient,
-		csrfSecret:         []byte(csrfHMACSecret),
+		csrfSecret:         csrfSecret,
 		jwsSigAlgs:         algs,
-	}
+	}, nil
+}
+
+func (m *Manager) MakeRedirectURL(requestURI string) string {
+	u := *m.redirectURL
+	q := u.Query()
+	q.Set("redirect_uri", requestURI)
+	u.RawQuery = q.Encode()
+
+	return u.String()
 }
 
 // MakeAuthURI returns an OIDC authentication URI.
@@ -125,7 +149,7 @@ func (m *Manager) authURI(openidConf oidc.Configuration, state State, pkce pkce.
 	q.Set("state", state.ID)
 	q.Set("code_challenge", pkce.Challenge)
 	q.Set("code_challenge_method", pkce.Method)
-	q.Set("redirect_uri", m.redirectURI)
+	q.Set("redirect_uri", m.callbackURL.String())
 	for _, parameter := range m.getParametersAuth {
 		value, ok := properties[parameter]
 		if !ok {
@@ -266,7 +290,7 @@ func (m *Manager) exchangeCode(ctx context.Context, openidConf oidc.Configuratio
 	data.Set("grant_type", "authorization_code")
 	data.Set("code", code)
 	data.Set("code_verifier", codeVerifier)
-	data.Set("redirect_uri", m.redirectURI)
+	data.Set("redirect_uri", m.callbackURL.String())
 	data.Set("client_id", m.clientID)
 	for _, parameter := range m.getParametersToken {
 		value, ok := properties[parameter]
