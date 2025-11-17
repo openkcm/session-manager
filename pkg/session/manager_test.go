@@ -42,11 +42,11 @@ func TestMakeRedirectURL(t *testing.T) {
 		{
 			name:       "Basic redirect URL",
 			requestURI: "http://example.com/request",
-			want:       "http://example.com/redirect?redirect_uri=http%3A%2F%2Fexample.com%2Frequest",
+			want:       "http://example.com/redirect?to=http%3A%2F%2Fexample.com%2Frequest",
 		}, {
 			name:       "Different domain",
 			requestURI: "http://ui.example.com/request",
-			want:       "http://example.com/redirect?redirect_uri=http%3A%2F%2Fui.example.com%2Frequest",
+			want:       "http://example.com/redirect?to=http%3A%2F%2Fui.example.com%2Frequest",
 		},
 	}
 

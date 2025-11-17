@@ -94,7 +94,7 @@ func NewManager(
 func (m *Manager) MakeRedirectURL(requestURI string) string {
 	u := *m.redirectURL
 	q := u.Query()
-	q.Set("redirect_uri", requestURI)
+	q.Set("to", requestURI)
 	u.RawQuery = q.Encode()
 
 	return u.String()
