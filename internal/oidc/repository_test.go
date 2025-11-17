@@ -28,6 +28,8 @@ const (
 type RepoWrapper struct {
 	Repo             oidc.ProviderRepository
 	MockGetForTenant func(ctx context.Context, tenantID string) (oidc.Provider, error)
+	MockGet          func(ctx context.Context, issuerURL string) (oidc.Provider, error)
+	MockCreate       func(ctx context.Context, tenantID string, provider oidc.Provider) error
 	MockUpdate       func(ctx context.Context, tenantID string, provider oidc.Provider) error
 	MockDelete       func(ctx context.Context, tenantID string, provider oidc.Provider) error
 }
@@ -36,6 +38,13 @@ var _ oidc.ProviderRepository = &RepoWrapper{}
 
 // Create implements oidc.ProviderRepository.
 func (m *RepoWrapper) Create(ctx context.Context, tenantID string, provider oidc.Provider) error {
+	if m.MockCreate != nil {
+		err := m.MockCreate(ctx, tenantID, provider)
+		if err != nil {
+			return err
+		}
+	}
+
 	return m.Repo.Create(ctx, tenantID, provider)
 }
 
@@ -53,6 +62,13 @@ func (m *RepoWrapper) Delete(ctx context.Context, tenantID string, provider oidc
 
 // Get implements oidc.ProviderRepository.
 func (m *RepoWrapper) Get(ctx context.Context, issuerURL string) (oidc.Provider, error) {
+	if m.MockGet != nil {
+		_, err := m.MockGet(ctx, issuerURL)
+		if err != nil {
+			return oidc.Provider{}, err
+		}
+	}
+
 	return m.Repo.Get(ctx, issuerURL)
 }
 

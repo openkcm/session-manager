@@ -2,8 +2,6 @@ package oidc_test
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"os"
 	"testing"
 
@@ -14,36 +12,17 @@ import (
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/session-manager/internal/oidc"
-	oidcmock "github.com/openkcm/session-manager/internal/oidc/mock"
 	"github.com/openkcm/session-manager/internal/serviceerr"
 )
 
-var (
-	oidcProvider oidc.Provider
-	newOIDCRepo  func(getErr, getForTenantErr, createErr, deleteErr, updateErr error) *oidcmock.Repository
-	repo         oidc.ProviderRepository
-)
+var repo oidc.ProviderRepository
 
 const (
 	requestURI = "http://cmk.example.com/ui"
-	issuerURL  = "http://oidc.example.com"
-	tenantID   = "tenant-id"
+	jwksURI    = "http://jwks.example.com"
 )
 
 func TestMain(m *testing.M) {
-	oidcProvider = oidc.Provider{
-		IssuerURL: issuerURL,
-		Blocked:   false,
-		JWKSURIs:  []string{"http://jwks.example.com"},
-		Audiences: []string{requestURI},
-	}
-	newOIDCRepo = func(getErr, getForTenantErr, createErr, deleteErr, updateErr error) *oidcmock.Repository {
-		oidcRepo := oidcmock.NewInMemRepository(getErr, getForTenantErr, createErr, deleteErr, updateErr)
-		oidcRepo.Add(tenantID, oidcProvider)
-
-		return oidcRepo
-	}
-
 	ctx := context.Background()
 	r, err := createRepo(ctx)
 	if err != nil {
@@ -56,76 +35,184 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestService_Get(t *testing.T) {
-	tests := []struct {
-		name         string
-		issuerURL    string
-		oidcRepo     *oidcmock.Repository
-		wantProvider oidc.Provider
-		assertErr    assert.ErrorAssertionFunc
-	}{
-		{
-			name:         "Success",
-			issuerURL:    issuerURL,
-			oidcRepo:     newOIDCRepo(nil, nil, nil, nil, nil),
-			wantProvider: oidcProvider,
-			assertErr:    assert.NoError,
-		},
-		{
-			name:      "Get OIDC error",
-			oidcRepo:  newOIDCRepo(errors.New("Repository.Get() error"), nil, nil, nil, nil),
-			issuerURL: "does-not-exist",
-			assertErr: assert.Error,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := oidc.NewService(tt.oidcRepo)
+func TestService_GetProvider(t *testing.T) {
+	ctx := t.Context()
 
-			gotProvider, err := s.GetProvider(t.Context(), tt.issuerURL)
-			if !tt.assertErr(t, err, fmt.Sprintf("Service.GetProvider() error %v", err)) || err != nil {
-				assert.Zerof(t, gotProvider, "Service.GetProvider() extected zero value if an error is returned, got %v", gotProvider)
-				return
+	t.Run("success if provider exists", func(t *testing.T) {
+		expTenantID := uuid.NewString()
+		expProvider := oidc.Provider{
+			IssuerURL: uuid.NewString(),
+			JWKSURIs:  []string{jwksURI},
+			Audiences: []string{requestURI},
+		}
+
+		wrapper := &RepoWrapper{Repo: repo}
+		subj := oidc.NewService(wrapper)
+
+		err := subj.ApplyMapping(ctx, expTenantID, expProvider)
+		assert.NoError(t, err)
+
+		actProvider, err := subj.GetProvider(ctx, expProvider.IssuerURL)
+		assert.NoError(t, err)
+		assert.Equal(t, expProvider, actProvider)
+	})
+
+	t.Run("should return error if", func(t *testing.T) {
+		t.Run("Get returns and error", func(t *testing.T) {
+			expIssuer := uuid.NewString()
+			wrapper := &RepoWrapper{Repo: repo}
+			noOfCalls := 0
+			wrapper.MockGet = func(ctx context.Context, issuerURL string) (oidc.Provider, error) {
+				assert.Equal(t, expIssuer, issuerURL)
+				noOfCalls++
+				return oidc.Provider{}, assert.AnError
 			}
+			subj := oidc.NewService(wrapper)
 
-			assert.Equal(t, tt.wantProvider, gotProvider, "Service.GetProvider()")
+			_, err := subj.GetProvider(ctx, expIssuer)
+
+			assert.ErrorIs(t, err, assert.AnError)
 		})
-	}
+
+		t.Run("the provider does not exist", func(t *testing.T) {
+			expIssuer := uuid.NewString()
+			wrapper := &RepoWrapper{Repo: repo}
+			subj := oidc.NewService(wrapper)
+
+			_, err := subj.GetProvider(ctx, expIssuer)
+
+			assert.ErrorIs(t, err, serviceerr.ErrNotFound)
+		})
+	})
 }
 
 func TestService_ApplyMapping(t *testing.T) {
-	tests := []struct {
-		name     string
-		tenant   string
-		oidcRepo *oidcmock.Repository
-		wantErr  assert.ErrorAssertionFunc
-	}{
-		{
-			name:     "Success",
-			tenant:   tenantID,
-			oidcRepo: newOIDCRepo(nil, nil, nil, nil, nil),
-			wantErr:  assert.NoError,
-		},
-		{
-			name:     "Create error",
-			tenant:   tenantID,
-			oidcRepo: newOIDCRepo(nil, errors.New("getForTenant failed"), errors.New("create failed"), nil, nil),
-			wantErr:  assert.Error,
-		},
-		{
-			name:     "Update error",
-			tenant:   tenantID,
-			oidcRepo: newOIDCRepo(nil, nil, nil, nil, errors.New("update failed")),
-			wantErr:  assert.Error,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := oidc.NewService(tt.oidcRepo)
-			err := s.ApplyMapping(t.Context(), tt.tenant, oidcProvider)
-			tt.wantErr(t, err)
+	ctx := t.Context()
+
+	t.Run("success if", func(t *testing.T) {
+		t.Run("the mapping does not exist", func(t *testing.T) {
+			expTenantID := uuid.NewString()
+			expProvider := oidc.Provider{
+				IssuerURL: uuid.NewString(),
+				JWKSURIs:  []string{jwksURI},
+				Audiences: []string{requestURI},
+			}
+
+			wrapper := &RepoWrapper{Repo: repo}
+			subj := oidc.NewService(wrapper)
+
+			err := subj.ApplyMapping(ctx, expTenantID, expProvider)
+			assert.NoError(t, err)
+
+			actProvider, err := wrapper.Repo.GetForTenant(ctx, expTenantID)
+			assert.NoError(t, err)
+			assert.Equal(t, expProvider, actProvider)
 		})
-	}
+
+		t.Run("the mapping exists", func(t *testing.T) {
+			expTenantID := uuid.NewString()
+			expProvider := oidc.Provider{
+				IssuerURL: uuid.NewString(),
+				JWKSURIs:  []string{jwksURI},
+				Audiences: []string{requestURI},
+			}
+
+			wrapper := &RepoWrapper{Repo: repo}
+			subj := oidc.NewService(wrapper)
+
+			err := subj.ApplyMapping(ctx, expTenantID, expProvider)
+			assert.NoError(t, err)
+
+			expUpdatedProvider := oidc.Provider{
+				IssuerURL: expProvider.IssuerURL,
+				JWKSURIs:  []string{"http://updated-jwks.example.com"},
+				Audiences: []string{requestURI, "http://new-aud.example.com"},
+			}
+
+			err = subj.ApplyMapping(ctx, expTenantID, expUpdatedProvider)
+			assert.NoError(t, err)
+
+			actProvider, err := wrapper.Repo.GetForTenant(ctx, expTenantID)
+			assert.NoError(t, err)
+			assert.Equal(t, expUpdatedProvider, actProvider)
+		})
+	})
+
+	t.Run("should return error if", func(t *testing.T) {
+		t.Run("Create returns an error", func(t *testing.T) {
+			expTenantID := uuid.NewString()
+			expProvider := oidc.Provider{
+				IssuerURL: uuid.NewString(),
+				JWKSURIs:  []string{jwksURI},
+				Audiences: []string{requestURI},
+			}
+
+			wrapper := &RepoWrapper{Repo: repo}
+			noOfCalls := 0
+			wrapper.MockCreate = func(ctx context.Context, tenantID string, provider oidc.Provider) error {
+				assert.Equal(t, expTenantID, tenantID)
+				assert.Equal(t, expProvider, provider)
+				noOfCalls++
+				return assert.AnError
+			}
+
+			subj := oidc.NewService(wrapper)
+			err := subj.ApplyMapping(ctx, expTenantID, expProvider)
+
+			assert.ErrorIs(t, err, assert.AnError)
+			assert.Equal(t, 1, noOfCalls)
+		})
+
+		t.Run("Update returns an error", func(t *testing.T) {
+			expTenantID := uuid.NewString()
+			expProvider := oidc.Provider{
+				IssuerURL: uuid.NewString(),
+				JWKSURIs:  []string{jwksURI},
+				Audiences: []string{requestURI},
+			}
+
+			wrapper := &RepoWrapper{Repo: repo}
+			noOfCalls := 0
+			wrapper.MockUpdate = func(ctx context.Context, tenantID string, provider oidc.Provider) error {
+				assert.Equal(t, expTenantID, tenantID)
+				assert.Equal(t, expProvider, provider)
+				noOfCalls++
+				return assert.AnError
+			}
+			subj := oidc.NewService(wrapper)
+
+			err := subj.ApplyMapping(ctx, expTenantID, expProvider)
+			assert.NoError(t, err)
+			err = subj.ApplyMapping(ctx, expTenantID, expProvider)
+
+			assert.ErrorIs(t, err, assert.AnError)
+			assert.Equal(t, 1, noOfCalls)
+		})
+
+		t.Run("the issuer URL has changed", func(t *testing.T) {
+			expTenantID := uuid.NewString()
+			expProvider := oidc.Provider{
+				IssuerURL: uuid.NewString(),
+				JWKSURIs:  []string{jwksURI},
+				Audiences: []string{requestURI},
+			}
+
+			wrapper := &RepoWrapper{Repo: repo}
+			subj := oidc.NewService(wrapper)
+
+			err := subj.ApplyMapping(ctx, expTenantID, expProvider)
+			assert.NoError(t, err)
+
+			expUpdatedProvider := oidc.Provider{
+				IssuerURL: uuid.NewString(), // changed issuer URL
+				JWKSURIs:  []string{"http://updated-jwks.example.com"},
+				Audiences: []string{requestURI, "http://new-aud.example.com"},
+			}
+
+			err = subj.ApplyMapping(ctx, expTenantID, expUpdatedProvider)
+			assert.ErrorIs(t, err, serviceerr.ErrNotFound)
+		})
+	})
 }
 
 func TestService_BlockMapping(t *testing.T) {
@@ -138,7 +225,7 @@ func TestService_BlockMapping(t *testing.T) {
 			expUnblockedProvider := oidc.Provider{
 				IssuerURL: uuid.NewString(),
 				Blocked:   false,
-				JWKSURIs:  []string{"http://jwks.example.com"},
+				JWKSURIs:  []string{jwksURI},
 				Audiences: []string{requestURI},
 			}
 
@@ -167,7 +254,7 @@ func TestService_BlockMapping(t *testing.T) {
 			expBlockedProvider := oidc.Provider{
 				IssuerURL: uuid.NewString(),
 				Blocked:   true,
-				JWKSURIs:  []string{"http://jwks.example.com"},
+				JWKSURIs:  []string{jwksURI},
 				Audiences: []string{requestURI},
 			}
 			repoWrapper := &RepoWrapper{Repo: repo}
@@ -198,7 +285,7 @@ func TestService_BlockMapping(t *testing.T) {
 			expBlockedProvider := oidc.Provider{
 				IssuerURL: uuid.NewString(),
 				Blocked:   false,
-				JWKSURIs:  []string{"http://jwks.example.com"},
+				JWKSURIs:  []string{jwksURI},
 				Audiences: []string{requestURI},
 			}
 			repoWrapper := &RepoWrapper{Repo: repo}
@@ -265,7 +352,7 @@ func TestService_BlockMapping(t *testing.T) {
 			expProvider := oidc.Provider{
 				IssuerURL: uuid.NewString(),
 				Blocked:   false,
-				JWKSURIs:  []string{"http://jwks.example.com"},
+				JWKSURIs:  []string{jwksURI},
 				Audiences: []string{requestURI},
 			}
 			repoWrapper := &RepoWrapper{Repo: repo}
@@ -304,7 +391,7 @@ func TestService_UnBlockMapping(t *testing.T) {
 			expBlockedProvider := oidc.Provider{
 				IssuerURL: uuid.NewString(),
 				Blocked:   true,
-				JWKSURIs:  []string{"http://jwks.example.com"},
+				JWKSURIs:  []string{jwksURI},
 				Audiences: []string{requestURI},
 			}
 
@@ -333,7 +420,7 @@ func TestService_UnBlockMapping(t *testing.T) {
 			expUnblockedProvider := oidc.Provider{
 				IssuerURL: uuid.NewString(),
 				Blocked:   false,
-				JWKSURIs:  []string{"http://jwks.example.com"},
+				JWKSURIs:  []string{jwksURI},
 				Audiences: []string{requestURI},
 			}
 			repoWrapper := &RepoWrapper{Repo: repo}
@@ -364,7 +451,7 @@ func TestService_UnBlockMapping(t *testing.T) {
 			expUnblockedProvider := oidc.Provider{
 				IssuerURL: uuid.NewString(),
 				Blocked:   true,
-				JWKSURIs:  []string{"http://jwks.example.com"},
+				JWKSURIs:  []string{jwksURI},
 				Audiences: []string{requestURI},
 			}
 			repoWrapper := &RepoWrapper{Repo: repo}
@@ -430,7 +517,7 @@ func TestService_UnBlockMapping(t *testing.T) {
 			expBlockedProvider := oidc.Provider{
 				IssuerURL: uuid.NewString(),
 				Blocked:   true,
-				JWKSURIs:  []string{"http://jwks.example.com"},
+				JWKSURIs:  []string{jwksURI},
 				Audiences: []string{requestURI},
 			}
 			repoWrapper := &RepoWrapper{Repo: repo}

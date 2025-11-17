@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"errors"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -9,6 +10,7 @@ import (
 	oidcmappingv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/oidcmapping/v1"
 
 	"github.com/openkcm/session-manager/internal/oidc"
+	"github.com/openkcm/session-manager/internal/serviceerr"
 )
 
 type OIDCMappingServer struct {
@@ -26,9 +28,7 @@ func NewOIDCMappingServer(oidc *oidc.Service) *OIDCMappingServer {
 }
 
 func (srv *OIDCMappingServer) ApplyOIDCMapping(ctx context.Context, req *oidcmappingv1.ApplyOIDCMappingRequest) (*oidcmappingv1.ApplyOIDCMappingResponse, error) {
-	response := &oidcmappingv1.ApplyOIDCMappingResponse{
-		Success: false,
-	}
+	response := &oidcmappingv1.ApplyOIDCMappingResponse{}
 
 	provider := oidc.Provider{
 		IssuerURL:  req.GetIssuer(),
@@ -39,10 +39,13 @@ func (srv *OIDCMappingServer) ApplyOIDCMapping(ctx context.Context, req *oidcmap
 	}
 	err := srv.oidc.ApplyMapping(ctx, req.GetTenantId(), provider)
 	if err != nil {
-		msg := err.Error()
-		response.Message = &msg
+		if errors.Is(err, serviceerr.ErrNotFound) {
+			msg := serviceerr.ErrNotFound.Error()
+			response.Message = &msg
+			return response, nil
+		}
 
-		return response, status.Error(codes.Internal, "failed to apply OIDC mapping: "+msg)
+		return nil, status.Errorf(codes.Internal, "failed to apply OIDC mapping: %v", err)
 	}
 
 	response.Success = true
