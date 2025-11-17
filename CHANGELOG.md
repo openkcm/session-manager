@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.3](https://github.com/openkcm/session-manager/compare/v0.9.2...v0.9.3) (2025-11-17)
+
+
+### Bug Fixes
+
+* apply OIDC mapping response ([0342419](https://github.com/openkcm/session-manager/commit/03424194884165803eb64dc7633fb5458b4b0d33)), closes [#107](https://github.com/openkcm/session-manager/issues/107)
+* separate callback and redirect to properly set cookies ([#108](https://github.com/openkcm/session-manager/issues/108)) ([40742e5](https://github.com/openkcm/session-manager/commit/40742e58fbe682bed18c9177a496740b40305cc4))
+
 ## [0.9.2](https://github.com/openkcm/session-manager/compare/v0.9.1...v0.9.2) (2025-11-17)
 
 
