@@ -99,7 +99,7 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 		Value:    result.SessionID,
 		Path:     "/",
 		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteNoneMode,
 		HttpOnly: true,
 	}
 
@@ -109,7 +109,7 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 		Value:    result.CSRFToken,
 		Path:     "/",
 		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteNoneMode,
 	}
 
 	// Get the response writer from the context
