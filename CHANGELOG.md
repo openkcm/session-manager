@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.5](https://github.com/openkcm/session-manager/compare/v0.9.4...v0.9.5) (2025-11-18)
+
+
+### Bug Fixes
+
+* create cookies with SameSite: None ([#112](https://github.com/openkcm/session-manager/issues/112)) ([e55f39a](https://github.com/openkcm/session-manager/commit/e55f39a80feb83baac4acd9719d1f3e9f85bb0ed))
+
 ## [0.9.4](https://github.com/openkcm/session-manager/compare/v0.9.3...v0.9.4) (2025-11-17)
 
 
