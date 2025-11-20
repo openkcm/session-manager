@@ -78,13 +78,13 @@ paths:
             responses:
                 "302":
                     description: |
-                        Redirect to original request URI with session and CSRF cookies set.
-                        There is a limitation of OpenAPI that does not allow setting multiple cookies
-                        with the strict handlers. Therefore, we do not define the Set-Cookie header
-                        in the yaml spec. However, in the actual implementation both cookies are set.
-                        See https://github.com/OAI/OpenAPI-Specification/issues/1237 for details.
+                        Set the session cookie and redirect to the redirect endpoint.
+                        This ensures that the cookie is set for the backend domain.
                     headers:
                         Location:
+                            schema:
+                                type: string
+                        Set-Cookie:
                             schema:
                                 type: string
                 "403":
@@ -107,6 +107,11 @@ paths:
                 original request URI.
             operationId: redirect
             parameters:
+                - name: __Host-Http-SESSION
+                  in: cookie
+                  required: true
+                  schema:
+                    type: string
                 - name: to
                   in: query
                   required: true
@@ -114,9 +119,14 @@ paths:
                       type: string
             responses:
                 "302":
-                    description: Redirect to original request URI
+                    description: |
+                        Set the CSRF cookie and redirect to the original request URI.
+                        This ensures that the cookie is set for the frontend domain.
                     headers:
                         Location:
+                            schema:
+                                type: string
+                        Set-Cookie:
                             schema:
                                 type: string
                 default:

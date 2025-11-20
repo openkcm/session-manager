@@ -463,12 +463,130 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 				assert.NotEmpty(t, result.SessionID, "SessionID should not be empty")
 			}
 
-			if tt.wantCSRFToken {
-				assert.NotEmpty(t, result.CSRFToken, "CSRFToken should not be empty")
-			}
-
 			if tt.wantRedirectURI != "" {
 				assert.Equal(t, tt.wantRedirectURI, result.RequestURI, "RedirectURI should match")
+			}
+		})
+	}
+}
+
+func TestManager_MakeCSRFToken(t *testing.T) {
+	const (
+		sessionID   = "test-session-id"
+		fingerprint = "test-fingerprint"
+		csrfToken   = "test-csrf-token"
+	)
+
+	validSession := session.Session{
+		ID:          sessionID,
+		Fingerprint: fingerprint,
+		CSRFToken:   csrfToken,
+	}
+
+	sessionWithEmptyCSRFToken := session.Session{
+		ID:          sessionID,
+		Fingerprint: fingerprint,
+		CSRFToken:   "",
+	}
+
+	newSessionRepo := func(loadStateErr, storeStateErr, storeSessionErr, deleteStateErr, deleteSessionErr error, session *session.Session) *sessionmock.Repository {
+		sessionRepo := sessionmock.NewInMemRepository(loadStateErr, storeStateErr, storeSessionErr, deleteStateErr, deleteSessionErr)
+		if storeSessionErr != nil {
+			t.Logf("Session repo configured with store session error: %v", storeSessionErr)
+		}
+		if session != nil && storeSessionErr == nil {
+			sessionRepo.Sessions[session.ID] = *session
+		}
+		return sessionRepo
+	}
+
+	// Arrange
+	auditServer := StartAuditServer(t)
+	defer auditServer.Close()
+
+	tests := []struct {
+		name            string
+		oidc            *oidcmock.Repository
+		sessions        *sessionmock.Repository
+		sessionID       string
+		fingerprint     string
+		cfg             *config.SessionManager
+		oidcServerFail  bool
+		wantSessionID   bool
+		wantCSRFToken   bool
+		wantRedirectURI string
+		errAssert       assert.ErrorAssertionFunc
+	}{
+		{
+			name:        "no session ID",
+			sessions:    newSessionRepo(nil, nil, nil, nil, nil, &validSession),
+			sessionID:   "",
+			fingerprint: "invalid-fingerprint",
+			cfg: &config.SessionManager{
+				JWSSigAlgs: []string{"RS256"},
+				CSRFSecret: commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
+			},
+			errAssert: assert.Error,
+		}, {
+			name:        "invalid session ID",
+			sessions:    newSessionRepo(nil, nil, nil, nil, nil, &validSession),
+			sessionID:   "does-not-exist",
+			fingerprint: "invalid-fingerprint",
+			cfg: &config.SessionManager{
+				JWSSigAlgs: []string{"RS256"},
+				CSRFSecret: commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
+			},
+			errAssert: assert.Error,
+		}, {
+			name:        "fingerprint mismatch",
+			sessions:    newSessionRepo(nil, nil, nil, nil, nil, &validSession),
+			sessionID:   sessionID,
+			fingerprint: "invalid-fingerprint",
+			cfg: &config.SessionManager{
+				JWSSigAlgs: []string{"RS256"},
+				CSRFSecret: commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
+			},
+			errAssert: assert.Error,
+		}, {
+			name:        "empty CSRF token",
+			sessions:    newSessionRepo(nil, nil, nil, nil, nil, &sessionWithEmptyCSRFToken),
+			sessionID:   sessionID,
+			fingerprint: fingerprint,
+			cfg: &config.SessionManager{
+				JWSSigAlgs: []string{"RS256"},
+				CSRFSecret: commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
+			},
+			errAssert: assert.Error,
+		}, {
+			name:        "success",
+			sessions:    newSessionRepo(nil, nil, nil, nil, nil, &validSession),
+			sessionID:   sessionID,
+			fingerprint: fingerprint,
+			cfg: &config.SessionManager{
+				JWSSigAlgs: []string{"RS256"},
+				CSRFSecret: commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
+			},
+			errAssert: assert.NoError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+			require.NoError(t, err)
+			m, err := session.NewManager(tt.cfg, tt.oidc, tt.sessions, auditLogger, http.DefaultClient)
+			require.NoError(t, err)
+
+			// Act
+			csrfToken, err := m.GetCSRFToken(t.Context(), tt.sessionID, tt.fingerprint)
+
+			// Assert
+			if !tt.errAssert(t, err, fmt.Sprintf("Manager.Callback() error = %v", err)) {
+				return
+			}
+			if tt.wantCSRFToken {
+				assert.NotEmpty(t, csrfToken, "CSRFToken should not be empty")
 			}
 		})
 	}

@@ -308,9 +308,26 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 
 	return OIDCSessionData{
 		SessionID:  sessionID,
-		CSRFToken:  csrfToken,
 		RequestURI: state.RequestURI,
 	}, nil
+}
+
+// GetCSRFToken retrieves the CSRF token associated with the given session ID and fingerprint.
+func (m *Manager) GetCSRFToken(ctx context.Context, sessionID, fingerprint string) (string, error) {
+	session, err := m.sessions.LoadSession(ctx, sessionID)
+	if err != nil {
+		return "", fmt.Errorf("loading session from the storage: %w", err)
+	}
+
+	if session.Fingerprint != fingerprint {
+		return "", serviceerr.ErrFingerprintMismatch
+	}
+
+	if session.CSRFToken == "" {
+		return "", serviceerr.ErrInvalidCSRFToken
+	}
+
+	return session.CSRFToken, nil
 }
 
 // sendUserLoginFailureAudit creates the user-login-failure audit event and sends it.

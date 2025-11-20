@@ -11,6 +11,7 @@ const (
 	CodeFingerprintMismatch
 	CodeStateExpired
 	CodeInvalidOIDCProvider
+	CodeInvalidCSRFToken
 )
 
 var ErrUnknown = newErr("unknown error", CodeUnknown)
@@ -19,6 +20,7 @@ var ErrNotFound = newErr("not found", CodeNotFound)
 var ErrFingerprintMismatch = newErr("fingerprint mismatch", CodeFingerprintMismatch)
 var ErrStateExpired = newErr("state expired", CodeStateExpired)
 var ErrInvalidOIDCProvider = newErr("invalid OIDC provider", CodeInvalidOIDCProvider)
+var ErrInvalidCSRFToken = newErr("invalid CSRF token", CodeInvalidCSRFToken)
 
 //nolint:recvcheck
 type Error struct {
