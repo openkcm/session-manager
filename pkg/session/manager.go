@@ -35,7 +35,6 @@ type Manager struct {
 
 	sessionDuration    time.Duration
 	callbackURL        *url.URL
-	redirectURL        *url.URL
 	clientID           string
 	getParametersAuth  []string
 	getParametersToken []string
@@ -70,11 +69,6 @@ func NewManager(
 		return nil, fmt.Errorf("parsing callback URL: %w", err)
 	}
 
-	redirectURL, err := url.Parse(cfg.RedirectURL)
-	if err != nil {
-		return nil, fmt.Errorf("parsing redirect URL: %w", err)
-	}
-
 	return &Manager{
 		oidc:               oidc,
 		sessions:           sessions,
@@ -84,21 +78,11 @@ func NewManager(
 		getParametersToken: cfg.AdditionalGetParametersToken,
 		authContextKeys:    cfg.AdditionalAuthContextKeys,
 		callbackURL:        callbackURL,
-		redirectURL:        redirectURL,
 		clientID:           cfg.ClientAuth.ClientID,
 		secureClient:       httpClient,
 		csrfSecret:         csrfSecret,
 		jwsSigAlgs:         algs,
 	}, nil
-}
-
-func (m *Manager) MakeRedirectURL(requestURI string) string {
-	u := *m.redirectURL
-	q := u.Query()
-	q.Set("to", requestURI)
-	u.RawQuery = q.Encode()
-
-	return u.String()
 }
 
 // MakeAuthURI returns an OIDC authentication URI.
@@ -308,26 +292,18 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 
 	return OIDCSessionData{
 		SessionID:  sessionID,
+		CSRFToken:  csrfToken,
 		RequestURI: state.RequestURI,
 	}, nil
 }
 
-// GetCSRFToken retrieves the CSRF token associated with the given session ID and fingerprint.
-func (m *Manager) GetCSRFToken(ctx context.Context, sessionID, fingerprint string) (string, error) {
-	session, err := m.sessions.LoadSession(ctx, sessionID)
-	if err != nil {
-		return "", fmt.Errorf("loading session from the storage: %w", err)
+func (m *Manager) MakeCSRFCookieDomain() (string, error) {
+	host := m.callbackURL.Hostname()
+	// strip the first subdomain and return the rest with a leading . as cookie domain
+	if _, cookieDomain, found := strings.Cut(host, "."); found {
+		return "." + cookieDomain, nil
 	}
-
-	if session.Fingerprint != fingerprint {
-		return "", serviceerr.ErrFingerprintMismatch
-	}
-
-	if session.CSRFToken == "" {
-		return "", serviceerr.ErrInvalidCSRFToken
-	}
-
-	return session.CSRFToken, nil
+	return "", fmt.Errorf("could not determine cookie domain from host: %s", host)
 }
 
 // sendUserLoginFailureAudit creates the user-login-failure audit event and sends it.

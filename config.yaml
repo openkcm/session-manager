@@ -220,7 +220,6 @@ valkey:
 sessionManager:
     sessionDuration: 12h
     callbackURL: http://localhost:8080/sm/callback
-    redirectURL: http://localhost:8080/sm/redirect
     clientAuth:
         clientID: "client-id"
         type: client_secret
