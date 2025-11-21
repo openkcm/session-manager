@@ -27,42 +27,10 @@ const (
 	testClientID   = "my-client-id"
 )
 
-func TestMakeRedirectURL(t *testing.T) {
-	m, err := session.NewManager(&config.SessionManager{
-		RedirectURL: "http://example.com/redirect",
-		CSRFSecret:  commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
-	}, nil, nil, nil, nil)
-	require.NoError(t, err)
-
-	tests := []struct {
-		name       string
-		requestURI string
-		want       string
-	}{
-		{
-			name:       "Basic redirect URL",
-			requestURI: "http://example.com/request",
-			want:       "http://example.com/redirect?to=http%3A%2F%2Fexample.com%2Frequest",
-		}, {
-			name:       "Different domain",
-			requestURI: "http://ui.example.com/request",
-			want:       "http://example.com/redirect?to=http%3A%2F%2Fui.example.com%2Frequest",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := m.MakeRedirectURL(tt.requestURI)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
 func TestManager_Auth(t *testing.T) {
 	const (
 		requestURI  = "http://localhost/request.jwt"
 		callbackURL = "http://localhost/sm/callback"
-		redirectURL = "http://localhost/sm/redirect"
 		tenantID    = "tenant-id"
 	)
 
@@ -109,7 +77,6 @@ func TestManager_Auth(t *testing.T) {
 			cfg: &config.SessionManager{
 				SessionDuration:                  time.Hour,
 				CallbackURL:                      callbackURL,
-				RedirectURL:                      redirectURL,
 				AdditionalGetParametersAuthorize: []string{"paramAuth1"},
 				JWSSigAlgs:                       []string{"RS256"},
 				ClientAuth: config.ClientAuth{
@@ -130,7 +97,6 @@ func TestManager_Auth(t *testing.T) {
 			cfg: &config.SessionManager{
 				SessionDuration: time.Hour,
 				CallbackURL:     callbackURL,
-				RedirectURL:     redirectURL,
 				CSRFSecret:      commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
 			},
 			tenantID:    tenantID,
@@ -146,7 +112,6 @@ func TestManager_Auth(t *testing.T) {
 			cfg: &config.SessionManager{
 				SessionDuration: time.Hour,
 				CallbackURL:     callbackURL,
-				RedirectURL:     redirectURL,
 				CSRFSecret:      commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
 			},
 			tenantID:    tenantID,
@@ -220,7 +185,6 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 	const (
 		requestURI   = "http://cmk.example.com/ui"
 		callbackURL  = "http://sm.example.com/sm/callback"
-		redirectURL  = "http://sm.example.com/sm/redirect"
 		tenantID     = "tenant-id"
 		stateID      = "test-state-id"
 		code         = "auth-code"
@@ -293,7 +257,6 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			cfg: &config.SessionManager{
 				SessionDuration:              time.Hour,
 				CallbackURL:                  callbackURL,
-				RedirectURL:                  redirectURL,
 				AdditionalGetParametersToken: []string{"getParamToken1"},
 				AdditionalAuthContextKeys:    []string{"authContextKey1"},
 				JWSSigAlgs:                   []string{"RS256"},
@@ -395,7 +358,6 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			cfg: &config.SessionManager{
 				SessionDuration:              time.Hour,
 				CallbackURL:                  callbackURL,
-				RedirectURL:                  redirectURL,
 				AdditionalGetParametersToken: []string{"getParamToken1"},
 				AdditionalAuthContextKeys:    []string{"doesNotExist"},
 				JWSSigAlgs:                   []string{"RS256"},
@@ -463,130 +425,12 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 				assert.NotEmpty(t, result.SessionID, "SessionID should not be empty")
 			}
 
+			if tt.wantCSRFToken {
+				assert.NotEmpty(t, result.CSRFToken, "CSRFToken should not be empty")
+			}
+
 			if tt.wantRedirectURI != "" {
 				assert.Equal(t, tt.wantRedirectURI, result.RequestURI, "RedirectURI should match")
-			}
-		})
-	}
-}
-
-func TestManager_MakeCSRFToken(t *testing.T) {
-	const (
-		sessionID   = "test-session-id"
-		fingerprint = "test-fingerprint"
-		csrfToken   = "test-csrf-token"
-	)
-
-	validSession := session.Session{
-		ID:          sessionID,
-		Fingerprint: fingerprint,
-		CSRFToken:   csrfToken,
-	}
-
-	sessionWithEmptyCSRFToken := session.Session{
-		ID:          sessionID,
-		Fingerprint: fingerprint,
-		CSRFToken:   "",
-	}
-
-	newSessionRepo := func(loadStateErr, storeStateErr, storeSessionErr, deleteStateErr, deleteSessionErr error, session *session.Session) *sessionmock.Repository {
-		sessionRepo := sessionmock.NewInMemRepository(loadStateErr, storeStateErr, storeSessionErr, deleteStateErr, deleteSessionErr)
-		if storeSessionErr != nil {
-			t.Logf("Session repo configured with store session error: %v", storeSessionErr)
-		}
-		if session != nil && storeSessionErr == nil {
-			sessionRepo.Sessions[session.ID] = *session
-		}
-		return sessionRepo
-	}
-
-	// Arrange
-	auditServer := StartAuditServer(t)
-	defer auditServer.Close()
-
-	tests := []struct {
-		name            string
-		oidc            *oidcmock.Repository
-		sessions        *sessionmock.Repository
-		sessionID       string
-		fingerprint     string
-		cfg             *config.SessionManager
-		oidcServerFail  bool
-		wantSessionID   bool
-		wantCSRFToken   bool
-		wantRedirectURI string
-		errAssert       assert.ErrorAssertionFunc
-	}{
-		{
-			name:        "no session ID",
-			sessions:    newSessionRepo(nil, nil, nil, nil, nil, &validSession),
-			sessionID:   "",
-			fingerprint: "invalid-fingerprint",
-			cfg: &config.SessionManager{
-				JWSSigAlgs: []string{"RS256"},
-				CSRFSecret: commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
-			},
-			errAssert: assert.Error,
-		}, {
-			name:        "invalid session ID",
-			sessions:    newSessionRepo(nil, nil, nil, nil, nil, &validSession),
-			sessionID:   "does-not-exist",
-			fingerprint: "invalid-fingerprint",
-			cfg: &config.SessionManager{
-				JWSSigAlgs: []string{"RS256"},
-				CSRFSecret: commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
-			},
-			errAssert: assert.Error,
-		}, {
-			name:        "fingerprint mismatch",
-			sessions:    newSessionRepo(nil, nil, nil, nil, nil, &validSession),
-			sessionID:   sessionID,
-			fingerprint: "invalid-fingerprint",
-			cfg: &config.SessionManager{
-				JWSSigAlgs: []string{"RS256"},
-				CSRFSecret: commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
-			},
-			errAssert: assert.Error,
-		}, {
-			name:        "empty CSRF token",
-			sessions:    newSessionRepo(nil, nil, nil, nil, nil, &sessionWithEmptyCSRFToken),
-			sessionID:   sessionID,
-			fingerprint: fingerprint,
-			cfg: &config.SessionManager{
-				JWSSigAlgs: []string{"RS256"},
-				CSRFSecret: commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
-			},
-			errAssert: assert.Error,
-		}, {
-			name:        "success",
-			sessions:    newSessionRepo(nil, nil, nil, nil, nil, &validSession),
-			sessionID:   sessionID,
-			fingerprint: fingerprint,
-			cfg: &config.SessionManager{
-				JWSSigAlgs: []string{"RS256"},
-				CSRFSecret: commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
-			},
-			errAssert: assert.NoError,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
-			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
-			require.NoError(t, err)
-			m, err := session.NewManager(tt.cfg, tt.oidc, tt.sessions, auditLogger, http.DefaultClient)
-			require.NoError(t, err)
-
-			// Act
-			csrfToken, err := m.GetCSRFToken(t.Context(), tt.sessionID, tt.fingerprint)
-
-			// Assert
-			if !tt.errAssert(t, err, fmt.Sprintf("Manager.Callback() error = %v", err)) {
-				return
-			}
-			if tt.wantCSRFToken {
-				assert.NotEmpty(t, csrfToken, "CSRFToken should not be empty")
 			}
 		})
 	}

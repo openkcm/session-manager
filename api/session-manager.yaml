@@ -78,13 +78,13 @@ paths:
             responses:
                 "302":
                     description: |
-                        Set the session cookie and redirect to the redirect endpoint.
-                        This ensures that the cookie is set for the backend domain.
+                        Redirect to original request URI with session and CSRF cookies set.
+                        There is a limitation of OpenAPI that does not allow setting multiple cookies
+                        with the strict handlers. Therefore, we do not define the Set-Cookie header
+                        in the yaml spec. However, in the actual implementation both cookies are set.
+                        See https://github.com/OAI/OpenAPI-Specification/issues/1237 for details.
                     headers:
                         Location:
-                            schema:
-                                type: string
-                        Set-Cookie:
                             schema:
                                 type: string
                 "403":
@@ -93,42 +93,6 @@ paths:
                         application/json:
                             schema:
                                 $ref: "#/components/schemas/ErrorModel"
-                default:
-                    description: Unexpected error
-                    content:
-                        application/json:
-                            schema:
-                                $ref: "#/components/schemas/ErrorModel"
-    /sm/redirect:
-        get:
-            description: |
-                After the callback, which sets the cookies to the correct domain,
-                the browser is redirected to this endpoint to finally reach the
-                original request URI.
-            operationId: redirect
-            parameters:
-                - name: __Host-Http-SESSION
-                  in: cookie
-                  required: true
-                  schema:
-                    type: string
-                - name: to
-                  in: query
-                  required: true
-                  schema:
-                      type: string
-            responses:
-                "302":
-                    description: |
-                        Set the CSRF cookie and redirect to the original request URI.
-                        This ensures that the cookie is set for the frontend domain.
-                    headers:
-                        Location:
-                            schema:
-                                type: string
-                        Set-Cookie:
-                            schema:
-                                type: string
                 default:
                     description: Unexpected error
                     content:

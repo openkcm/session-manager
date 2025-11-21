@@ -7,6 +7,7 @@ import (
 
 	slogctx "github.com/veqryn/slog-context"
 
+	"github.com/openkcm/session-manager/internal/middleware/responsewriter"
 	"github.com/openkcm/session-manager/internal/openapi"
 	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/pkg/fingerprint"
@@ -79,6 +80,30 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 		}, nil
 	}
 
+	// Get the response writer from the context
+	rw, err := responsewriter.ResponseWriterFromContext(ctx)
+	if err != nil {
+		slogctx.Error(ctx, "Failed to get response writer from context", "error", err)
+
+		body, status := s.toErrorModel(serviceerr.ErrUnknown)
+		return openapi.CallbackdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+
+	// Get CSRF cookie domain
+	csrfCookieDomain, err := s.sManager.MakeCSRFCookieDomain()
+	if err != nil {
+		slogctx.Error(ctx, "Failed to make CSRF cookie domain", "error", err)
+
+		body, status := s.toErrorModel(serviceerr.ErrUnknown)
+		return openapi.CallbackdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+
 	result, err := s.sManager.FinaliseOIDCLogin(ctx, req.Params.State, req.Params.Code, currentFingerprint)
 	if err != nil {
 		slogctx.Error(ctx, "Failed to finalise OIDC login", "error", err)
@@ -104,58 +129,27 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 		HttpOnly: true,
 	}
 
-	redirectURL := s.sManager.MakeRedirectURL(result.RequestURI)
-	slogctx.Debug(ctx, "Redirecting user", "to", redirectURL)
-	return openapi.Callback302Response{
-		Headers: openapi.Callback302ResponseHeaders{
-			Location:  redirectURL,
-			SetCookie: sessionCookie.String(),
-		},
-	}, nil
-}
-
-// Redirect implements openapi.StrictServerInterface.
-func (s *openAPIServer) Redirect(ctx context.Context, req openapi.RedirectRequestObject) (openapi.RedirectResponseObject, error) {
-	slogctx.Debug(ctx, "Redirect() called", "request_uri", req.Params.To)
-	defer slogctx.Debug(ctx, "Redirect() completed")
-
-	currentFingerprint, err := fingerprint.ExtractFingerprint(ctx)
-	if err != nil {
-		slogctx.Error(ctx, "Failed to extract fingerprint", "error", err)
-
-		body, status := s.toErrorModel(serviceerr.ErrUnknown)
-		return openapi.RedirectdefaultJSONResponse{
-			Body:       body,
-			StatusCode: status,
-		}, nil
-	}
-
-	// Using the session ID from the cookie, read the CSRF token from the session store
-	sessionID := req.Params.UnderscoreUnderscoreHostHTTPSESSION
-	csrfToken, err := s.sManager.GetCSRFToken(ctx, sessionID, currentFingerprint)
-	if err != nil {
-		slogctx.Error(ctx, "Failed to make CSRF token", "error", err)
-
-		body, status := s.toErrorModel(serviceerr.ErrInvalidCSRFToken)
-		return openapi.RedirectdefaultJSONResponse{
-			Body:       body,
-			StatusCode: status,
-		}, nil
-	}
-
 	// CSRF cookie
 	csrfCookie := &http.Cookie{
 		Name:     "__Host-CSRF",
-		Value:    csrfToken,
+		Value:    result.CSRFToken,
 		Path:     "/",
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
+		Domain:   csrfCookieDomain,
 	}
 
-	return openapi.Redirect302Response{
-		Headers: openapi.Redirect302ResponseHeaders{
-			Location:  req.Params.To,
-			SetCookie: csrfCookie.String(),
+	// There is a limitation of OpenAPI that does not allow setting multiple cookies
+	// with the strict handlers. Therefore, we do not define the Set-Cookie header
+	// in the yaml spec. However, in the actual implementation both cookies are set.
+	// See https://github.com/OAI/OpenAPI-Specification/issues/1237 for details.
+	http.SetCookie(rw, sessionCookie)
+	http.SetCookie(rw, csrfCookie) // NOSONAR
+
+	slogctx.Debug(ctx, "Redirecting user", "to", result.RequestURI)
+	return openapi.Callback302Response{
+		Headers: openapi.Callback302ResponseHeaders{
+			Location: result.RequestURI,
 		},
 	}, nil
 }

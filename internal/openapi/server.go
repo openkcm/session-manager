@@ -33,12 +33,6 @@ type CallbackParams struct {
 	State string `form:"state" json:"state"`
 }
 
-// RedirectParams defines parameters for Redirect.
-type RedirectParams struct {
-	To                                  string `form:"to" json:"to"`
-	UnderscoreUnderscoreHostHTTPSESSION string `form:"__Host-Http-SESSION" json:"__Host-Http-SESSION"`
-}
-
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 
@@ -47,9 +41,6 @@ type ServerInterface interface {
 
 	// (GET /sm/callback)
 	Callback(w http.ResponseWriter, r *http.Request, params CallbackParams)
-
-	// (GET /sm/redirect)
-	Redirect(w http.ResponseWriter, r *http.Request, params RedirectParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -150,58 +141,6 @@ func (siw *ServerInterfaceWrapper) Callback(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Callback(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// Redirect operation middleware
-func (siw *ServerInterfaceWrapper) Redirect(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params RedirectParams
-
-	// ------------- Required query parameter "to" -------------
-
-	if paramValue := r.URL.Query().Get("to"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "to", r.URL.Query(), &params.To)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
-		return
-	}
-
-	{
-		var cookie *http.Cookie
-
-		if cookie, err = r.Cookie("__Host-Http-SESSION"); err == nil {
-			var value string
-			err = runtime.BindStyledParameterWithOptions("simple", "__Host-Http-SESSION", cookie.Value, &value, runtime.BindStyledParameterOptions{Explode: true, Required: true})
-			if err != nil {
-				siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "__Host-Http-SESSION", Err: err})
-				return
-			}
-			params.UnderscoreUnderscoreHostHTTPSESSION = value
-
-		} else {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "__Host-Http-SESSION"})
-			return
-		}
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.Redirect(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -333,7 +272,6 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc("GET "+options.BaseURL+"/sm/auth", wrapper.Auth)
 	m.HandleFunc("GET "+options.BaseURL+"/sm/callback", wrapper.Callback)
-	m.HandleFunc("GET "+options.BaseURL+"/sm/redirect", wrapper.Redirect)
 
 	return m
 }
@@ -381,8 +319,7 @@ type CallbackResponseObject interface {
 }
 
 type Callback302ResponseHeaders struct {
-	Location  string
-	SetCookie string
+	Location string
 }
 
 type Callback302Response struct {
@@ -391,7 +328,6 @@ type Callback302Response struct {
 
 func (response Callback302Response) VisitCallbackResponse(w http.ResponseWriter) error {
 	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
-	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
 	w.WriteHeader(302)
 	return nil
 }
@@ -417,42 +353,6 @@ func (response CallbackdefaultJSONResponse) VisitCallbackResponse(w http.Respons
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
-type RedirectRequestObject struct {
-	Params RedirectParams
-}
-
-type RedirectResponseObject interface {
-	VisitRedirectResponse(w http.ResponseWriter) error
-}
-
-type Redirect302ResponseHeaders struct {
-	Location  string
-	SetCookie string
-}
-
-type Redirect302Response struct {
-	Headers Redirect302ResponseHeaders
-}
-
-func (response Redirect302Response) VisitRedirectResponse(w http.ResponseWriter) error {
-	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
-	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
-	w.WriteHeader(302)
-	return nil
-}
-
-type RedirectdefaultJSONResponse struct {
-	Body       ErrorModel
-	StatusCode int
-}
-
-func (response RedirectdefaultJSONResponse) VisitRedirectResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(response.StatusCode)
-
-	return json.NewEncoder(w).Encode(response.Body)
-}
-
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
@@ -461,9 +361,6 @@ type StrictServerInterface interface {
 
 	// (GET /sm/callback)
 	Callback(ctx context.Context, request CallbackRequestObject) (CallbackResponseObject, error)
-
-	// (GET /sm/redirect)
-	Redirect(ctx context.Context, request RedirectRequestObject) (RedirectResponseObject, error)
 }
 
 type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
@@ -540,32 +437,6 @@ func (sh *strictHandler) Callback(w http.ResponseWriter, r *http.Request, params
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CallbackResponseObject); ok {
 		if err := validResponse.VisitCallbackResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// Redirect operation middleware
-func (sh *strictHandler) Redirect(w http.ResponseWriter, r *http.Request, params RedirectParams) {
-	var request RedirectRequestObject
-
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.Redirect(ctx, request.(RedirectRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "Redirect")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(RedirectResponseObject); ok {
-		if err := validResponse.VisitRedirectResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
