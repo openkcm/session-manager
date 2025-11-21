@@ -35,7 +35,8 @@ type CallbackParams struct {
 
 // RedirectParams defines parameters for Redirect.
 type RedirectParams struct {
-	To string `form:"to" json:"to"`
+	To                                  string `form:"to" json:"to"`
+	UnderscoreUnderscoreHostHTTPSESSION string `form:"__Host-Http-SESSION" json:"__Host-Http-SESSION"`
 }
 
 // ServerInterface represents all server handlers.
@@ -179,6 +180,24 @@ func (siw *ServerInterfaceWrapper) Redirect(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
 		return
+	}
+
+	{
+		var cookie *http.Cookie
+
+		if cookie, err = r.Cookie("__Host-Http-SESSION"); err == nil {
+			var value string
+			err = runtime.BindStyledParameterWithOptions("simple", "__Host-Http-SESSION", cookie.Value, &value, runtime.BindStyledParameterOptions{Explode: true, Required: true})
+			if err != nil {
+				siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "__Host-Http-SESSION", Err: err})
+				return
+			}
+			params.UnderscoreUnderscoreHostHTTPSESSION = value
+
+		} else {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "__Host-Http-SESSION"})
+			return
+		}
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -362,7 +381,8 @@ type CallbackResponseObject interface {
 }
 
 type Callback302ResponseHeaders struct {
-	Location string
+	Location  string
+	SetCookie string
 }
 
 type Callback302Response struct {
@@ -371,6 +391,7 @@ type Callback302Response struct {
 
 func (response Callback302Response) VisitCallbackResponse(w http.ResponseWriter) error {
 	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
 	w.WriteHeader(302)
 	return nil
 }
@@ -405,7 +426,8 @@ type RedirectResponseObject interface {
 }
 
 type Redirect302ResponseHeaders struct {
-	Location string
+	Location  string
+	SetCookie string
 }
 
 type Redirect302Response struct {
@@ -414,6 +436,7 @@ type Redirect302Response struct {
 
 func (response Redirect302Response) VisitRedirectResponse(w http.ResponseWriter) error {
 	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
 	w.WriteHeader(302)
 	return nil
 }
