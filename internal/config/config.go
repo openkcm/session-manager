@@ -58,6 +58,8 @@ type SessionManager struct {
 	AdditionalGetParametersAuthorize []string            `yaml:"additionalGetParametersAuthorize"`
 	AdditionalGetParametersToken     []string            `yaml:"additionalGetParametersToken"`
 	AdditionalAuthContextKeys        []string            `yaml:"additionalAuthContextKeys"`
+	// Deprecated: not used anymore. Kept for a helm issue with the migrate job.
+	RedirectURL string `yaml:"redirectURL" default:"/sm/redirect"`
 }
 
 type ClientAuth struct {
