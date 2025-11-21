@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.8](https://github.com/openkcm/session-manager/compare/v0.9.7...v0.9.8) (2025-11-21)
+
+
+### Bug Fixes
+
+* reintroduce the redirectURL as deprecated ([#119](https://github.com/openkcm/session-manager/issues/119)) ([7c16c5b](https://github.com/openkcm/session-manager/commit/7c16c5bfe3406f9ee376ae2cb2fd23cad41ffadf))
+
 ## [0.9.7](https://github.com/openkcm/session-manager/compare/v0.9.6...v0.9.7) (2025-11-21)
 
 
