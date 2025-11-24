@@ -3,6 +3,7 @@
 package config
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
@@ -58,6 +59,10 @@ type SessionManager struct {
 	AdditionalGetParametersAuthorize []string            `yaml:"additionalGetParametersAuthorize"`
 	AdditionalGetParametersToken     []string            `yaml:"additionalGetParametersToken"`
 	AdditionalAuthContextKeys        []string            `yaml:"additionalAuthContextKeys"`
+	// SessionCookieTemplate defines the template attributes for the session cookie.
+	SessionCookieTemplate http.Cookie `yaml:"sessionCookieTemplate"`
+	// CSRFCookieTemplate defines the template attributes for the CSRF cookie.
+	CSRFCookieTemplate http.Cookie `yaml:"csrfCookieTemplate"`
 	// Deprecated: not used anymore. Kept for a helm issue with the migrate job.
 	RedirectURL string `yaml:"redirectURL" default:"/sm/redirect"`
 }
