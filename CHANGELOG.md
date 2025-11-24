@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.10](https://github.com/openkcm/session-manager/compare/v0.9.9...v0.9.10) (2025-11-24)
+
+
+### Bug Fixes
+
+* include missing claims ([#125](https://github.com/openkcm/session-manager/issues/125)) ([c89d76e](https://github.com/openkcm/session-manager/commit/c89d76e383ab6fff6524b115f3e96e82c2e441e8))
+
 ## [0.9.9](https://github.com/openkcm/session-manager/compare/v0.9.8...v0.9.9) (2025-11-24)
 
 
