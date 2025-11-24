@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.9](https://github.com/openkcm/session-manager/compare/v0.9.8...v0.9.9) (2025-11-24)
+
+
+### Bug Fixes
+
+* define the CSRF cookie without the `__Host-` prefix ([#121](https://github.com/openkcm/session-manager/issues/121)) ([2dc708e](https://github.com/openkcm/session-manager/commit/2dc708ef3c913890093f4558819334c8ae5e10a0))
+
 ## [0.9.8](https://github.com/openkcm/session-manager/compare/v0.9.7...v0.9.8) (2025-11-21)
 
 
