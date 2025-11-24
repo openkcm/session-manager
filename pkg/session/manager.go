@@ -233,8 +233,17 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("getting jwks for a provider: %w", err)
 	}
 
-	var claims jwt.Claims
-	if err := token.Claims(keyset, &claims); err != nil {
+	type CustomClaims struct {
+		UserUUID   string   `json:"user_uuid"`
+		GivenName  string   `json:"given_name"`
+		FamilyName string   `json:"family_name"`
+		Email      string   `json:"email"`
+		Groups     []string `json:"groups"`
+	}
+
+	var standardClaims jwt.Claims
+	var customClaims CustomClaims
+	if err := token.Claims(keyset, &standardClaims, &customClaims); err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get JWT claims")
 		return OIDCSessionData{}, fmt.Errorf("getting JWT claims: %w", err)
 	}
@@ -260,9 +269,12 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		Issuer:      provider.IssuerURL,
 		RawClaims:   string(jws.UnsafePayloadWithoutVerification()),
 		Claims: Claims{
-			Subject: claims.Subject,
-			Email:   "",         // TODO: extract email from claims
-			Groups:  []string{}, // TODO: extract groups from claims
+			Subject:    standardClaims.Subject,
+			UserUUID:   customClaims.UserUUID,
+			GivenName:  customClaims.GivenName,
+			FamilyName: customClaims.FamilyName,
+			Email:      customClaims.Email,
+			Groups:     customClaims.Groups,
 		},
 		AccessToken:  tokens.AccessToken,
 		RefreshToken: tokens.RefreshToken,

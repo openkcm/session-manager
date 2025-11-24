@@ -32,9 +32,12 @@ type Session struct {
 }
 
 type Claims struct {
-	Subject string   `json:"sub"`
-	Email   string   `json:"email"`
-	Groups  []string `json:"groups"`
+	Subject    string   `json:"sub"`
+	UserUUID   string   `json:"user_uuid"`
+	GivenName  string   `json:"given_name"`
+	FamilyName string   `json:"family_name"`
+	Email      string   `json:"email"`
+	Groups     []string `json:"groups"`
 }
 
 // OIDCSessionData represents a data from the last step of the OIDC flow.
