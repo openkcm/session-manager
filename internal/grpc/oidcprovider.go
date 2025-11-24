@@ -27,6 +27,10 @@ func NewOIDCProviderServer(oidcService *oidc.Service) *OIDCProviderServer {
 }
 
 func (s *OIDCProviderServer) GetOIDCProvider(ctx context.Context, req *oidcproviderv1.GetOIDCProviderRequest) (*oidcproviderv1.GetOIDCProviderResponse, error) {
+	slogctx.Debug(ctx, "GetOIDCProvider called",
+		"issuer", req.GetIssuer(),
+	)
+
 	provider, err := s.oidc.GetProvider(ctx, req.GetIssuer())
 	if err != nil {
 		if errors.Is(err, serviceerr.ErrNotFound) {

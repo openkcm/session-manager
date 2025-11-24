@@ -8,6 +8,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	oidcmappingv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/oidcmapping/v1"
+	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/session-manager/internal/oidc"
 	"github.com/openkcm/session-manager/internal/serviceerr"
@@ -28,8 +29,15 @@ func NewOIDCMappingServer(oidc *oidc.Service) *OIDCMappingServer {
 }
 
 func (srv *OIDCMappingServer) ApplyOIDCMapping(ctx context.Context, req *oidcmappingv1.ApplyOIDCMappingRequest) (*oidcmappingv1.ApplyOIDCMappingResponse, error) {
-	response := &oidcmappingv1.ApplyOIDCMappingResponse{}
+	slogctx.Debug(ctx, "ApplyOIDCMapping called",
+		"tenant_id", req.GetTenantId(),
+		"issuer", req.GetIssuer(),
+		"jwks_uris", req.GetJwksUris(),
+		"audiences", req.GetAudiences(),
+		"properties", req.GetProperties(),
+	)
 
+	response := &oidcmappingv1.ApplyOIDCMappingResponse{}
 	provider := oidc.Provider{
 		IssuerURL:  req.GetIssuer(),
 		Blocked:    false,
@@ -54,6 +62,10 @@ func (srv *OIDCMappingServer) ApplyOIDCMapping(ctx context.Context, req *oidcmap
 }
 
 func (srv *OIDCMappingServer) RemoveOIDCMapping(ctx context.Context, req *oidcmappingv1.RemoveOIDCMappingRequest) (*oidcmappingv1.RemoveOIDCMappingResponse, error) {
+	slogctx.Debug(ctx, "RemoveOIDCMapping called",
+		"tenant_id", req.GetTenantId(),
+	)
+
 	resp := &oidcmappingv1.RemoveOIDCMappingResponse{}
 	err := srv.oidc.RemoveMapping(ctx, req.GetTenantId())
 	if err != nil {
@@ -71,6 +83,10 @@ func (srv *OIDCMappingServer) RemoveOIDCMapping(ctx context.Context, req *oidcma
 // It calls the underlying service to set the mapping as blocked.
 // Returns a response containing an optional error message if blocking fails.
 func (srv *OIDCMappingServer) BlockOIDCMapping(ctx context.Context, req *oidcmappingv1.BlockOIDCMappingRequest) (*oidcmappingv1.BlockOIDCMappingResponse, error) {
+	slogctx.Debug(ctx, "BlockOIDCMapping called",
+		"tenant_id", req.GetTenantId(),
+	)
+
 	resp := &oidcmappingv1.BlockOIDCMappingResponse{}
 	err := srv.oidc.BlockMapping(ctx, req.GetTenantId())
 	if err != nil {
@@ -86,6 +102,10 @@ func (srv *OIDCMappingServer) BlockOIDCMapping(ctx context.Context, req *oidcmap
 // It calls the underlying service to set the mapping as unblocked.
 // Returns a response containing an optional error message if unblocking fails.
 func (srv *OIDCMappingServer) UnblockOIDCMapping(ctx context.Context, req *oidcmappingv1.UnblockOIDCMappingRequest) (*oidcmappingv1.UnblockOIDCMappingResponse, error) {
+	slogctx.Debug(ctx, "UnblockOIDCMapping called",
+		"tenant_id", req.GetTenantId(),
+	)
+
 	resp := &oidcmappingv1.UnblockOIDCMappingResponse{}
 	err := srv.oidc.UnBlockMapping(ctx, req.GetTenantId())
 	if err != nil {
