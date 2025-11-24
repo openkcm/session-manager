@@ -131,7 +131,7 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 
 	// CSRF cookie
 	csrfCookie := &http.Cookie{
-		Name:     "__Host-CSRF",
+		Name:     "CSRF",
 		Value:    result.CSRFToken,
 		Path:     "/",
 		Secure:   true,

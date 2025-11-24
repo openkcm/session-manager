@@ -299,9 +299,9 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 
 func (m *Manager) MakeCSRFCookieDomain() (string, error) {
 	host := m.callbackURL.Hostname()
-	// strip the first subdomain and return the rest with a leading . as cookie domain
+	// strip the first subdomain and return the rest as cookie domain
 	if _, cookieDomain, found := strings.Cut(host, "."); found {
-		return "." + cookieDomain, nil
+		return cookieDomain, nil
 	}
 	return "", fmt.Errorf("could not determine cookie domain from host: %s", host)
 }
