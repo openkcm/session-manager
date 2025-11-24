@@ -98,7 +98,9 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 
 		body, status := s.toErrorModel(err)
 		if status == 403 {
-			return openapi.Callback403JSONResponse(body), nil
+			// return generic Unauthorized for 403 Forbidden to avoid leaking information on
+			// fingerprint mismatch in the original error body
+			body, status = s.toErrorModel(serviceerr.ErrUnauthorized)
 		}
 
 		return openapi.CallbackdefaultJSONResponse{
