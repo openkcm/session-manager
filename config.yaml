@@ -230,13 +230,13 @@ sessionManager:
         name: "__Host-Http-SESSION"
         path: "/"
         secure: true
-        sameSite: 4 # SameSiteNoneMode
+        sameSite: None
         httpOnly: true
     csrfCookieTemplate:
         name: "CSRF"
         path: "/"
         secure: true
-        sameSite: 3 # SameSiteStrictMode
+        sameSite: Strict
         domain: localhost
     csrfSecret:
         source: embedded

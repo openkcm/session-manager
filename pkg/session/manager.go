@@ -40,8 +40,8 @@ type Manager struct {
 	getParametersToken []string
 	authContextKeys    []string
 
-	sessionCookieTemplate http.Cookie
-	csrfCookieTemplate    http.Cookie
+	sessionCookieTemplate config.CookieTemplate
+	csrfCookieTemplate    config.CookieTemplate
 
 	csrfSecret []byte
 	jwsSigAlgs []jose.SignatureAlgorithm
@@ -315,8 +315,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 }
 
 func (m *Manager) MakeSessionCookie(ctx context.Context, value string) (*http.Cookie, error) {
-	sessionCookie := m.sessionCookieTemplate
-	sessionCookie.Value = value
+	sessionCookie := m.sessionCookieTemplate.ToCookie(value)
 
 	err := sessionCookie.Valid()
 	if err != nil {
@@ -333,12 +332,11 @@ func (m *Manager) MakeSessionCookie(ctx context.Context, value string) (*http.Co
 		slogctx.Warn(ctx, "Session cookie is not marked as HttpOnly; this is not recommended in production environments")
 	}
 
-	return &sessionCookie, nil
+	return sessionCookie, nil
 }
 
 func (m *Manager) MakeCSRFCookie(ctx context.Context, value string) (*http.Cookie, error) {
-	csrfCookie := m.csrfCookieTemplate
-	csrfCookie.Value = value
+	csrfCookie := m.csrfCookieTemplate.ToCookie(value)
 
 	err := csrfCookie.Valid()
 	if err != nil {
@@ -355,7 +353,7 @@ func (m *Manager) MakeCSRFCookie(ctx context.Context, value string) (*http.Cooki
 		slogctx.Warn(ctx, "CSRF cookie is not marked as SameSite=Strict; this is not recommended in production environments")
 	}
 
-	return &csrfCookie, nil
+	return csrfCookie, nil
 }
 
 // sendUserLoginFailureAudit creates the user-login-failure audit event and sends it.
