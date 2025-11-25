@@ -307,6 +307,8 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		slogctx.Error(ctx, "Failed to send audit log for user login success", "error", otlpauditErr)
 	}
 
+	slogctx.Debug(ctx, "sent audit log for user login success")
+
 	return OIDCSessionData{
 		SessionID:  sessionID,
 		CSRFToken:  csrfToken,
@@ -374,6 +376,7 @@ func (m *Manager) sendUserLoginFailureAudit(ctx context.Context, metadata otlpau
 	if err := m.audit.SendEvent(ctx, event); err != nil {
 		slogctx.Error(ctx, "Failed to send audit log for user login failure", "error", err)
 	}
+	slogctx.Debug(ctx, "sent audit log for user login failure")
 }
 
 func (m *Manager) exchangeCode(ctx context.Context, openidConf oidc.Configuration, code, codeVerifier string, properties map[string]string) (tokenResponse, error) {
