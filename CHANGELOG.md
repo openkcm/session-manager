@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/openkcm/session-manager/compare/v0.10.0...v0.10.1) (2025-11-25)
+
+
+### Bug Fixes
+
+* cookie configuration and config loading ([#132](https://github.com/openkcm/session-manager/issues/132)) ([0b34e08](https://github.com/openkcm/session-manager/commit/0b34e08a538d244ac6effc5e2f80b7d08e1ddd12))
+
 ## [0.10.0](https://github.com/openkcm/session-manager/compare/v0.9.10...v0.10.0) (2025-11-25)
 
 
