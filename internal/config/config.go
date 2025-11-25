@@ -76,12 +76,12 @@ const (
 
 type CookieTemplate struct {
 	Name     string              `yaml:"name"`
-	MaxAge   int                 `yaml:"max_age"`
+	MaxAge   int                 `yaml:"maxAge"`
 	Path     string              `yaml:"path"`
 	Domain   string              `yaml:"domain"`
 	Secure   bool                `yaml:"secure"`
-	SameSite CookieSameSiteValue `yaml:"same_site"`
-	HTTPOnly bool                `yaml:"http_only"`
+	SameSite CookieSameSiteValue `yaml:"sameSite"`
+	HTTPOnly bool                `yaml:"httpOnly"`
 }
 
 type ClientAuth struct {
