@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"testing"
 
 	"github.com/google/uuid"
@@ -14,7 +15,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	oidcmappingv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/oidcmapping/v1"
-	oidcproviderv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/oidcprovider/v1"
+	sessionv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/session/v1"
 	slogctx "github.com/veqryn/slog-context"
 	stdgrpc "google.golang.org/grpc"
 
@@ -43,30 +44,28 @@ func TestGRPCServer(t *testing.T) {
 	mappingClient := oidcmappingv1.NewServiceClient(conn)
 
 	t.Run("ApplyOIDCMapping", func(t *testing.T) {
-		expJwks := []string{"jks"}
-		expAud := []string{"aud"}
+		expJwks := "jks"
 		expTenantID := uuid.NewString()
 		expIssuer := uuid.NewString()
 		applyResp, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
 			TenantId:  expTenantID,
 			Issuer:    expIssuer,
-			JwksUris:  expJwks,
-			Audiences: expAud,
+			JwksUri:   &expJwks,
+			Audiences: []string{"aud"},
 		})
 		assert.NoError(t, err)
 		assert.True(t, applyResp.GetSuccess())
 	})
 
 	t.Run("BlockOIDCMapping", func(t *testing.T) {
-		expJwks := []string{"jks"}
-		expAud := []string{"aud"}
+		expJwks := "jks"
 		expTenantID := uuid.NewString()
 		expIssuer := uuid.NewString()
 		applyResp, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
 			TenantId:  expTenantID,
 			Issuer:    expIssuer,
-			JwksUris:  expJwks,
-			Audiences: expAud,
+			JwksUri:   &expJwks,
+			Audiences: []string{"aud"},
 		})
 		assert.NoError(t, err)
 		assert.True(t, applyResp.GetSuccess())
@@ -79,12 +78,13 @@ func TestGRPCServer(t *testing.T) {
 	})
 
 	t.Run("UnblockOIDCMapping", func(t *testing.T) {
+		expJwks := "jks"
 		expTenantID := uuid.NewString()
 		expIssuer1 := uuid.NewString()
 		applyRes, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
 			TenantId:  expTenantID,
 			Issuer:    expIssuer1,
-			JwksUris:  []string{"uris"},
+			JwksUri:   &expJwks,
 			Audiences: []string{"audience"},
 		})
 		assert.NoError(t, err)
@@ -105,12 +105,13 @@ func TestGRPCServer(t *testing.T) {
 
 	// This method is not implemented as the API changes. Will be resolved in a future release
 	// t.Run("RemoveOIDCMapping", func(t *testing.T) {
+	//  expJwks := "jks"
 	// 	expTenantID := uuid.NewString()
 	// 	expIssuer := uuid.NewString()
 	// 	applyRes, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
 	// 		TenantId:  expTenantID,
 	// 		Issuer:    expIssuer,
-	// 		JwksUris:  []string{"uris"},
+	// 		JwksUri:   &expJwks,
 	// 		Audiences: []string{"audience"},
 	// 	})
 	// 	assert.NoError(t, err)
@@ -137,7 +138,8 @@ func startServer(t *testing.T, port int) (*stdgrpc.Server, *oidc.Service, func(c
 	ctx := t.Context()
 	// start postgres
 	db, _, terminateFn := postgrestest.Start(ctx)
-	service := oidc.NewService(oidcsql.NewRepository(db))
+	oidcProviderRepo := oidcsql.NewRepository(db)
+	service := oidc.NewService(oidcProviderRepo)
 
 	lstConf := net.ListenConfig{}
 	lis, err := lstConf.Listen(ctx, "tcp", fmt.Sprintf("localhost:%d", port))
@@ -147,7 +149,7 @@ func startServer(t *testing.T, port int) (*stdgrpc.Server, *oidc.Service, func(c
 
 	srv := stdgrpc.NewServer()
 	oidcmappingv1.RegisterServiceServer(srv, grpc.NewOIDCMappingServer(service))
-	oidcproviderv1.RegisterServiceServer(srv, grpc.NewOIDCProviderServer(service))
+	sessionv1.RegisterServiceServer(srv, grpc.NewSessionServer(nil, oidcProviderRepo, http.DefaultClient))
 
 	// start
 	go func() {

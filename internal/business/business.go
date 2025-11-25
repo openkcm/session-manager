@@ -83,24 +83,31 @@ func TokenRefresherMain(ctx context.Context, cfg *config.Config) error {
 
 // internalMain starts the gRPC private API server.
 func internalMain(ctx context.Context, cfg *config.Config) error {
-	connStr, err := config.MakeConnStr(cfg.Database)
+	// Create OIDC service
+	oidcProviderRepo, err := oidcProviderRepoFromConfig(ctx, cfg)
 	if err != nil {
-		return fmt.Errorf("making dsn from config: %w", err)
+		return fmt.Errorf("creating OIDC service: %w", err)
 	}
+	oidcService := oidc.NewService(oidcProviderRepo)
 
-	db, err := pgxpool.New(ctx, connStr)
+	// Create session repository
+	valkeyClient, err := valkeyClientFromConfig(cfg)
 	if err != nil {
-		return fmt.Errorf("initialising pgxpool connection: %w", err)
+		return fmt.Errorf("creating valkey client: %w", err)
 	}
+	defer valkeyClient.Close()
+	sessionRepo := sessionvalkey.NewRepository(valkeyClient, cfg.ValKey.Prefix)
 
-	// Create the database repository.
-	repo := oidcsql.NewRepository(db)
-	service := oidc.NewService(repo)
+	// Create HTTP client
+	httpClient, err := loadHTTPClient(cfg)
+	if err != nil {
+		return fmt.Errorf("loading http client: %w", err)
+	}
 
 	// Initialize the gRPC servers.
-	oidcprovidersrv := grpc.NewOIDCProviderServer(service)
-	oidcmappingsrv := grpc.NewOIDCMappingServer(service)
-	return server.StartGRPCServer(ctx, cfg, oidcprovidersrv, oidcmappingsrv)
+	oidcmappingsrv := grpc.NewOIDCMappingServer(oidcService)
+	sessionsrv := grpc.NewSessionServer(sessionRepo, oidcProviderRepo, httpClient)
+	return server.StartGRPCServer(ctx, cfg, oidcmappingsrv, sessionsrv)
 }
 
 func startTokenRefresher(ctx context.Context, sessionManager *session.Manager, cfg *config.Config) error {
@@ -121,53 +128,20 @@ func startTokenRefresher(ctx context.Context, sessionManager *session.Manager, c
 }
 
 func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Manager, closeFn func(), _ error) {
-	connStr, err := config.MakeConnStr(cfg.Database)
+	// Create OIDC provider repository
+	oidcProviderRepo, err := oidcProviderRepoFromConfig(ctx, cfg)
 	if err != nil {
-		return nil, nil, fmt.Errorf("making dsn from config: %w", err)
+		return nil, nil, fmt.Errorf("creating OIDC service: %w", err)
 	}
 
-	db, err := pgxpool.New(ctx, connStr)
+	// Create session repository
+	valkeyClient, err := valkeyClientFromConfig(cfg)
 	if err != nil {
-		return nil, nil, fmt.Errorf("initialising pgxpool connection: %w", err)
+		return nil, nil, fmt.Errorf("creating valkey client: %w", err)
 	}
-
-	valkeyHost, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.Host)
-	if err != nil {
-		return nil, nil, fmt.Errorf("loading valkey host: %w", err)
-	}
-
-	valkeyUsername, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.User)
-	if err != nil {
-		return nil, nil, fmt.Errorf("loading valkey username: %w", err)
-	}
-
-	valkeyPassword, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.Password)
-	if err != nil {
-		return nil, nil, fmt.Errorf("loading valkey password: %w", err)
-	}
-
-	valkeyOpts := valkey.ClientOption{
-		InitAddress: []string{string(valkeyHost)},
-		Username:    string(valkeyUsername),
-		Password:    string(valkeyPassword),
-	}
-
-	if cfg.ValKey.SecretRef.Type == commoncfg.MTLSSecretType {
-		tlsConfig, err := commoncfg.LoadMTLSConfig(&cfg.ValKey.SecretRef.MTLS)
-		if err != nil {
-			return nil, nil, fmt.Errorf("loading valkey mTLS config from secret ref: %w", err)
-		}
-
-		valkeyOpts.TLSConfig = tlsConfig
-	}
-
-	valkeyClient, err := valkey.NewClient(valkeyOpts)
-	if err != nil {
-		return nil, nil, fmt.Errorf("creating a new valkey client: %w", err)
-	}
-
-	oidcProviderRepo := oidcsql.NewRepository(db)
 	sessionRepo := sessionvalkey.NewRepository(valkeyClient, cfg.ValKey.Prefix)
+
+	// Create HTTP client
 	httpClient, err := loadHTTPClient(cfg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("loading http client: %w", err)
@@ -190,6 +164,58 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Man
 	}
 
 	return sessManager, valkeyClient.Close, nil
+}
+
+func oidcProviderRepoFromConfig(ctx context.Context, cfg *config.Config) (*oidcsql.Repository, error) {
+	connStr, err := config.MakeConnStr(cfg.Database)
+	if err != nil {
+		return nil, fmt.Errorf("making dsn from config: %w", err)
+	}
+
+	db, err := pgxpool.New(ctx, connStr)
+	if err != nil {
+		return nil, fmt.Errorf("initialising pgxpool connection: %w", err)
+	}
+
+	return oidcsql.NewRepository(db), nil
+}
+
+func valkeyClientFromConfig(cfg *config.Config) (valkey.Client, error) {
+	valkeyHost, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.Host)
+	if err != nil {
+		return nil, fmt.Errorf("loading valkey host: %w", err)
+	}
+
+	valkeyUsername, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.User)
+	if err != nil {
+		return nil, fmt.Errorf("loading valkey username: %w", err)
+	}
+
+	valkeyPassword, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.Password)
+	if err != nil {
+		return nil, fmt.Errorf("loading valkey password: %w", err)
+	}
+
+	valkeyOpts := valkey.ClientOption{
+		InitAddress: []string{string(valkeyHost)},
+		Username:    string(valkeyUsername),
+		Password:    string(valkeyPassword),
+	}
+
+	if cfg.ValKey.SecretRef.Type == commoncfg.MTLSSecretType {
+		tlsConfig, err := commoncfg.LoadMTLSConfig(&cfg.ValKey.SecretRef.MTLS)
+		if err != nil {
+			return nil, fmt.Errorf("loading valkey mTLS config from secret ref: %w", err)
+		}
+
+		valkeyOpts.TLSConfig = tlsConfig
+	}
+
+	valkeyClient, err := valkey.NewClient(valkeyOpts)
+	if err != nil {
+		return nil, fmt.Errorf("creating a new valkey client: %w", err)
+	}
+	return valkeyClient, nil
 }
 
 func loadHTTPClient(cfg *config.Config) (*http.Client, error) {

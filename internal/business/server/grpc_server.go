@@ -8,7 +8,7 @@ import (
 	"github.com/samber/oops"
 
 	oidcmappingv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/oidcmapping/v1"
-	oidcproviderv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/oidcprovider/v1"
+	sessionv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/session/v1"
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/session-manager/internal/config"
@@ -16,15 +16,15 @@ import (
 )
 
 func StartGRPCServer(ctx context.Context, cfg *config.Config,
-	oidcprovidersrv *grpc.OIDCProviderServer,
 	oidcmappingsrv *grpc.OIDCMappingServer,
+	sessionsrv *grpc.SessionServer,
 ) error {
 	grpcServer := commongrpc.NewServer(ctx, &cfg.GRPC.GRPCServer)
 
-	// Register OIDC provider server for ExtAuthZ
-	oidcproviderv1.RegisterServiceServer(grpcServer, oidcprovidersrv)
 	// Register OIDC mapping server for the regional tenant manager
 	oidcmappingv1.RegisterServiceServer(grpcServer, oidcmappingsrv)
+	// Register Session server for ExtAuthZ
+	sessionv1.RegisterServiceServer(grpcServer, sessionsrv)
 
 	slogctx.Info(ctx, "Starting a listener", "address", cfg.GRPC.Address)
 
