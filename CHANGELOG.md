@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/openkcm/session-manager/compare/v0.9.10...v0.10.0) (2025-11-25)
+
+
+### Features
+
+* make cookies configurable ([#124](https://github.com/openkcm/session-manager/issues/124)) ([7705585](https://github.com/openkcm/session-manager/commit/77055855073549ad4aa249ad4dfd3ce7db4eacc2))
+
 ## [0.9.10](https://github.com/openkcm/session-manager/compare/v0.9.9...v0.9.10) (2025-11-24)
 
 
