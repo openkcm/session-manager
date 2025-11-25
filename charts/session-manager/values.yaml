@@ -318,6 +318,18 @@ config:
       clientSecret:
         source: embedded
         value: secret
+    sessionCookieTemplate:
+      name: "__Host-Http-SESSION"
+      path: "/"
+      secure: true
+      sameSite: None
+      httpOnly: true
+    csrfCookieTemplate:
+      name: "CSRF"
+      path: "/"
+      secure: true
+      sameSite: Strict
+      domain: localhost
     csrfSecret:
       source: embedded
       value: my-csrf-secret-at-least-thirty-two-bits-size

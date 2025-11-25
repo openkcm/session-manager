@@ -40,6 +40,9 @@ type Manager struct {
 	getParametersToken []string
 	authContextKeys    []string
 
+	sessionCookieTemplate config.CookieTemplate
+	csrfCookieTemplate    config.CookieTemplate
+
 	csrfSecret []byte
 	jwsSigAlgs []jose.SignatureAlgorithm
 }
@@ -70,18 +73,20 @@ func NewManager(
 	}
 
 	return &Manager{
-		oidc:               oidc,
-		sessions:           sessions,
-		audit:              auditLogger,
-		sessionDuration:    cfg.SessionDuration,
-		getParametersAuth:  cfg.AdditionalGetParametersAuthorize,
-		getParametersToken: cfg.AdditionalGetParametersToken,
-		authContextKeys:    cfg.AdditionalAuthContextKeys,
-		callbackURL:        callbackURL,
-		clientID:           cfg.ClientAuth.ClientID,
-		secureClient:       httpClient,
-		csrfSecret:         csrfSecret,
-		jwsSigAlgs:         algs,
+		oidc:                  oidc,
+		sessions:              sessions,
+		audit:                 auditLogger,
+		sessionDuration:       cfg.SessionDuration,
+		getParametersAuth:     cfg.AdditionalGetParametersAuthorize,
+		getParametersToken:    cfg.AdditionalGetParametersToken,
+		authContextKeys:       cfg.AdditionalAuthContextKeys,
+		sessionCookieTemplate: cfg.SessionCookieTemplate,
+		csrfCookieTemplate:    cfg.CSRFCookieTemplate,
+		callbackURL:           callbackURL,
+		clientID:              cfg.ClientAuth.ClientID,
+		secureClient:          httpClient,
+		csrfSecret:            csrfSecret,
+		jwsSigAlgs:            algs,
 	}, nil
 }
 
@@ -309,13 +314,46 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 	}, nil
 }
 
-func (m *Manager) MakeCSRFCookieDomain() (string, error) {
-	host := m.callbackURL.Hostname()
-	// strip the first subdomain and return the rest as cookie domain
-	if _, cookieDomain, found := strings.Cut(host, "."); found {
-		return cookieDomain, nil
+func (m *Manager) MakeSessionCookie(ctx context.Context, value string) (*http.Cookie, error) {
+	sessionCookie := m.sessionCookieTemplate.ToCookie(value)
+
+	err := sessionCookie.Valid()
+	if err != nil {
+		return nil, fmt.Errorf("invalid CSRF cookie: %w", err)
 	}
-	return "", fmt.Errorf("could not determine cookie domain from host: %s", host)
+
+	if !strings.HasPrefix(sessionCookie.Name, "__Host-Http-") {
+		slogctx.Warn(ctx, "Session cookie name does not start with __Host-Http-; this is not recommended in production environments")
+	}
+	if !sessionCookie.Secure {
+		slogctx.Warn(ctx, "Session cookie is not marked as Secure; this is not recommended in production environments")
+	}
+	if !sessionCookie.HttpOnly {
+		slogctx.Warn(ctx, "Session cookie is not marked as HttpOnly; this is not recommended in production environments")
+	}
+
+	return sessionCookie, nil
+}
+
+func (m *Manager) MakeCSRFCookie(ctx context.Context, value string) (*http.Cookie, error) {
+	csrfCookie := m.csrfCookieTemplate.ToCookie(value)
+
+	err := csrfCookie.Valid()
+	if err != nil {
+		return nil, fmt.Errorf("invalid CSRF cookie: %w", err)
+	}
+
+	if !csrfCookie.Secure {
+		slogctx.Warn(ctx, "CSRF cookie is not marked as Secure; this is not recommended in production environments")
+	}
+	if csrfCookie.HttpOnly {
+		slogctx.Warn(ctx, "CSRF cookie is marked as HttpOnly; this is not recommended as the CSRF token needs to be accessible from JavaScript")
+	}
+	if csrfCookie.SameSite != http.SameSiteStrictMode {
+		slogctx.Warn(ctx, "CSRF cookie is not marked as SameSite=Strict; this is not recommended in production environments")
+	}
+
+	return csrfCookie, nil
 }
 
 // sendUserLoginFailureAudit creates the user-login-failure audit event and sends it.

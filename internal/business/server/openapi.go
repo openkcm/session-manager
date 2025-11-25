@@ -92,18 +92,6 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 		}, nil
 	}
 
-	// Get CSRF cookie domain
-	csrfCookieDomain, err := s.sManager.MakeCSRFCookieDomain()
-	if err != nil {
-		slogctx.Error(ctx, "Failed to make CSRF cookie domain", "error", err)
-
-		body, status := s.toErrorModel(serviceerr.ErrUnknown)
-		return openapi.CallbackdefaultJSONResponse{
-			Body:       body,
-			StatusCode: status,
-		}, nil
-	}
-
 	result, err := s.sManager.FinaliseOIDCLogin(ctx, req.Params.State, req.Params.Code, currentFingerprint)
 	if err != nil {
 		slogctx.Error(ctx, "Failed to finalise OIDC login", "error", err)
@@ -120,23 +108,26 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 	}
 
 	// Session cookie
-	sessionCookie := &http.Cookie{
-		Name:     "__Host-Http-SESSION",
-		Value:    result.SessionID,
-		Path:     "/",
-		Secure:   true,
-		SameSite: http.SameSiteNoneMode,
-		HttpOnly: true,
+	sessionCookie, err := s.sManager.MakeSessionCookie(ctx, result.SessionID)
+	if err != nil {
+		slogctx.Error(ctx, "Failed to create session cookie", "error", err)
+
+		body, status := s.toErrorModel(serviceerr.ErrUnknown)
+		return openapi.CallbackdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
 	}
 
-	// CSRF cookie
-	csrfCookie := &http.Cookie{
-		Name:     "CSRF",
-		Value:    result.CSRFToken,
-		Path:     "/",
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
-		Domain:   csrfCookieDomain,
+	csrfCookie, err := s.sManager.MakeCSRFCookie(ctx, result.CSRFToken)
+	if err != nil {
+		slogctx.Error(ctx, "Failed to create CSRF cookie", "error", err)
+
+		body, status := s.toErrorModel(serviceerr.ErrUnknown)
+		return openapi.CallbackdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
 	}
 
 	// There is a limitation of OpenAPI that does not allow setting multiple cookies
@@ -144,7 +135,7 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 	// in the yaml spec. However, in the actual implementation both cookies are set.
 	// See https://github.com/OAI/OpenAPI-Specification/issues/1237 for details.
 	http.SetCookie(rw, sessionCookie)
-	http.SetCookie(rw, csrfCookie) // NOSONAR
+	http.SetCookie(rw, csrfCookie)
 
 	slogctx.Debug(ctx, "Redirecting user", "to", result.RequestURI)
 	return openapi.Callback302Response{

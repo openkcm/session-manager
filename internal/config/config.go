@@ -58,8 +58,30 @@ type SessionManager struct {
 	AdditionalGetParametersAuthorize []string            `yaml:"additionalGetParametersAuthorize"`
 	AdditionalGetParametersToken     []string            `yaml:"additionalGetParametersToken"`
 	AdditionalAuthContextKeys        []string            `yaml:"additionalAuthContextKeys"`
+	// SessionCookieTemplate defines the template attributes for the session cookie.
+	SessionCookieTemplate CookieTemplate `yaml:"sessionCookieTemplate"`
+	// CSRFCookieTemplate defines the template attributes for the CSRF cookie.
+	CSRFCookieTemplate CookieTemplate `yaml:"csrfCookieTemplate"`
 	// Deprecated: not used anymore. Kept for a helm issue with the migrate job.
 	RedirectURL string `yaml:"redirectURL" default:"/sm/redirect"`
+}
+
+type CookieSameSiteValue string
+
+const (
+	CookieSameSiteLax    CookieSameSiteValue = "Lax"
+	CookieSameSiteStrict CookieSameSiteValue = "Strict"
+	CookieSameSiteNone   CookieSameSiteValue = "None"
+)
+
+type CookieTemplate struct {
+	Name     string              `yaml:"name"`
+	MaxAge   int                 `yaml:"max_age"`
+	Path     string              `yaml:"path"`
+	Domain   string              `yaml:"domain"`
+	Secure   bool                `yaml:"secure"`
+	SameSite CookieSameSiteValue `yaml:"same_site"`
+	HTTPOnly bool                `yaml:"http_only"`
 }
 
 type ClientAuth struct {
