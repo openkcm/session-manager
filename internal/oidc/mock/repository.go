@@ -11,15 +11,14 @@ type Repository struct {
 	Providers         map[string]oidc.Provider
 	ProvidersToTenant map[string]oidc.Provider
 
-	getErr, getForTenantErr, createErr, deleteErr, updateErr error
+	getForTenantErr, createErr, deleteErr, updateErr error
 }
 
-func NewInMemRepository(getErr, getForTenantErr, createErr, deleteErr, updateErr error) *Repository {
+func NewInMemRepository(getForTenantErr, createErr, deleteErr, updateErr error) *Repository {
 	return &Repository{
 		Providers:         make(map[string]oidc.Provider),
 		ProvidersToTenant: make(map[string]oidc.Provider),
 
-		getErr:          getErr,
 		getForTenantErr: getForTenantErr,
 		createErr:       createErr,
 		deleteErr:       deleteErr,
@@ -27,24 +26,12 @@ func NewInMemRepository(getErr, getForTenantErr, createErr, deleteErr, updateErr
 	}
 }
 
-func (r *Repository) GetForTenant(ctx context.Context, tenantID string) (oidc.Provider, error) {
+func (r *Repository) Get(ctx context.Context, tenantID string) (oidc.Provider, error) {
 	if r.getForTenantErr != nil {
 		return oidc.Provider{}, r.getForTenantErr
 	}
 
 	if provider, ok := r.ProvidersToTenant[tenantID]; ok {
-		return provider, nil
-	}
-
-	return oidc.Provider{}, nil
-}
-
-func (r *Repository) Get(ctx context.Context, issuerURL string) (oidc.Provider, error) {
-	if r.getErr != nil {
-		return oidc.Provider{}, r.getErr
-	}
-
-	if provider, ok := r.Providers[issuerURL]; ok {
 		return provider, nil
 	}
 

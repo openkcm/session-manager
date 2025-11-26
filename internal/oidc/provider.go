@@ -3,7 +3,7 @@ package oidc
 type Provider struct {
 	IssuerURL  string
 	Blocked    bool
-	JWKSURIs   []string
+	JWKSURI    string
 	Audiences  []string
 	Properties map[string]string
 }
