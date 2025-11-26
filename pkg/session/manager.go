@@ -3,9 +3,13 @@ package session
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash"
 	"net/http"
 	"net/url"
 	"strings"
@@ -241,11 +245,22 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		Groups     []string `json:"groups"`
 	}
 
+	type ExtraClaims struct {
+		AtHash string `json:"at_hash,omitempty"`
+	}
+
 	var standardClaims jwt.Claims
 	var customClaims CustomClaims
-	if err := token.Claims(keyset, &standardClaims, &customClaims); err != nil {
+	var extraClaims ExtraClaims
+	if err := token.Claims(keyset, &standardClaims, &customClaims, &extraClaims); err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get JWT claims")
 		return OIDCSessionData{}, fmt.Errorf("getting JWT claims: %w", err)
+	}
+
+	if extraClaims.AtHash != "" {
+		if err := m.verifyAccessToken(tokens.AccessToken, extraClaims.AtHash, token); err != nil {
+			return OIDCSessionData{}, err
+		}
 	}
 
 	// prepare the auth context used by ExtAuthZ
@@ -336,6 +351,29 @@ func (m *Manager) sendUserLoginFailureAudit(ctx context.Context, metadata otlpau
 	if err := m.audit.SendEvent(ctx, event); err != nil {
 		slogctx.Error(ctx, "Failed to send audit log for user login failure", "error", err)
 	}
+}
+
+func (m *Manager) verifyAccessToken(accessToken, atHash string, idToken *jwt.JSONWebToken) error {
+	var h hash.Hash
+	switch alg := idToken.Headers[0].Algorithm; alg {
+	case "RS256", "ES256", "PS256":
+		h = sha256.New()
+	case "RS384", "ES384", "PS384":
+		h = sha512.New384()
+	case "RS512", "ES512", "PS512", "EdDSA":
+		h = sha512.New()
+	default:
+		return fmt.Errorf("oidc: unsupported signing algorithm %q", alg)
+	}
+
+	h.Write([]byte(accessToken)) // NOSONAR
+	sum := h.Sum(nil)[:h.Size()/2]
+	actual := base64.RawURLEncoding.EncodeToString(sum)
+	if actual != atHash {
+		return serviceerr.ErrInvalidAtHash
+	}
+
+	return nil
 }
 
 func (m *Manager) exchangeCode(ctx context.Context, openidConf oidc.Configuration, code, codeVerifier string, properties map[string]string) (tokenResponse, error) {
