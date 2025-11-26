@@ -54,7 +54,6 @@ type SessionManager struct {
 	CallbackURL                      string              `yaml:"callbackURL" default:"/sm/callback"`
 	ClientAuth                       ClientAuth          `yaml:"clientAuth"`
 	CSRFSecret                       commoncfg.SourceRef `yaml:"csrfSecret"`
-	JWSSigAlgs                       []string            `yaml:"jwsSigAlgs"` // A list of supported JWT signature algorithms
 	AdditionalGetParametersAuthorize []string            `yaml:"additionalGetParametersAuthorize"`
 	AdditionalGetParametersToken     []string            `yaml:"additionalGetParametersToken"`
 	AdditionalAuthContextKeys        []string            `yaml:"additionalAuthContextKeys"`

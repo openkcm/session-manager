@@ -78,7 +78,6 @@ func TestManager_Auth(t *testing.T) {
 				SessionDuration:                  time.Hour,
 				CallbackURL:                      callbackURL,
 				AdditionalGetParametersAuthorize: []string{"paramAuth1"},
-				JWSSigAlgs:                       []string{"RS256"},
 				ClientAuth: config.ClientAuth{
 					ClientID: testClientID,
 				},
@@ -259,7 +258,6 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 				CallbackURL:                  callbackURL,
 				AdditionalGetParametersToken: []string{"getParamToken1"},
 				AdditionalAuthContextKeys:    []string{"authContextKey1"},
-				JWSSigAlgs:                   []string{"RS256"},
 				CSRFSecret:                   commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
 			},
 			wantSessionID:   true,
@@ -291,7 +289,6 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			code:        code,
 			fingerprint: fingerprint,
 			cfg: &config.SessionManager{
-				JWSSigAlgs: []string{"RS256"},
 				CSRFSecret: commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
 			},
 			wantSessionID:   false,
@@ -307,7 +304,6 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			code:        code,
 			fingerprint: fingerprint,
 			cfg: &config.SessionManager{
-				JWSSigAlgs: []string{"RS256"},
 				CSRFSecret: commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
 			},
 			wantSessionID:   false,
@@ -323,7 +319,6 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			code:        code,
 			fingerprint: fingerprint,
 			cfg: &config.SessionManager{
-				JWSSigAlgs: []string{"RS256"},
 				CSRFSecret: commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
 			},
 			wantSessionID:   false,
@@ -339,7 +334,6 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			code:        code,
 			fingerprint: fingerprint,
 			cfg: &config.SessionManager{
-				JWSSigAlgs: []string{"RS256"},
 				CSRFSecret: commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
 			},
 			oidcServerFail:  true,
@@ -360,7 +354,6 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 				CallbackURL:                  callbackURL,
 				AdditionalGetParametersToken: []string{"getParamToken1"},
 				AdditionalAuthContextKeys:    []string{"doesNotExist"},
-				JWSSigAlgs:                   []string{"RS256"},
 				CSRFSecret:                   commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
 			},
 			wantSessionID:   true,
