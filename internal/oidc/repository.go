@@ -6,6 +6,6 @@ import "context"
 type ProviderRepository interface {
 	Get(ctx context.Context, tenantID string) (Provider, error)
 	Create(ctx context.Context, tenantID string, provider Provider) error
-	Delete(ctx context.Context, tenantID string, provider Provider) error
+	Delete(ctx context.Context, tenantID string) error
 	Update(ctx context.Context, tenantID string, provider Provider) error
 }

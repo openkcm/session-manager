@@ -93,7 +93,7 @@ func (r *Repository) Create(ctx context.Context, tenantID string, provider oidc.
 	return nil
 }
 
-func (r *Repository) Delete(ctx context.Context, tenantID string, provider oidc.Provider) error {
+func (r *Repository) Delete(ctx context.Context, tenantID string) error {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return fmt.Errorf("starting transaction: %w", err)

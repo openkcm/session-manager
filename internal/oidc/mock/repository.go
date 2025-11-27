@@ -8,7 +8,6 @@ import (
 )
 
 type Repository struct {
-	Providers         map[string]oidc.Provider
 	ProvidersToTenant map[string]oidc.Provider
 
 	getForTenantErr, createErr, deleteErr, updateErr error
@@ -16,7 +15,6 @@ type Repository struct {
 
 func NewInMemRepository(getForTenantErr, createErr, deleteErr, updateErr error) *Repository {
 	return &Repository{
-		Providers:         make(map[string]oidc.Provider),
 		ProvidersToTenant: make(map[string]oidc.Provider),
 
 		getForTenantErr: getForTenantErr,
@@ -39,7 +37,6 @@ func (r *Repository) Get(ctx context.Context, tenantID string) (oidc.Provider, e
 }
 
 func (r *Repository) Add(tenantID string, provider oidc.Provider) {
-	r.Providers[provider.IssuerURL] = provider
 	r.ProvidersToTenant[tenantID] = provider
 }
 
@@ -53,12 +50,12 @@ func (r *Repository) Create(ctx context.Context, tenantID string, provider oidc.
 	return nil
 }
 
-func (r *Repository) Delete(ctx context.Context, tenantID string, provider oidc.Provider) error {
+func (r *Repository) Delete(ctx context.Context, tenantID string) error {
 	if r.deleteErr != nil {
 		return r.deleteErr
 	}
 
-	if _, ok := r.Providers[provider.IssuerURL]; !ok {
+	if _, ok := r.ProvidersToTenant[tenantID]; !ok {
 		return serviceerr.ErrNotFound
 	}
 
@@ -72,7 +69,6 @@ func (r *Repository) Update(ctx context.Context, tenantID string, provider oidc.
 		return r.updateErr
 	}
 
-	r.Providers[provider.IssuerURL] = provider
 	r.ProvidersToTenant[tenantID] = provider
 
 	return nil

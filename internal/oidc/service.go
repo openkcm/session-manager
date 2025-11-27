@@ -60,10 +60,18 @@ func (s *Service) BlockMapping(ctx context.Context, tenantID string) error {
 	return nil
 }
 
-// UnBlockMapping sets the Blocked flag to false for the OIDC provider associated with the given tenantID.
+func (s *Service) RemoveMapping(ctx context.Context, tenantID string) error {
+	if err := s.repository.Delete(ctx, tenantID); err != nil {
+		return fmt.Errorf("deleting provider for tenant: %w", err)
+	}
+
+	return nil
+}
+
+// UnblockMapping sets the Blocked flag to false for the OIDC provider associated with the given tenantID.
 // If the provider is not blocked, it does nothing.
 // Returns an error if the provider cannot be retrieved or updated.
-func (s *Service) UnBlockMapping(ctx context.Context, tenantID string) error {
+func (s *Service) UnblockMapping(ctx context.Context, tenantID string) error {
 	provider, err := s.repository.Get(ctx, tenantID)
 	if err != nil {
 		if errors.Is(err, serviceerr.ErrNotFound) {

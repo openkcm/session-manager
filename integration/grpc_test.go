@@ -103,26 +103,25 @@ func TestGRPCServer(t *testing.T) {
 		assert.True(t, unblockRes.GetSuccess())
 	})
 
-	// This method is not implemented as the API changes. Will be resolved in a future release
-	// t.Run("RemoveOIDCMapping", func(t *testing.T) {
-	//  expJwks := "jks"
-	// 	expTenantID := uuid.NewString()
-	// 	expIssuer := uuid.NewString()
-	// 	applyRes, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
-	// 		TenantId:  expTenantID,
-	// 		Issuer:    expIssuer,
-	// 		JwksUri:   &expJwks,
-	// 		Audiences: []string{"audience"},
-	// 	})
-	// 	assert.NoError(t, err)
-	// 	assert.True(t, applyRes.GetSuccess())
+	t.Run("RemoveOIDCMapping", func(t *testing.T) {
+		expJwks := "jks"
+		expTenantID := uuid.NewString()
+		expIssuer := uuid.NewString()
+		applyRes, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
+			TenantId:  expTenantID,
+			Issuer:    expIssuer,
+			JwksUri:   &expJwks,
+			Audiences: []string{"audience"},
+		})
+		assert.NoError(t, err)
+		assert.True(t, applyRes.GetSuccess())
 
-	// 	removeRes, err := mappingClient.RemoveOIDCMapping(ctx, &oidcmappingv1.RemoveOIDCMappingRequest{
-	// 		TenantId: expTenantID,
-	// 	})
-	// 	assert.NoError(t, err)
-	// 	assert.True(t, removeRes.GetSuccess())
-	// })
+		removeRes, err := mappingClient.RemoveOIDCMapping(ctx, &oidcmappingv1.RemoveOIDCMappingRequest{
+			TenantId: expTenantID,
+		})
+		assert.NoError(t, err)
+		assert.True(t, removeRes.GetSuccess())
+	})
 }
 
 func createClientConn(t *testing.T, port int) (*stdgrpc.ClientConn, error) {
