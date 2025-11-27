@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/openkcm/session-manager/compare/v0.10.1...v0.11.0) (2025-11-27)
+
+
+### Features
+
+* implement the gRPC session service ([#131](https://github.com/openkcm/session-manager/issues/131)) ([4361b20](https://github.com/openkcm/session-manager/commit/4361b20c8ad489f259f51051e0d23ab28c66ad73))
+
 ## [0.10.1](https://github.com/openkcm/session-manager/compare/v0.10.0...v0.10.1) (2025-11-25)
 
 
