@@ -39,10 +39,15 @@ func (srv *OIDCMappingServer) ApplyOIDCMapping(ctx context.Context, req *oidcmap
 	slogctx.Debug(ctx, "ApplyOIDCMapping called")
 
 	response := &oidcmappingv1.ApplyOIDCMappingResponse{}
+
+	var jwksURI string
+	if jwksURIs := req.GetJwksUris(); len(jwksURIs) > 0 {
+		jwksURI = req.GetJwksUris()[0]
+	}
 	provider := oidc.Provider{
 		IssuerURL:  req.GetIssuer(),
 		Blocked:    false,
-		JWKSURIs:   req.GetJwksUris(),
+		JWKSURI:    jwksURI,
 		Audiences:  req.GetAudiences(),
 		Properties: req.GetProperties(),
 	}
@@ -61,24 +66,6 @@ func (srv *OIDCMappingServer) ApplyOIDCMapping(ctx context.Context, req *oidcmap
 	response.Success = true
 
 	return response, nil
-}
-
-func (srv *OIDCMappingServer) RemoveOIDCMapping(ctx context.Context, req *oidcmappingv1.RemoveOIDCMappingRequest) (*oidcmappingv1.RemoveOIDCMappingResponse, error) {
-	ctx = slogctx.With(ctx, "tenant_id", req.GetTenantId())
-	slogctx.Debug(ctx, "RemoveOIDCMapping called")
-
-	resp := &oidcmappingv1.RemoveOIDCMappingResponse{}
-	err := srv.oidc.RemoveMapping(ctx, req.GetTenantId())
-	if err != nil {
-		slogctx.Error(ctx, "Could not remove OIDC mapping", "error", err)
-		msg := err.Error()
-		resp.Message = &msg
-		return resp, status.Error(codes.Internal, "failed to remove OIDC mapping: "+msg)
-	}
-
-	resp.Success = true
-
-	return resp, nil
 }
 
 // BlockOIDCMapping blocks the OIDC mapping for the specified tenant.

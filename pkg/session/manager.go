@@ -96,7 +96,7 @@ func NewManager(
 
 // MakeAuthURI returns an OIDC authentication URI.
 func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, requestURI string) (string, error) {
-	provider, err := m.oidc.GetForTenant(ctx, tenantID)
+	provider, err := m.oidc.Get(ctx, tenantID)
 	if err != nil {
 		return "", fmt.Errorf("getting oidc provider: %w", err)
 	}
@@ -202,7 +202,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, serviceerr.ErrFingerprintMismatch
 	}
 
-	provider, err := m.oidc.GetForTenant(ctx, state.TenantID)
+	provider, err := m.oidc.Get(ctx, state.TenantID)
 	if err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get oidc provider")
 		return OIDCSessionData{}, fmt.Errorf("getting oidc provider: %w", err)
@@ -466,7 +466,7 @@ func (m *Manager) RefreshExpiringSessions(ctx context.Context) error {
 		return err
 	}
 	for _, s := range sessions {
-		provider, err := m.oidc.Get(ctx, s.Issuer)
+		provider, err := m.oidc.Get(ctx, s.TenantID)
 		if err != nil {
 			return fmt.Errorf("getting odic provider: %w", err)
 		}

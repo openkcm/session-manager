@@ -7,6 +7,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,7 +32,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestRepository_GetForTenant(t *testing.T) {
+func TestRepository_Get(t *testing.T) {
 	tests := []struct {
 		name         string
 		tenantID     string
@@ -44,7 +45,7 @@ func TestRepository_GetForTenant(t *testing.T) {
 			wantProvider: oidc.Provider{
 				IssuerURL:  "url-one",
 				Blocked:    false,
-				JWKSURIs:   make([]string, 0),
+				JWKSURI:    "",
 				Audiences:  make([]string, 0),
 				Properties: make(map[string]string),
 			},
@@ -60,53 +61,13 @@ func TestRepository_GetForTenant(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := oidcsql.NewRepository(dbPool)
 
-			gotProvider, err := r.GetForTenant(t.Context(), tt.tenantID)
-			if !tt.assertErr(t, err, fmt.Sprintf("Repository.GetForTenant() error %v", err)) || err != nil {
-				assert.Zerof(t, gotProvider, "Repository.GetForTenant() extected zero value if an error is returned, got %v", gotProvider)
-				return
-			}
-
-			assert.Equal(t, tt.wantProvider, gotProvider, "Repository.GetForTenant()")
-		})
-	}
-}
-
-func TestRepository_Get(t *testing.T) {
-	tests := []struct {
-		name         string
-		issuerURL    string
-		wantProvider oidc.Provider
-		assertErr    assert.ErrorAssertionFunc
-	}{
-		{
-			name:      "Success",
-			issuerURL: "url-one",
-			wantProvider: oidc.Provider{
-				IssuerURL:  "url-one",
-				Blocked:    false,
-				JWKSURIs:   make([]string, 0),
-				Audiences:  make([]string, 0),
-				Properties: make(map[string]string),
-			},
-			assertErr: assert.NoError,
-		},
-		{
-			name:      "Error does not exist",
-			issuerURL: "does-not-exist",
-			assertErr: assert.Error,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := oidcsql.NewRepository(dbPool)
-
-			gotProvider, err := r.Get(t.Context(), tt.issuerURL)
+			gotProvider, err := r.Get(t.Context(), tt.tenantID)
 			if !tt.assertErr(t, err, fmt.Sprintf("Repository.Get() error %v", err)) || err != nil {
 				assert.Zerof(t, gotProvider, "Repository.Get() extected zero value if an error is returned, got %v", gotProvider)
 				return
 			}
 
-			assert.Equal(t, tt.wantProvider, gotProvider, "Repository.GetForTenant()")
+			assert.Equal(t, tt.wantProvider, gotProvider, "Repository.Get()")
 		})
 	}
 }
@@ -124,7 +85,7 @@ func TestRepository_Create(t *testing.T) {
 			provider: oidc.Provider{
 				IssuerURL: "http://oidc-success.example.com",
 				Blocked:   false,
-				JWKSURIs:  []string{"jwks.example.com"},
+				JWKSURI:   "jwks.example.com",
 				Audiences: []string{"cmk.example.com"},
 				Properties: map[string]string{
 					"prop1": "prop1val",
@@ -138,7 +99,7 @@ func TestRepository_Create(t *testing.T) {
 			provider: oidc.Provider{
 				IssuerURL: "url-one",
 				Blocked:   false,
-				JWKSURIs:  []string{"jwks.example.com"},
+				JWKSURI:   "jwks.example.com",
 				Audiences: []string{"cmk.example.com"},
 				Properties: map[string]string{
 					"prop1": "prop1val",
@@ -147,16 +108,17 @@ func TestRepository_Create(t *testing.T) {
 			assertErr: assert.Error,
 		},
 		{
-			name:     "Create without JWKSURIs and Audiences succeeds",
+			name:     "Create without JWKSURI and Audiences succeeds",
 			tenantID: "tenant-id-create-without-jwks-aud-success",
 			provider: oidc.Provider{
 				IssuerURL: "http://oidc-success-2.example.com",
 				Blocked:   false,
+				Audiences: []string{},
 			},
 			assertErr: assert.NoError,
 		},
 		{
-			name:     "Create without JWKSURIs succeeds",
+			name:     "Create without JWKSURI succeeds",
 			tenantID: "tenant-id-create-without-jwks-success",
 			provider: oidc.Provider{
 				IssuerURL: "http://oidc-success-3.example.com",
@@ -171,7 +133,8 @@ func TestRepository_Create(t *testing.T) {
 			provider: oidc.Provider{
 				IssuerURL: "http://oidc-success-4.example.com",
 				Blocked:   false,
-				JWKSURIs:  []string{"jwks.example.com"},
+				JWKSURI:   "jwks.example.com",
+				Audiences: []string{},
 			},
 			assertErr: assert.NoError,
 		},
@@ -188,10 +151,12 @@ func TestRepository_Create(t *testing.T) {
 			}
 
 			// Then
-			provider, err := r.GetForTenant(t.Context(), tt.tenantID)
+			provider, err := r.Get(t.Context(), tt.tenantID)
 			require.NoError(t, err)
 
-			assertEqualProviders(t, tt.provider, provider)
+			if diff := cmp.Diff(tt.provider, provider); diff != "" {
+				t.Fatalf("Unexpected provider in the database (-want, +got):\n%s", diff)
+			}
 		})
 	}
 }
@@ -202,7 +167,7 @@ func TestRepository_Delete(t *testing.T) {
 	provider := oidc.Provider{
 		IssuerURL: "http://oidc-to-delete.example.com",
 		Blocked:   false,
-		JWKSURIs:  []string{"jwks.example.com"},
+		JWKSURI:   "jwks.example.com",
 		Audiences: []string{"cmk.example.com"},
 	}
 
@@ -236,7 +201,7 @@ func TestRepository_Delete(t *testing.T) {
 				return
 			}
 
-			p, err := r.GetForTenant(t.Context(), tt.tenantID)
+			p, err := r.Get(t.Context(), tt.tenantID)
 			if !errors.Is(err, serviceerr.ErrNotFound) {
 				t.Error("The provider is expected to be deleted")
 			}
@@ -251,7 +216,7 @@ func TestRepository_Update(t *testing.T) {
 	provider := oidc.Provider{
 		IssuerURL: "http://oidc-to-update.example.com",
 		Blocked:   false,
-		JWKSURIs:  []string{"jwks.example.com"},
+		JWKSURI:   "jwks.example.com",
 		Audiences: []string{"cmk.example.com"},
 	}
 
@@ -271,7 +236,7 @@ func TestRepository_Update(t *testing.T) {
 			provider: oidc.Provider{
 				IssuerURL: provider.IssuerURL,
 				Blocked:   true,
-				JWKSURIs:  []string{"jwks-updated.example.com"},
+				JWKSURI:   "jwks-updated.example.com",
 				Audiences: append(provider.Audiences, "new-audience.example.com"),
 			},
 			assertErr: assert.NoError,
@@ -282,22 +247,23 @@ func TestRepository_Update(t *testing.T) {
 			provider: oidc.Provider{
 				IssuerURL: "does-not-exist",
 				Blocked:   true,
-				JWKSURIs:  []string{"jwks-updated.example.com"},
+				JWKSURI:   "jwks-updated.example.com",
 				Audiences: append(provider.Audiences, "new-audience.example.com"),
 			},
 			assertErr: assert.Error,
 		},
 		{
-			name:     "Update without JWKSURIs and Audiences succeeds",
+			name:     "Update without JWKSURI and Audiences succeeds",
 			tenantID: tenantID,
 			provider: oidc.Provider{
 				IssuerURL: provider.IssuerURL,
 				Blocked:   true,
+				Audiences: []string{},
 			},
 			assertErr: assert.NoError,
 		},
 		{
-			name:     "Update without JWKSURIs succeeds",
+			name:     "Update without JWKSURI succeeds",
 			tenantID: tenantID,
 			provider: oidc.Provider{
 				IssuerURL: provider.IssuerURL,
@@ -312,7 +278,8 @@ func TestRepository_Update(t *testing.T) {
 			provider: oidc.Provider{
 				IssuerURL: provider.IssuerURL,
 				Blocked:   true,
-				JWKSURIs:  []string{"jwks-updated.example.com"},
+				JWKSURI:   "jwks-updated.example.com",
+				Audiences: []string{},
 			},
 			assertErr: assert.NoError,
 		},
@@ -324,19 +291,12 @@ func TestRepository_Update(t *testing.T) {
 				return
 			}
 
-			provider, err := r.GetForTenant(t.Context(), tt.tenantID)
+			provider, err := r.Get(t.Context(), tt.tenantID)
 			require.NoError(t, err)
 
-			assertEqualProviders(t, tt.provider, provider)
+			if diff := cmp.Diff(tt.provider, provider); diff != "" {
+				t.Fatalf("Unexpected provider in the database (-want, +got):\n%s", diff)
+			}
 		})
 	}
-}
-
-func assertEqualProviders(t *testing.T, expected, actual oidc.Provider) {
-	t.Helper()
-	assert.Equal(t, expected.IssuerURL, actual.IssuerURL, "IssuerURL does not match")
-	assert.Equal(t, expected.Blocked, actual.Blocked, "Blocked does not match")
-	assert.ElementsMatch(t, expected.JWKSURIs, actual.JWKSURIs, "JWKSURIs do not match")
-	assert.ElementsMatch(t, expected.Audiences, actual.Audiences, "Audiences do not match")
-	assert.Equal(t, expected.Properties, actual.Properties, "Properties do not match")
 }
