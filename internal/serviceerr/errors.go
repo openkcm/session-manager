@@ -12,6 +12,7 @@ const (
 	CodeStateExpired
 	CodeInvalidOIDCProvider
 	CodeInvalidCSRFToken
+	CodeUnauthorized
 	CodeInvalidAtHashToken
 )
 
@@ -22,6 +23,7 @@ var ErrFingerprintMismatch = newErr("fingerprint mismatch", CodeFingerprintMisma
 var ErrStateExpired = newErr("state expired", CodeStateExpired)
 var ErrInvalidOIDCProvider = newErr("invalid OIDC provider", CodeInvalidOIDCProvider)
 var ErrInvalidCSRFToken = newErr("invalid CSRF token", CodeInvalidCSRFToken)
+var ErrUnauthorized = newErr("unauthorized", CodeUnauthorized)
 var ErrInvalidAtHash = newErr("invalid atHash token", CodeInvalidAtHashToken)
 
 //nolint:recvcheck
@@ -55,6 +57,8 @@ func (e Error) HTTPStatus() int {
 		return http.StatusGone
 	case CodeInvalidOIDCProvider:
 		return http.StatusPreconditionFailed
+	case CodeUnauthorized:
+		return http.StatusForbidden
 	case CodeInvalidAtHashToken:
 		return http.StatusUnauthorized
 	default:
