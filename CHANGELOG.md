@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.12.0](https://github.com/openkcm/session-manager/compare/v0.11.0...v0.12.0) (2025-11-27)
+
+
+### Features
+
+* implement remove ODIC mapping ([61c088a](https://github.com/openkcm/session-manager/commit/61c088a3ee228a4b923bf2cbf903d316337946b9))
+* implement remove OIDC mapping ([#140](https://github.com/openkcm/session-manager/issues/140)) ([61c088a](https://github.com/openkcm/session-manager/commit/61c088a3ee228a4b923bf2cbf903d316337946b9))
+
+
+### Bug Fixes
+
+* configmap hook weight ([#141](https://github.com/openkcm/session-manager/issues/141)) ([55a06ef](https://github.com/openkcm/session-manager/commit/55a06efd477c4f6da29b458fa3a1fb55f381a792))
+* migration script ([#142](https://github.com/openkcm/session-manager/issues/142)) ([c775ebb](https://github.com/openkcm/session-manager/commit/c775ebb5c90d93741cb7fc52e709358f26d0d813))
+
 ## [0.11.0](https://github.com/openkcm/session-manager/compare/v0.10.1...v0.11.0) (2025-11-27)
 
 
