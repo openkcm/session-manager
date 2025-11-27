@@ -26,12 +26,11 @@ const (
 )
 
 type RepoWrapper struct {
-	Repo             oidc.ProviderRepository
-	MockGetForTenant func(ctx context.Context, tenantID string) (oidc.Provider, error)
-	MockGet          func(ctx context.Context, issuerURL string) (oidc.Provider, error)
-	MockCreate       func(ctx context.Context, tenantID string, provider oidc.Provider) error
-	MockUpdate       func(ctx context.Context, tenantID string, provider oidc.Provider) error
-	MockDelete       func(ctx context.Context, tenantID string, provider oidc.Provider) error
+	Repo       oidc.ProviderRepository
+	MockGet    func(ctx context.Context, tenantID string) (oidc.Provider, error)
+	MockCreate func(ctx context.Context, tenantID string, provider oidc.Provider) error
+	MockUpdate func(ctx context.Context, tenantID string, provider oidc.Provider) error
+	MockDelete func(ctx context.Context, tenantID string, provider oidc.Provider) error
 }
 
 var _ oidc.ProviderRepository = &RepoWrapper{}
@@ -61,26 +60,14 @@ func (m *RepoWrapper) Delete(ctx context.Context, tenantID string, provider oidc
 }
 
 // Get implements oidc.ProviderRepository.
-func (m *RepoWrapper) Get(ctx context.Context, issuerURL string) (oidc.Provider, error) {
+func (m *RepoWrapper) Get(ctx context.Context, tenantID string) (oidc.Provider, error) {
 	if m.MockGet != nil {
-		_, err := m.MockGet(ctx, issuerURL)
+		_, err := m.MockGet(ctx, tenantID)
 		if err != nil {
 			return oidc.Provider{}, err
 		}
 	}
-
-	return m.Repo.Get(ctx, issuerURL)
-}
-
-// GetForTenant implements oidc.ProviderRepository.
-func (m *RepoWrapper) GetForTenant(ctx context.Context, tenantID string) (oidc.Provider, error) {
-	if m.MockGetForTenant != nil {
-		_, err := m.MockGetForTenant(ctx, tenantID)
-		if err != nil {
-			return oidc.Provider{}, err
-		}
-	}
-	return m.Repo.GetForTenant(ctx, tenantID)
+	return m.Repo.Get(ctx, tenantID)
 }
 
 // Update implements oidc.ProviderRepository.

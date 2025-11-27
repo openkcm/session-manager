@@ -18,17 +18,8 @@ func NewService(repo ProviderRepository) *Service {
 	}
 }
 
-func (s *Service) GetProvider(ctx context.Context, issuer string) (Provider, error) {
-	provider, err := s.repository.Get(ctx, issuer)
-	if err != nil {
-		return Provider{}, fmt.Errorf("getting provider by issuer URL: %w", err)
-	}
-
-	return provider, nil
-}
-
 func (s *Service) ApplyMapping(ctx context.Context, tenantID string, provider Provider) error {
-	_, err := s.repository.GetForTenant(ctx, tenantID)
+	_, err := s.repository.Get(ctx, tenantID)
 	if err != nil {
 		err = s.repository.Create(ctx, tenantID, provider)
 		if err != nil {
@@ -44,27 +35,11 @@ func (s *Service) ApplyMapping(ctx context.Context, tenantID string, provider Pr
 	return nil
 }
 
-func (s *Service) RemoveMapping(ctx context.Context, tenantID string) error {
-	provider, err := s.repository.GetForTenant(ctx, tenantID)
-	if err != nil {
-		if errors.Is(err, serviceerr.ErrNotFound) {
-			return nil
-		}
-		return fmt.Errorf("getting provider for tenant: %w", err)
-	}
-	err = s.repository.Delete(ctx, tenantID, provider)
-	if err != nil {
-		return fmt.Errorf("deleting provider for tenant: %w", err)
-	}
-
-	return nil
-}
-
 // BlockMapping sets the Blocked flag to true for the OIDC provider associated with the given tenantID.
 // If the provider is already blocked, it does nothing.
 // Returns an error if the provider cannot be retrieved or updated.
 func (s *Service) BlockMapping(ctx context.Context, tenantID string) error {
-	provider, err := s.repository.GetForTenant(ctx, tenantID)
+	provider, err := s.repository.Get(ctx, tenantID)
 	if err != nil {
 		if errors.Is(err, serviceerr.ErrNotFound) {
 			return nil
@@ -89,7 +64,7 @@ func (s *Service) BlockMapping(ctx context.Context, tenantID string) error {
 // If the provider is not blocked, it does nothing.
 // Returns an error if the provider cannot be retrieved or updated.
 func (s *Service) UnBlockMapping(ctx context.Context, tenantID string) error {
-	provider, err := s.repository.GetForTenant(ctx, tenantID)
+	provider, err := s.repository.Get(ctx, tenantID)
 	if err != nil {
 		if errors.Is(err, serviceerr.ErrNotFound) {
 			return nil

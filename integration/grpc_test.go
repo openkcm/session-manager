@@ -22,7 +22,6 @@ import (
 	"github.com/openkcm/session-manager/internal/grpc"
 	"github.com/openkcm/session-manager/internal/oidc"
 	oidcsql "github.com/openkcm/session-manager/internal/oidc/sql"
-	"github.com/openkcm/session-manager/internal/serviceerr"
 )
 
 func TestGRPCServer(t *testing.T) {
@@ -31,7 +30,7 @@ func TestGRPCServer(t *testing.T) {
 	port := 9091
 
 	// create grpc server
-	srv, service, terminateFn, err := startServer(t, port)
+	srv, _, terminateFn, err := startServer(t, port)
 	require.NoError(t, err)
 	defer srv.Stop()
 	defer terminateFn(ctx)
@@ -56,18 +55,6 @@ func TestGRPCServer(t *testing.T) {
 		})
 		assert.NoError(t, err)
 		assert.True(t, applyResp.GetSuccess())
-
-		// changing the issuer will result in a unsuccessful apply
-		expIssuer = uuid.NewString()
-		applyResp, err = mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
-			TenantId:  expTenantID,
-			Issuer:    expIssuer,
-			JwksUris:  expJwks,
-			Audiences: expAud,
-		})
-		assert.NoError(t, err)
-		assert.False(t, applyResp.GetSuccess())
-		assert.Equal(t, serviceerr.ErrNotFound.Error(), *applyResp.Message)
 	})
 
 	t.Run("BlockOIDCMapping", func(t *testing.T) {
@@ -89,13 +76,6 @@ func TestGRPCServer(t *testing.T) {
 		})
 		assert.NoError(t, err)
 		assert.True(t, blockResp.GetSuccess())
-
-		actProvider, err := service.GetProvider(ctx, expIssuer)
-		assert.NoError(t, err)
-		assert.True(t, actProvider.Blocked)
-		assert.Equal(t, expIssuer, actProvider.IssuerURL)
-		assert.Equal(t, expAud, actProvider.Audiences)
-		assert.Equal(t, expJwks, actProvider.JWKSURIs)
 	})
 
 	t.Run("UnblockOIDCMapping", func(t *testing.T) {
@@ -116,42 +96,32 @@ func TestGRPCServer(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, blockRes.GetSuccess())
 
-		actProvider, err := service.GetProvider(ctx, expIssuer1)
-		assert.NoError(t, err)
-		assert.True(t, actProvider.Blocked)
-
 		unblockRes, err := mappingClient.UnblockOIDCMapping(ctx, &oidcmappingv1.UnblockOIDCMappingRequest{
 			TenantId: expTenantID,
 		})
 		assert.NoError(t, err)
 		assert.True(t, unblockRes.GetSuccess())
-
-		actProvider, err = service.GetProvider(ctx, expIssuer1)
-		assert.NoError(t, err)
-		assert.False(t, actProvider.Blocked)
 	})
 
-	t.Run("RemoveOIDCMapping", func(t *testing.T) {
-		expTenantID := uuid.NewString()
-		expIssuer := uuid.NewString()
-		applyRes, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
-			TenantId:  expTenantID,
-			Issuer:    expIssuer,
-			JwksUris:  []string{"uris"},
-			Audiences: []string{"audience"},
-		})
-		assert.NoError(t, err)
-		assert.True(t, applyRes.GetSuccess())
+	// This method is not implemented as the API changes. Will be resolved in a future release
+	// t.Run("RemoveOIDCMapping", func(t *testing.T) {
+	// 	expTenantID := uuid.NewString()
+	// 	expIssuer := uuid.NewString()
+	// 	applyRes, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
+	// 		TenantId:  expTenantID,
+	// 		Issuer:    expIssuer,
+	// 		JwksUris:  []string{"uris"},
+	// 		Audiences: []string{"audience"},
+	// 	})
+	// 	assert.NoError(t, err)
+	// 	assert.True(t, applyRes.GetSuccess())
 
-		removeRes, err := mappingClient.RemoveOIDCMapping(ctx, &oidcmappingv1.RemoveOIDCMappingRequest{
-			TenantId: expTenantID,
-		})
-		assert.NoError(t, err)
-		assert.True(t, removeRes.GetSuccess())
-
-		_, err = service.GetProvider(ctx, expIssuer)
-		assert.ErrorIs(t, err, serviceerr.ErrNotFound)
-	})
+	// 	removeRes, err := mappingClient.RemoveOIDCMapping(ctx, &oidcmappingv1.RemoveOIDCMappingRequest{
+	// 		TenantId: expTenantID,
+	// 	})
+	// 	assert.NoError(t, err)
+	// 	assert.True(t, removeRes.GetSuccess())
+	// })
 }
 
 func createClientConn(t *testing.T, port int) (*stdgrpc.ClientConn, error) {
