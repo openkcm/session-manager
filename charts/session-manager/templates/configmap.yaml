@@ -6,7 +6,7 @@ metadata:
     {{- include "session-manager.labels" . | nindent 4 }}
   annotations:
     helm.sh/hook: pre-install,pre-upgrade
-    helm.sh/weight: "0"
+    helm.sh/weight: "-1"
     helm.sh/hook-delete-policy: before-hook-creation
 immutable: {{ .Values.config.isImmutable | default false }}
 data:
