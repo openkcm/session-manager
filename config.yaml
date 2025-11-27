@@ -241,9 +241,6 @@ sessionManager:
     csrfSecret:
         source: embedded
         value: my-csrf-secret-at-least-thirty-two-bits-size
-    jwsSigAlgs:
-        - RS256
-        - HS256
 
 migrate:
     source: file://./sql

@@ -48,7 +48,6 @@ type Manager struct {
 	csrfCookieTemplate    config.CookieTemplate
 
 	csrfSecret []byte
-	jwsSigAlgs []jose.SignatureAlgorithm
 }
 
 func NewManager(
@@ -58,11 +57,6 @@ func NewManager(
 	auditLogger *otlpaudit.AuditLogger,
 	httpClient *http.Client,
 ) (*Manager, error) {
-	algs := make([]jose.SignatureAlgorithm, 0, len(cfg.JWSSigAlgs))
-	for _, alg := range cfg.JWSSigAlgs {
-		algs = append(algs, jose.SignatureAlgorithm(alg))
-	}
-
 	csrfSecret, err := commoncfg.LoadValueFromSourceRef(cfg.CSRFSecret)
 	if err != nil {
 		return nil, fmt.Errorf("loading csrf token from source ref: %w", err)
@@ -90,7 +84,6 @@ func NewManager(
 		clientID:              cfg.ClientAuth.ClientID,
 		secureClient:          httpClient,
 		csrfSecret:            csrfSecret,
-		jwsSigAlgs:            algs,
 	}, nil
 }
 
@@ -224,14 +217,17 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 
 	sessionID := m.pkce.SessionID()
 	csrfToken := csrf.NewToken(sessionID, m.csrfSecret)
-
-	token, err := jwt.ParseSigned(tokens.IDToken, m.jwsSigAlgs)
+	algs := make([]jose.SignatureAlgorithm, 0, len(openidConf.IDTokenSigningAlgValuesSupported))
+	for _, alg := range openidConf.IDTokenSigningAlgValuesSupported {
+		algs = append(algs, jose.SignatureAlgorithm(alg))
+	}
+	token, err := jwt.ParseSigned(tokens.IDToken, algs)
 	if err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to parse id token")
-		return OIDCSessionData{}, fmt.Errorf("parsing id token: %w", err)
+		return OIDCSessionData{}, fmt.Errorf("parsing id token: %w, %s", err, algs)
 	}
 
-	jws, err := jose.ParseSigned(tokens.IDToken, m.jwsSigAlgs)
+	jws, err := jose.ParseSigned(tokens.IDToken, algs)
 	if err != nil {
 		return OIDCSessionData{}, fmt.Errorf("parsing JWS: %w", err)
 	}

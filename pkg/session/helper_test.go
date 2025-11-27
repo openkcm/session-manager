@@ -10,7 +10,7 @@ import (
 	"github.com/openkcm/session-manager/pkg/session"
 )
 
-func StartOIDCServer(t *testing.T, fail bool) *httptest.Server {
+func StartOIDCServer(t *testing.T, fail bool, algs ...string) *httptest.Server {
 	t.Helper()
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -20,14 +20,22 @@ func StartOIDCServer(t *testing.T, fail bool) *httptest.Server {
 			_, _ = w.Write([]byte(`{"error": "invalid_request", "error_description": "Token exchange failed"}`))
 			return
 		}
+		// Determine supported algorithms by passed arguments or set to default value
+		var algList []string
+		if len(algs) == 0 {
+			algList = []string{"RS256"}
+		} else {
+			algList = algs
+		}
 
 		switch r.URL.Path {
 		case "/.well-known/openid-configuration":
 			_ = json.NewEncoder(w).Encode(oidc.Configuration{
-				Issuer:                server.URL,
-				AuthorizationEndpoint: server.URL + "/oauth2/authorize",
-				TokenEndpoint:         server.URL + "/oauth2/token",
-				JwksURI:               server.URL + "/.well-known/jwks.json",
+				Issuer:                           server.URL,
+				AuthorizationEndpoint:            server.URL + "/oauth2/authorize",
+				TokenEndpoint:                    server.URL + "/oauth2/token",
+				JwksURI:                          server.URL + "/.well-known/jwks.json",
+				IDTokenSigningAlgValuesSupported: algList,
 			})
 		case "/.well-known/jwks.json":
 			_, _ = w.Write([]byte(`{"keys":[{"kty": "RSA", "e": "AQAB", "use": "sig", "kid": "MwK4iAYDIILiA_ymyjAwMGAaLlW84jOAqR0V-oojuIk", "alg": "RS256", "n": "nD89GVZMXuv_MSbH_SqDnU5oQgLlcH6yGe5LkXSdP_UzBXt49wPRoVHE-W981oylw9vhzfNBE8JY0PSkxVvYCWwYP86YWVtJix23iONYpXeAH9M1ep4Gzo1y0XnjAKURi-sN5T5nUBZ-fkODvyr6ALIUG3AXzaRow1RMmhUOx1spKGS34DJPv0D3E6aVcGkwgUwZcBhObYxGQdMAYi-OYDDS3uAkFciO3G1Bpz4nyW_JaV7i4zkMOH6-2wYFt1fjMsyc0lt1eRqdUVdANy0kDtmIXnjgjKN0Isr16flzfRDXfOQmaBPp14hQPiAgVFaqvTIvXucXOkiWcAQWhas2Aw"}]}`))
