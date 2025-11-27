@@ -11,7 +11,7 @@ CREATE TABLE trust (
 );
 
 INSERT INTO trust (tenant_id, blocked, issuer, jwks_uri, audiences, properties, created_at)
-    SELECT m.tenant_id, p.blocked, p.issuer_url, p.jwks_uris[1], p.audience, COALESCE(p.properties, '{}'), p.created_at
+    SELECT m.tenant_id, p.blocked, p.issuer_url, COALESCE(p.jwks_uris[1], ''), p.audience, COALESCE(p.properties, '{}'), p.created_at
         FROM oidc_providers p
         INNER JOIN oidc_provider_map m ON p.issuer_url = m.issuer_url;
 
@@ -43,4 +43,6 @@ INSERT INTO oidc_providers (issuer_url, blocked, jwks_uris, audience, properties
 
 INSERT INTO oidc_provider_map (tenant_id, issuer_url)
     SELECT tenant_id, issuer FROM trust;
+
+DROP TABLE trust;
 -- +goose StatementEnd
