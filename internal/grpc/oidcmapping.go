@@ -32,7 +32,7 @@ func (srv *OIDCMappingServer) ApplyOIDCMapping(ctx context.Context, req *oidcmap
 	ctx = slogctx.With(ctx,
 		"tenant_id", req.GetTenantId(),
 		"issuer", req.GetIssuer(),
-		"jwks_uris", req.GetJwksUris(),
+		"jwks_uri", req.GetJwksUri(),
 		"audiences", req.GetAudiences(),
 		"properties", req.GetProperties(),
 	)
@@ -40,14 +40,10 @@ func (srv *OIDCMappingServer) ApplyOIDCMapping(ctx context.Context, req *oidcmap
 
 	response := &oidcmappingv1.ApplyOIDCMappingResponse{}
 
-	var jwksURI string
-	if jwksURIs := req.GetJwksUris(); len(jwksURIs) > 0 {
-		jwksURI = req.GetJwksUris()[0]
-	}
 	provider := oidc.Provider{
 		IssuerURL:  req.GetIssuer(),
 		Blocked:    false,
-		JWKSURI:    jwksURI,
+		JWKSURI:    req.GetJwksUri(),
 		Audiences:  req.GetAudiences(),
 		Properties: req.GetProperties(),
 	}

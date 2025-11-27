@@ -9,11 +9,12 @@ require (
 	github.com/envoyproxy/go-control-plane/envoy v1.36.0
 	github.com/go-jose/go-jose/v4 v4.1.3
 	github.com/go-viper/mapstructure/v2 v2.4.0
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/oapi-codegen/runtime v1.1.2
-	github.com/openkcm/api-sdk v0.12.0
+	github.com/openkcm/api-sdk v0.13.0
 	github.com/openkcm/common-sdk v1.6.2
 	github.com/pressly/goose/v3 v3.26.0
 	github.com/samber/oops v1.19.4

@@ -101,7 +101,7 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 		return "", fmt.Errorf("getting oidc provider: %w", err)
 	}
 
-	openidConf, err := m.getOpenIDConfig(ctx, provider)
+	openidConf, err := provider.GetOpenIDConfig(ctx, m.secureClient)
 	if err != nil {
 		return "", fmt.Errorf("getting an openid config: %w", err)
 	}
@@ -208,7 +208,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("getting oidc provider: %w", err)
 	}
 
-	openidConf, err := m.getOpenIDConfig(ctx, provider)
+	openidConf, err := provider.GetOpenIDConfig(ctx, m.secureClient)
 	if err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get openid configuration")
 		return OIDCSessionData{}, fmt.Errorf("getting openid configuration: %w", err)
@@ -525,37 +525,6 @@ func (m *Manager) RefreshSession(ctx context.Context, s *Session, provider oidc.
 	s.AccessTokenExpiry = time.Now().Add(time.Duration(respData.ExpiresIn))
 
 	return nil
-}
-
-func (m *Manager) getOpenIDConfig(ctx context.Context, provider oidc.Provider) (oidc.Configuration, error) {
-	const wellKnownOpenIDConfigPath = "/.well-known/openid-configuration"
-
-	u, err := url.JoinPath(provider.IssuerURL, wellKnownOpenIDConfigPath)
-	if err != nil {
-		return oidc.Configuration{}, fmt.Errorf("building path to the well-known openid-config endpoint: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return oidc.Configuration{}, fmt.Errorf("creating an HTTP request: %w", err)
-	}
-
-	resp, err := m.secureClient.Do(req)
-	if err != nil {
-		return oidc.Configuration{}, fmt.Errorf("doing an HTTP request: %w", err)
-	}
-
-	var conf oidc.Configuration
-	if err := json.NewDecoder(resp.Body).Decode(&conf); err != nil {
-		return oidc.Configuration{}, fmt.Errorf("decoding a well-known openid config: %w", err)
-	}
-
-	// Validate the configuration
-	if conf.Issuer != provider.IssuerURL {
-		return oidc.Configuration{}, serviceerr.ErrInvalidOIDCProvider
-	}
-
-	return conf, nil
 }
 
 func shouldRefresh(s Session) bool {
