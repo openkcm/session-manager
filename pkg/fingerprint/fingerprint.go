@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	envoyauth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
@@ -24,7 +25,9 @@ func FromHTTPRequest(r *http.Request) (string, error) {
 	h := sha256.New()
 
 	for _, key := range headerKeys {
-		h.Write([]byte(r.Header.Get(key)))
+		val := r.Header.Get(key)
+		slog.Debug("Building fingerprint", "header", key, "value", val)
+		h.Write([]byte(val))
 	}
 
 	return hex.EncodeToString(h.Sum(nil)), nil
@@ -38,11 +41,12 @@ func FromEnvoyHTTPRequest(r *envoyauth.AttributeContext_HttpRequest) (string, er
 	h := sha256.New()
 
 	for _, key := range headerKeys {
+		var val string
 		if v, ok := r.GetHeaders()[key]; ok {
-			h.Write([]byte(v))
-		} else {
-			h.Write([]byte(""))
+			val = v
 		}
+		slog.Debug("Building fingerprint", "header", key, "value", val)
+		h.Write([]byte(val))
 	}
 
 	return hex.EncodeToString(h.Sum(nil)), nil
