@@ -220,7 +220,7 @@ func TestService_BlockMapping(t *testing.T) {
 			repoWrapper.MockUpdate = func(ctx context.Context, tenantID string, provider oidc.Provider) error {
 				noOfUpdateCalls++
 				// delete the provider before updating to return an error
-				err := repoWrapper.Repo.Delete(ctx, expTenantID, expBlockedProvider)
+				err := repoWrapper.Repo.Delete(ctx, expTenantID)
 				assert.NoError(t, err)
 				return nil
 			}
@@ -305,7 +305,7 @@ func TestService_BlockMapping(t *testing.T) {
 	})
 }
 
-func TestService_UnBlockMapping(t *testing.T) {
+func TestService_UnblockMapping(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("success if ", func(t *testing.T) {
@@ -325,7 +325,7 @@ func TestService_UnBlockMapping(t *testing.T) {
 			subj := oidc.NewService(wrapper)
 
 			// when
-			err = subj.UnBlockMapping(t.Context(), expTenantID)
+			err = subj.UnblockMapping(t.Context(), expTenantID)
 
 			// then
 			assert.NoError(t, err)
@@ -359,7 +359,7 @@ func TestService_UnBlockMapping(t *testing.T) {
 			subj := oidc.NewService(repoWrapper)
 
 			// when
-			err = subj.UnBlockMapping(t.Context(), expTenantID)
+			err = subj.UnblockMapping(t.Context(), expTenantID)
 
 			// then
 			assert.NoError(t, err)
@@ -386,14 +386,14 @@ func TestService_UnBlockMapping(t *testing.T) {
 			repoWrapper.MockUpdate = func(ctx context.Context, tenantID string, provider oidc.Provider) error {
 				noOfUpdateCalls++
 				// delete the provider before updating to return an error
-				err := repoWrapper.Repo.Delete(ctx, expTenantID, expUnblockedProvider)
+				err := repoWrapper.Repo.Delete(ctx, expTenantID)
 				assert.NoError(t, err)
 				return nil
 			}
 			subj := oidc.NewService(repoWrapper)
 
 			// when
-			err = subj.UnBlockMapping(t.Context(), expTenantID)
+			err = subj.UnblockMapping(t.Context(), expTenantID)
 
 			// then
 			assert.NoError(t, err)
@@ -407,7 +407,7 @@ func TestService_UnBlockMapping(t *testing.T) {
 			subj := oidc.NewService(repoWrapper)
 
 			// when
-			err := subj.UnBlockMapping(t.Context(), expTenantID)
+			err := subj.UnblockMapping(t.Context(), expTenantID)
 
 			// then
 			assert.NoError(t, err)
@@ -428,7 +428,7 @@ func TestService_UnBlockMapping(t *testing.T) {
 			subj := oidc.NewService(mockRepo)
 
 			// when
-			err := subj.UnBlockMapping(t.Context(), expTenantID)
+			err := subj.UnblockMapping(t.Context(), expTenantID)
 
 			// then
 			assert.ErrorIs(t, err, assert.AnError)
@@ -457,7 +457,7 @@ func TestService_UnBlockMapping(t *testing.T) {
 			subj := oidc.NewService(repoWrapper)
 
 			// when
-			err = subj.UnBlockMapping(t.Context(), expTenantIDtoUpdate)
+			err = subj.UnblockMapping(t.Context(), expTenantIDtoUpdate)
 
 			// then
 			assert.ErrorIs(t, err, assert.AnError)

@@ -83,6 +83,27 @@ func (srv *OIDCMappingServer) BlockOIDCMapping(ctx context.Context, req *oidcmap
 	return resp, nil
 }
 
+// RemoveOIDCMapping removes the OIDC configuration for the tenant.
+// It calls the underlying service to remove the mapping.
+// Returns a respose containing an optional error message if removing fails.
+func (srv *OIDCMappingServer) RemoveOIDCMapping(ctx context.Context, req *oidcmappingv1.RemoveOIDCMappingRequest) (*oidcmappingv1.RemoveOIDCMappingResponse, error) {
+	ctx = slogctx.With(ctx, "tenant_id", req.GetTenantId())
+	slogctx.Debug(ctx, "RemoveOIDCMapping called")
+
+	resp := &oidcmappingv1.RemoveOIDCMappingResponse{}
+	err := srv.oidc.RemoveMapping(ctx, req.GetTenantId())
+	if err != nil {
+		slogctx.Error(ctx, "Could not remove OIDC mapping", "error", err)
+		msg := err.Error()
+		resp.Message = &msg
+		return resp, status.Error(codes.Internal, "failed to remove OIDC mapping: "+msg)
+	}
+
+	resp.Success = true
+
+	return resp, nil
+}
+
 // UnblockOIDCMapping unblocks the OIDC mapping for the specified tenant.
 // It calls the underlying service to set the mapping as unblocked.
 // Returns a response containing an optional error message if unblocking fails.
@@ -91,7 +112,7 @@ func (srv *OIDCMappingServer) UnblockOIDCMapping(ctx context.Context, req *oidcm
 	slogctx.Debug(ctx, "UnblockOIDCMapping called")
 
 	resp := &oidcmappingv1.UnblockOIDCMappingResponse{}
-	err := srv.oidc.UnBlockMapping(ctx, req.GetTenantId())
+	err := srv.oidc.UnblockMapping(ctx, req.GetTenantId())
 	if err != nil {
 		slogctx.Error(ctx, "Could not unblock OIDC mapping", "error", err)
 		msg := err.Error()

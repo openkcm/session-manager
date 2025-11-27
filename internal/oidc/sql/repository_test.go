@@ -196,7 +196,7 @@ func TestRepository_Delete(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := r.Delete(t.Context(), tt.tenantID, tt.provider)
+			err := r.Delete(t.Context(), tt.tenantID)
 			if !tt.assertErr(t, err, fmt.Sprintf("Repository.Delete() error %v", err)) || err != nil {
 				return
 			}
