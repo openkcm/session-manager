@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.1](https://github.com/openkcm/session-manager/compare/v0.12.0...v0.12.1) (2025-11-28)
+
+
+### Bug Fixes
+
+* debug fingerprinting ([#145](https://github.com/openkcm/session-manager/issues/145)) ([42adbba](https://github.com/openkcm/session-manager/commit/42adbba45a748c3e0e86b0df3325ac500ab68949))
+
 ## [0.12.0](https://github.com/openkcm/session-manager/compare/v0.11.0...v0.12.0) (2025-11-27)
 
 
