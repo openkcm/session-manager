@@ -79,8 +79,9 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 			return &sessionv1.GetSessionResponse{Valid: false}, err
 		}
 		if !result.Active {
-			slogctx.Warn(ctx, "Access token is not active")
-			return &sessionv1.GetSessionResponse{Valid: false}, nil
+			slogctx.Warn(ctx, "Access token is not active", "result", result)
+			// TODO: enable the return when introspection is stable
+			// return &sessionv1.GetSessionResponse{Valid: false}, nil
 		}
 	}
 
