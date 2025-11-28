@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/openkcm/session-manager/internal/oidc"
-	"github.com/openkcm/session-manager/pkg/session"
+	"github.com/openkcm/session-manager/internal/session"
 )
 
 func StartOIDCServer(t *testing.T, fail bool, algs ...string) *httptest.Server {

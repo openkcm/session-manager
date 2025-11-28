@@ -10,8 +10,8 @@ import (
 	"github.com/openkcm/session-manager/internal/middleware/responsewriter"
 	"github.com/openkcm/session-manager/internal/openapi"
 	"github.com/openkcm/session-manager/internal/serviceerr"
+	"github.com/openkcm/session-manager/internal/session"
 	"github.com/openkcm/session-manager/pkg/fingerprint"
-	"github.com/openkcm/session-manager/pkg/session"
 )
 
 // openAPIServer is an implementation of the OpenAPI interface.

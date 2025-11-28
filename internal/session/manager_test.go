@@ -18,8 +18,8 @@ import (
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/oidc"
 	oidcmock "github.com/openkcm/session-manager/internal/oidc/mock"
-	"github.com/openkcm/session-manager/pkg/session"
-	sessionmock "github.com/openkcm/session-manager/pkg/session/mock"
+	"github.com/openkcm/session-manager/internal/session"
+	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
 )
 
 const (

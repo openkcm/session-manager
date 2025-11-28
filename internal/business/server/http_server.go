@@ -14,8 +14,8 @@ import (
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/middleware/responsewriter"
 	"github.com/openkcm/session-manager/internal/openapi"
+	"github.com/openkcm/session-manager/internal/session"
 	"github.com/openkcm/session-manager/pkg/fingerprint"
-	"github.com/openkcm/session-manager/pkg/session"
 )
 
 // createStatusServer creates an API http server using the given config
