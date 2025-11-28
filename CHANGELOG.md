@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.2](https://github.com/openkcm/session-manager/compare/v0.12.1...v0.12.2) (2025-11-28)
+
+
+### Bug Fixes
+
+* disable token introspection ([#148](https://github.com/openkcm/session-manager/issues/148)) ([03492dc](https://github.com/openkcm/session-manager/commit/03492dc01b09a19049312b132a8855dc256f9790))
+
 ## [0.12.1](https://github.com/openkcm/session-manager/compare/v0.12.0...v0.12.1) (2025-11-28)
 
 
