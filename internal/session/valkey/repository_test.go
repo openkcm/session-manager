@@ -13,8 +13,8 @@ import (
 	"github.com/valkey-io/valkey-go"
 
 	"github.com/openkcm/session-manager/internal/dbtest/valkeytest"
-	"github.com/openkcm/session-manager/pkg/session"
-	sessionvalkey "github.com/openkcm/session-manager/pkg/session/valkey"
+	"github.com/openkcm/session-manager/internal/session"
+	sessionvalkey "github.com/openkcm/session-manager/internal/session/valkey"
 )
 
 var client valkey.Client

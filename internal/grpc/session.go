@@ -8,7 +8,7 @@ import (
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/session-manager/internal/oidc"
-	"github.com/openkcm/session-manager/pkg/session"
+	"github.com/openkcm/session-manager/internal/session"
 )
 
 type SessionServer struct {

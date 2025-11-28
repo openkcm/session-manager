@@ -20,8 +20,8 @@ import (
 	"github.com/openkcm/session-manager/internal/grpc"
 	"github.com/openkcm/session-manager/internal/oidc"
 	oidcsql "github.com/openkcm/session-manager/internal/oidc/sql"
-	"github.com/openkcm/session-manager/pkg/session"
-	sessionvalkey "github.com/openkcm/session-manager/pkg/session/valkey"
+	"github.com/openkcm/session-manager/internal/session"
+	sessionvalkey "github.com/openkcm/session-manager/internal/session/valkey"
 )
 
 // Main starts both API servers

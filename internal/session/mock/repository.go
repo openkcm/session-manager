@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/openkcm/session-manager/internal/serviceerr"
-	"github.com/openkcm/session-manager/pkg/session"
+	"github.com/openkcm/session-manager/internal/session"
 )
 
 type Repository struct {
