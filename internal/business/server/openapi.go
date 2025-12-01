@@ -5,13 +5,14 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/openkcm/common-sdk/pkg/fingerprint"
+
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/session-manager/internal/middleware/responsewriter"
 	"github.com/openkcm/session-manager/internal/openapi"
 	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/internal/session"
-	"github.com/openkcm/session-manager/pkg/fingerprint"
 )
 
 // openAPIServer is an implementation of the OpenAPI interface.

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/openkcm/common-sdk/pkg/fingerprint"
 	"github.com/samber/oops"
 
 	slogctx "github.com/veqryn/slog-context"
@@ -15,7 +16,6 @@ import (
 	"github.com/openkcm/session-manager/internal/middleware/responsewriter"
 	"github.com/openkcm/session-manager/internal/openapi"
 	"github.com/openkcm/session-manager/internal/session"
-	"github.com/openkcm/session-manager/pkg/fingerprint"
 )
 
 // createStatusServer creates an API http server using the given config

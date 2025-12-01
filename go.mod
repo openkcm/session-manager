@@ -6,7 +6,6 @@ tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
 
 require (
 	github.com/docker/go-connections v0.6.0
-	github.com/envoyproxy/go-control-plane/envoy v1.36.0
 	github.com/go-jose/go-jose/v4 v4.1.3
 	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/golang-jwt/jwt/v5 v5.3.0
@@ -15,7 +14,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/oapi-codegen/runtime v1.1.2
 	github.com/openkcm/api-sdk v0.13.0
-	github.com/openkcm/common-sdk v1.6.2
+	github.com/openkcm/common-sdk v1.6.3-0.20251201142447-371564f7495f
 	github.com/pressly/goose/v3 v3.26.0
 	github.com/samber/oops v1.19.4
 	github.com/spf13/cobra v1.10.1
@@ -55,6 +54,7 @@ require (
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/dprotaso/go-yit v0.0.0-20220510233725-9ba8df137936 // indirect
 	github.com/ebitengine/purego v0.9.0 // indirect
+	github.com/envoyproxy/go-control-plane/envoy v1.36.0 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.2.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
