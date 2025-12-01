@@ -234,6 +234,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 	}
 
 	type CustomClaims struct {
+		SID        string   `json:"sid"`
 		UserUUID   string   `json:"user_uuid"`
 		GivenName  string   `json:"given_name"`
 		FamilyName string   `json:"family_name"`
@@ -275,6 +276,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 	session := Session{
 		ID:          sessionID,
 		TenantID:    state.TenantID,
+		ProviderID:  customClaims.SID,
 		Fingerprint: fingerprint,
 		CSRFToken:   csrfToken,
 		Issuer:      provider.IssuerURL,
