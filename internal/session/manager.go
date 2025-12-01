@@ -227,11 +227,6 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("parsing id token: %w, %s", err, algs)
 	}
 
-	jws, err := jose.ParseSigned(tokens.IDToken, algs)
-	if err != nil {
-		return OIDCSessionData{}, fmt.Errorf("parsing JWS: %w", err)
-	}
-
 	keyset, err := m.getProviderKeySet(ctx, openidConf)
 	if err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get jwks for provider")
@@ -283,7 +278,6 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		Fingerprint: fingerprint,
 		CSRFToken:   csrfToken,
 		Issuer:      provider.IssuerURL,
-		RawClaims:   string(jws.UnsafePayloadWithoutVerification()),
 		Claims: Claims{
 			Subject:    standardClaims.Subject,
 			UserUUID:   customClaims.UserUUID,

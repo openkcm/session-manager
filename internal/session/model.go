@@ -22,7 +22,6 @@ type Session struct {
 	Fingerprint       string            // Fingerprint to bind the session to a specific client
 	CSRFToken         string            // CSRF token to prevent CSRF attacks
 	Issuer            string            // Issuer of the OIDC tokens
-	RawClaims         string            // Raw JSON claims from the ID token
 	Claims            Claims            // Claims from the ID token
 	AccessToken       string            // Access token from the identity provider
 	RefreshToken      string            // Refresh token from the identity provider
