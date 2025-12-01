@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.3](https://github.com/openkcm/session-manager/compare/v0.12.2...v0.12.3) (2025-12-01)
+
+
+### Bug Fixes
+
+* add missing `sid` claim as provider session ID ([#151](https://github.com/openkcm/session-manager/issues/151)) ([e39b88f](https://github.com/openkcm/session-manager/commit/e39b88fb1c868c7524b167bf441995bbab6c2cd3))
+
 ## [0.12.2](https://github.com/openkcm/session-manager/compare/v0.12.1...v0.12.2) (2025-11-28)
 
 
