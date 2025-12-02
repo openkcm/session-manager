@@ -56,8 +56,7 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 	// Compare fingerprints
 	if sess.Fingerprint != req.GetFingerprint() {
 		slogctx.Warn(ctx, "Is this an attack? Fingerprints do not match", "session_fingerprint", sess.Fingerprint, "request_fingerprint", req.GetFingerprint())
-		// TODO: enable the return when fingerprinting is stable
-		// return &sessionv1.GetSessionResponse{Valid: false}, nil
+		return &sessionv1.GetSessionResponse{Valid: false}, nil
 	}
 
 	// Compare tenant IDs
