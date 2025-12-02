@@ -37,12 +37,12 @@ type Manager struct {
 	audit        *otlpaudit.AuditLogger
 	secureClient *http.Client
 
-	sessionDuration    time.Duration
-	callbackURL        *url.URL
-	clientID           string
-	getParametersAuth  []string
-	getParametersToken []string
-	authContextKeys    []string
+	sessionDuration      time.Duration
+	callbackURL          *url.URL
+	clientID             string
+	queryParametersAuth  []string
+	queryParametersToken []string
+	authContextKeys      []string
 
 	sessionCookieTemplate config.CookieTemplate
 	csrfCookieTemplate    config.CookieTemplate
@@ -75,8 +75,8 @@ func NewManager(
 		sessions:              sessions,
 		audit:                 auditLogger,
 		sessionDuration:       cfg.SessionDuration,
-		getParametersAuth:     cfg.AdditionalGetParametersAuthorize,
-		getParametersToken:    cfg.AdditionalGetParametersToken,
+		queryParametersAuth:   cfg.AdditionalQueryParametersAuthorize,
+		queryParametersToken:  cfg.AdditionalQueryParametersToken,
 		authContextKeys:       cfg.AdditionalAuthContextKeys,
 		sessionCookieTemplate: cfg.SessionCookieTemplate,
 		csrfCookieTemplate:    cfg.CSRFCookieTemplate,
@@ -137,7 +137,7 @@ func (m *Manager) authURI(openidConf oidc.Configuration, state State, pkce pkce.
 	q.Set("code_challenge", pkce.Challenge)
 	q.Set("code_challenge_method", pkce.Method)
 	q.Set("redirect_uri", m.callbackURL.String())
-	for _, parameter := range m.getParametersAuth {
+	for _, parameter := range m.queryParametersAuth {
 		value, ok := properties[parameter]
 		if !ok {
 			return "", fmt.Errorf("missing auth parameter: %s", parameter)
@@ -416,7 +416,7 @@ func (m *Manager) exchangeCode(ctx context.Context, openidConf oidc.Configuratio
 	data.Set("code_verifier", codeVerifier)
 	data.Set("redirect_uri", m.callbackURL.String())
 	data.Set("client_id", m.clientID)
-	for _, parameter := range m.getParametersToken {
+	for _, parameter := range m.queryParametersToken {
 		value, ok := properties[parameter]
 		if !ok {
 			return tokenResponse{}, fmt.Errorf("missing token parameter: %s", parameter)

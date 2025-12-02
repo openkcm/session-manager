@@ -75,9 +75,9 @@ func TestManager_Auth(t *testing.T) {
 			sessions:   sessionmock.NewInMemRepository(nil, nil, nil, nil, nil),
 			requestURI: requestURI,
 			cfg: &config.SessionManager{
-				SessionDuration:                  time.Hour,
-				CallbackURL:                      callbackURL,
-				AdditionalGetParametersAuthorize: []string{"paramAuth1"},
+				SessionDuration:                    time.Hour,
+				CallbackURL:                        callbackURL,
+				AdditionalQueryParametersAuthorize: []string{"paramAuth1"},
 				ClientAuth: config.ClientAuth{
 					ClientID: testClientID,
 				},
@@ -254,11 +254,11 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			code:        code,
 			fingerprint: fingerprint,
 			cfg: &config.SessionManager{
-				SessionDuration:              time.Hour,
-				CallbackURL:                  callbackURL,
-				AdditionalGetParametersToken: []string{"getParamToken1"},
-				AdditionalAuthContextKeys:    []string{"authContextKey1"},
-				CSRFSecret:                   commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
+				SessionDuration:                time.Hour,
+				CallbackURL:                    callbackURL,
+				AdditionalQueryParametersToken: []string{"queryParamToken1"},
+				AdditionalAuthContextKeys:      []string{"authContextKey1"},
+				CSRFSecret:                     commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
 			},
 			wantSessionID:   true,
 			wantCSRFToken:   true,
@@ -350,11 +350,11 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			code:        code,
 			fingerprint: fingerprint,
 			cfg: &config.SessionManager{
-				SessionDuration:              time.Hour,
-				CallbackURL:                  callbackURL,
-				AdditionalGetParametersToken: []string{"getParamToken1"},
-				AdditionalAuthContextKeys:    []string{"doesNotExist"},
-				CSRFSecret:                   commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
+				SessionDuration:                time.Hour,
+				CallbackURL:                    callbackURL,
+				AdditionalQueryParametersToken: []string{"queryParamToken1"},
+				AdditionalAuthContextKeys:      []string{"doesNotExist"},
+				CSRFSecret:                     commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
 			},
 			wantSessionID:   true,
 			wantCSRFToken:   true,
@@ -383,8 +383,8 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 				JWKSURI:   jwksURI,
 				Audiences: []string{requestURI},
 				Properties: map[string]string{
-					"getParamToken1":  "getParamToken1",
-					"authContextKey1": "authContextValue1",
+					"queryParamToken1": "queryParamToken1",
+					"authContextKey1":  "authContextValue1",
 				},
 			}
 
