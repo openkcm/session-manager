@@ -11,24 +11,41 @@ import (
 	"github.com/openkcm/session-manager/internal/session"
 )
 
+type SessionServerOption func(*SessionServer)
+
+func WithQueryParametersIntrospect(params []string) SessionServerOption {
+	return func(s *SessionServer) {
+		s.queryParametersIntrospect = params
+	}
+}
+
 type SessionServer struct {
 	sessionv1.UnimplementedServiceServer
 
 	sessionRepo  session.Repository
 	providerRepo oidc.ProviderRepository
 	httpClient   *http.Client
+
+	queryParametersIntrospect []string
 }
 
 func NewSessionServer(
 	sessionRepo session.Repository,
 	providerRepo oidc.ProviderRepository,
 	httpClient *http.Client,
+	opts ...SessionServerOption,
 ) *SessionServer {
-	return &SessionServer{
+	s := &SessionServer{
 		sessionRepo:  sessionRepo,
 		providerRepo: providerRepo,
 		httpClient:   httpClient,
 	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(s)
+		}
+	}
+	return s
 }
 
 func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessionRequest) (*sessionv1.GetSessionResponse, error) {
@@ -66,6 +83,7 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 	}
 
 	// Introspect access token
+	provider.QueryParametersIntrospect = s.queryParametersIntrospect
 	cfg, err := provider.GetOpenIDConfig(ctx, s.httpClient)
 	if err != nil {
 		slogctx.Error(ctx, "Could not get OpenID configuration", "issuer", sess.Issuer, "error", err)

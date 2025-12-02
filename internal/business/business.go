@@ -106,7 +106,10 @@ func internalMain(ctx context.Context, cfg *config.Config) error {
 
 	// Initialize the gRPC servers.
 	oidcmappingsrv := grpc.NewOIDCMappingServer(oidcService)
-	sessionsrv := grpc.NewSessionServer(sessionRepo, oidcProviderRepo, httpClient)
+	opts := []grpc.SessionServerOption{
+		grpc.WithQueryParametersIntrospect(cfg.SessionManager.AdditionalQueryParametersIntrospect),
+	}
+	sessionsrv := grpc.NewSessionServer(sessionRepo, oidcProviderRepo, httpClient, opts...)
 	return server.StartGRPCServer(ctx, cfg, oidcmappingsrv, sessionsrv)
 }
 

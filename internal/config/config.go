@@ -51,18 +51,24 @@ type ValKey struct {
 type SessionManager struct {
 	SessionDuration time.Duration `yaml:"sessionDuration" default:"12h"`
 	// CallbackURL is the URL path for the OAuth2 callback endpoint, where we receive the authorization code.
-	CallbackURL                      string              `yaml:"callbackURL" default:"/sm/callback"`
-	ClientAuth                       ClientAuth          `yaml:"clientAuth"`
-	CSRFSecret                       commoncfg.SourceRef `yaml:"csrfSecret"`
-	AdditionalGetParametersAuthorize []string            `yaml:"additionalGetParametersAuthorize"`
-	AdditionalGetParametersToken     []string            `yaml:"additionalGetParametersToken"`
-	AdditionalAuthContextKeys        []string            `yaml:"additionalAuthContextKeys"`
+	CallbackURL                         string              `yaml:"callbackURL" default:"/sm/callback"`
+	ClientAuth                          ClientAuth          `yaml:"clientAuth"`
+	CSRFSecret                          commoncfg.SourceRef `yaml:"csrfSecret"`
+	AdditionalQueryParametersAuthorize  []string            `yaml:"additionalQueryParametersAuthorize"`
+	AdditionalQueryParametersToken      []string            `yaml:"additionalQueryParametersToken"`
+	AdditionalQueryParametersIntrospect []string            `yaml:"additionalQueryParametersIntrospect"`
+	AdditionalAuthContextKeys           []string            `yaml:"additionalAuthContextKeys"`
 	// SessionCookieTemplate defines the template attributes for the session cookie.
 	SessionCookieTemplate CookieTemplate `yaml:"sessionCookieTemplate"`
 	// CSRFCookieTemplate defines the template attributes for the CSRF cookie.
 	CSRFCookieTemplate CookieTemplate `yaml:"csrfCookieTemplate"`
+
 	// Deprecated: not used anymore. Kept for a helm issue with the migrate job.
 	RedirectURL string `yaml:"redirectURL" default:"/sm/redirect"`
+	// Deprecated: use AdditionalQueryParametersAuthorize instead.
+	AdditionalGetParametersAuthorize []string `yaml:"additionalGetParametersAuthorize"`
+	// Deprecated: use AdditionalQueryParametersToken instead.
+	AdditionalGetParametersToken []string `yaml:"additionalGetParametersToken"`
 }
 
 type CookieSameSiteValue string

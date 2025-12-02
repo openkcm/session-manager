@@ -19,6 +19,8 @@ type Provider struct {
 	JWKSURI    string
 	Audiences  []string
 	Properties map[string]string
+
+	QueryParametersIntrospect []string
 }
 
 func (p *Provider) GetOpenIDConfig(ctx context.Context, httpClient *http.Client) (Configuration, error) {
@@ -62,6 +64,14 @@ func (p *Provider) IntrospectToken(ctx context.Context, httpClient *http.Client,
 	req.Header.Set("Accept", "application/json")
 	q := req.URL.Query()
 	q.Set("token", token)
+	for _, parameter := range p.QueryParametersIntrospect {
+		value, ok := p.Properties[parameter]
+		if !ok {
+			return Introspection{}, fmt.Errorf("missing introspect parameter: %s", parameter)
+		}
+		q.Set(parameter, value)
+	}
+
 	req.URL.RawQuery = q.Encode()
 
 	resp, err := httpClient.Do(req)
