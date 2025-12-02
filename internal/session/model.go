@@ -27,6 +27,7 @@ type Session struct {
 	RefreshToken      string            // Refresh token from the identity provider
 	Expiry            time.Time         // Expiry time of the session
 	AccessTokenExpiry time.Time         // Expiry time of the Access Token
+	LastVisited       time.Time         // The time the user last used the session
 	AuthContext       map[string]string // Additional authentication context
 }
 

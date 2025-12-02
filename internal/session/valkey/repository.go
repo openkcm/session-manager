@@ -39,6 +39,8 @@ type Repository struct {
 	store *store
 }
 
+var _ = session.Repository(&Repository{})
+
 func (r *Repository) ListSessions(ctx context.Context) ([]session.Session, error) {
 	var sessions []session.Session
 	if err := getStoreObjects(ctx, r.store, objectTypeSession, "*", &sessions); err != nil {

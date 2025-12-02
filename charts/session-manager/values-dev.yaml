@@ -336,5 +336,7 @@ config:
   migrate:
     source: file:///sql
 
-  tokenRefresher:
-    refreshInterval: 30m
+  housekeeper:
+    tokenRefreshInterval: 30m
+    idleSessionCleanupInterval: 30m
+    idleSessionTimeout: 90m
