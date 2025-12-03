@@ -14,7 +14,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/oapi-codegen/runtime v1.1.2
 	github.com/openkcm/api-sdk v0.13.0
-	github.com/openkcm/common-sdk v1.7.0
+	github.com/openkcm/common-sdk v1.8.0
 	github.com/pressly/goose/v3 v3.26.0
 	github.com/samber/oops v1.19.4
 	github.com/spf13/cobra v1.10.1
