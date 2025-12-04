@@ -23,7 +23,7 @@ func (m *Manager) RefreshExpiringTokens(ctx context.Context) error {
 	for _, s := range sessions {
 		provider, err := m.oidc.Get(ctx, s.TenantID)
 		if err != nil {
-			return fmt.Errorf("getting odic provider: %w", err)
+			return fmt.Errorf("getting OIDC provider: %w", err)
 		}
 
 		if shouldRefresh(s) {

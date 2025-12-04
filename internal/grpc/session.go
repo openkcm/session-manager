@@ -106,7 +106,7 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 	// Update last visited time
 	sess.LastVisited = time.Now()
 	if err := s.sessionRepo.StoreSession(ctx, sess); err != nil {
-		slogctx.Warn(ctx, "Could not update last visited time", "error", err)
+		slogctx.Error(ctx, "could not update last visited time", "error", err)
 	}
 
 	// Return info of the valid session
