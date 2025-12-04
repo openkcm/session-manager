@@ -15,8 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTokenRefresher(t *testing.T) {
-	const cmdName = "token-refresher"
+func TestHousekeeper(t *testing.T) {
+	const cmdName = "housekeeper"
 
 	ctx := t.Context()
 
@@ -47,11 +47,11 @@ func TestTokenRefresher(t *testing.T) {
 
 	cmd.Stdout = cmdOut
 	cmd.Stderr = cmdOut
-	t.Logf("starting token refresher process. Logs will be saved into %s", cmdOutPath)
+	t.Logf("starting housekeeper process. Logs will be saved into %s", cmdOutPath)
 	if err := cmd.Run(); err != nil && !errors.Is(err, context.Canceled) {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) && !exitErr.Sys().(syscall.WaitStatus).Signaled() {
-			t.Fatalf("token refresher process exited abnormally: %s", err)
+			t.Fatalf("housekeeper process exited abnormally: %s", err)
 		}
 	}
 }

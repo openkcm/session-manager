@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "session-manager.fullname" . }}-token-refresher
+  name: {{ include "session-manager.fullname" . }}-housekeeper
   labels:
     {{- include "session-manager.labels" . | nindent 4 }}
-    app.kubernetes.io/component: token-refresher
+    app.kubernetes.io/component: housekeeper
 spec:
   replicas: 1
   selector:
     matchLabels:
       {{- include "session-manager.selectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: token-refresher
+      app.kubernetes.io/component: housekeeper
   template:
     metadata:
       {{- with .Values.pod.annotations }}
@@ -22,7 +22,7 @@ spec:
         {{- with .Values.pod.labels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-        app.kubernetes.io/component: token-refresher
+        app.kubernetes.io/component: housekeeper
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -37,7 +37,7 @@ spec:
       {{- with .Values.extraContainers }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
-        - name: {{ include "session-manager.name" . }}-token-refresher
+        - name: {{ include "session-manager.name" . }}-housekeeper
           {{- with .Values.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
@@ -47,11 +47,18 @@ spec:
           {{- with .Values.image.command }}
           command: {{ . }}
           {{- end }}
-          args: [ "token-refresher" ]
+          args: [ "housekeeper" ]
           env: []
-          {{- with .Values.resources }}
           resources:
-            {{- toYaml . | nindent 12 }}
+          {{- if .Values.resources }}
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- else }}
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
           {{- end }}
           volumeMounts:
             - name: {{ include "session-manager.name" . }}-config-volume

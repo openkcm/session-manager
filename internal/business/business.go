@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
@@ -69,18 +68,6 @@ func publicMain(ctx context.Context, cfg *config.Config) error {
 	return server.StartHTTPServer(ctx, cfg, sessionManager)
 }
 
-func TokenRefresherMain(ctx context.Context, cfg *config.Config) error {
-	sessionManager, closeFn, err := initSessionManager(ctx, cfg)
-	if err != nil {
-		return fmt.Errorf("failed to initialise the session manager: %w", err)
-	}
-
-	defer closeFn()
-
-	slogctx.Info(ctx, "Starting token refresh job")
-	return startTokenRefresher(ctx, sessionManager, cfg)
-}
-
 // internalMain starts the gRPC private API server.
 func internalMain(ctx context.Context, cfg *config.Config) error {
 	// Create OIDC service
@@ -111,23 +98,6 @@ func internalMain(ctx context.Context, cfg *config.Config) error {
 	}
 	sessionsrv := grpc.NewSessionServer(sessionRepo, oidcProviderRepo, httpClient, opts...)
 	return server.StartGRPCServer(ctx, cfg, oidcmappingsrv, sessionsrv)
-}
-
-func startTokenRefresher(ctx context.Context, sessionManager *session.Manager, cfg *config.Config) error {
-	c := time.Tick(cfg.TokenRefresher.RefreshInterval)
-	for {
-		slogctx.Info(ctx, "Triggering tokens refresh")
-		if err := sessionManager.RefreshExpiringSessions(ctx); err != nil {
-			slogctx.Error(ctx, "failed to refresh tokens", "error", err)
-		}
-
-		select {
-		case <-c:
-			continue
-		case <-ctx.Done():
-			return nil
-		}
-	}
 }
 
 func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Manager, closeFn func(), _ error) {

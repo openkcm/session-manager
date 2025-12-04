@@ -18,7 +18,14 @@ type Config struct {
 	ValKey         ValKey         `yaml:"valkey"`
 	Migrate        Migrate        `yaml:"migrate"`
 	SessionManager SessionManager `yaml:"sessionManager"`
-	TokenRefresher TokenRefresher `yaml:"tokenRefresher"`
+	Housekeeper    Housekeeper    `yaml:"housekeeper"`
+}
+
+type Housekeeper struct {
+	TokenRefreshInterval time.Duration `yaml:"tokenRefreshInterval" default:"30m"`
+
+	IdleSessionCleanupInterval time.Duration `yaml:"idleSessionCleanupInterval" default:"30m"`
+	IdleSessionTimeout         time.Duration `yaml:"idleSessionTimeout" default:"90m"`
 }
 
 type HTTPServer struct {
@@ -104,8 +111,4 @@ type ClientAuth struct {
 
 type Migrate struct {
 	Source string `yaml:"source" default:"file://./sql"`
-}
-
-type TokenRefresher struct {
-	RefreshInterval time.Duration `yaml:"refreshInterval" default:"30m"`
 }

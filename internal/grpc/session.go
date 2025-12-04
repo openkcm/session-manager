@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"net/http"
+	"time"
 
 	sessionv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/session/v1"
 	slogctx "github.com/veqryn/slog-context"
@@ -100,6 +101,12 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 			// TODO: enable the return when introspection is stable
 			// return &sessionv1.GetSessionResponse{Valid: false}, nil
 		}
+	}
+
+	// Update last visited time
+	sess.LastVisited = time.Now()
+	if err := s.sessionRepo.StoreSession(ctx, sess); err != nil {
+		slogctx.Error(ctx, "could not update last visited time", "error", err)
 	}
 
 	// Return info of the valid session

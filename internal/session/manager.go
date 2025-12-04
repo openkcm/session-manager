@@ -1,7 +1,6 @@
 package session
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -291,6 +290,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		AccessToken:  tokens.AccessToken,
 		RefreshToken: tokens.RefreshToken,
 		Expiry:       time.Now().Add(m.sessionDuration),
+		LastVisited:  time.Now(),
 		AuthContext:  authContext,
 	}
 
@@ -415,7 +415,8 @@ func (m *Manager) exchangeCode(ctx context.Context, openidConf oidc.Configuratio
 	data.Set("code", code)
 	data.Set("code_verifier", codeVerifier)
 	data.Set("redirect_uri", m.callbackURL.String())
-	data.Set("client_id", m.clientID)
+	// The client_id is already set in the manager's secureClient.
+	// data.Set("client_id", m.clientID)
 	for _, parameter := range m.queryParametersToken {
 		value, ok := properties[parameter]
 		if !ok {
@@ -450,76 +451,4 @@ func (m *Manager) exchangeCode(ctx context.Context, openidConf oidc.Configuratio
 
 func (m *Manager) ValidateCSRFToken(token, sessionID string) bool {
 	return csrf.Validate(token, sessionID, m.csrfSecret)
-}
-
-func (m *Manager) RefreshExpiringSessions(ctx context.Context) error {
-	sessions, err := m.sessions.ListSessions(ctx)
-	if err != nil {
-		return err
-	}
-	for _, s := range sessions {
-		provider, err := m.oidc.Get(ctx, s.TenantID)
-		if err != nil {
-			return fmt.Errorf("getting odic provider: %w", err)
-		}
-
-		if shouldRefresh(s) {
-			if err := m.RefreshSession(ctx, &s, provider); err != nil {
-				slogctx.Warn(ctx, "Could not refresh token", "tenant_id", s.TenantID)
-				continue
-			}
-
-			if err := m.sessions.StoreSession(ctx, s); err != nil {
-				slogctx.Warn(ctx, "Could not store refreshed session", "tenant_id", s.TenantID)
-				continue
-			}
-		}
-	}
-	return nil
-}
-
-// RefreshSession refreshes the access token using the given refresh token for the tenant.
-func (m *Manager) RefreshSession(ctx context.Context, s *Session, provider oidc.Provider) error {
-	data := url.Values{}
-	data.Set("grant_type", "refresh_token")
-	data.Set("refresh_token", s.RefreshToken)
-	data.Set("client_id", m.clientID)
-
-	tokenEndpoint, err := url.JoinPath(provider.IssuerURL, "/token")
-	if err != nil {
-		return fmt.Errorf("making issuer token path: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenEndpoint, bytes.NewBufferString(data.Encode()))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := m.secureClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return errors.New("token endpoint returned non-200 status")
-	}
-
-	var respData struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		ExpiresIn    int    `json:"expires_in"`
-	}
-
-	s.AccessToken = respData.AccessToken
-	s.RefreshToken = respData.RefreshToken
-	s.AccessTokenExpiry = time.Now().Add(time.Duration(respData.ExpiresIn))
-
-	return nil
-}
-
-func shouldRefresh(s Session) bool {
-	// refresh if token expires in less than 5 minutes
-	return time.Until(s.AccessTokenExpiry) < 5*time.Minute
 }

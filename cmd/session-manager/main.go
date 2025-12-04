@@ -14,8 +14,8 @@ import (
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/session-manager/cmd/session-manager/apiserver"
+	"github.com/openkcm/session-manager/cmd/session-manager/housekeeper"
 	"github.com/openkcm/session-manager/cmd/session-manager/migrate"
-	tokenrefresh "github.com/openkcm/session-manager/cmd/session-manager/token-refresher"
 )
 
 var (
@@ -55,7 +55,7 @@ func rootCmd() *cobra.Command {
 	cmd.AddCommand(
 		versionCmd,
 		apiserver.Cmd(BuildInfo),
-		tokenrefresh.Cmd(BuildInfo),
+		housekeeper.Cmd(BuildInfo),
 		migrate.Cmd(BuildInfo),
 	)
 

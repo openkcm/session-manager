@@ -1,4 +1,4 @@
-package tokenrefresh
+package housekeeper
 
 import (
 	"github.com/spf13/cobra"
@@ -9,11 +9,11 @@ import (
 
 func Cmd(buildInfo string) *cobra.Command {
 	return cmdutils.CobraCommand(
-		"token-refresher",
-		"Session Manager Token Refresh job",
-		"Session Manager Token Refresh job refreshes access tokens",
+		"housekeeper",
+		"Session Manager Housekeeping job",
+		"Session Manager Housekeeping job refreshes access tokens, cleanups idle sessions, etc.",
 		buildInfo,
 		cmdutils.RunAsService,
-		business.TokenRefresherMain,
+		business.HousekeeperMain,
 	)
 }
