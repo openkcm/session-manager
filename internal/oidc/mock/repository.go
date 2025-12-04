@@ -7,69 +7,87 @@ import (
 	"github.com/openkcm/session-manager/internal/serviceerr"
 )
 
+type RepositoryOption func(*Repository)
+
 type Repository struct {
-	ProvidersToTenant map[string]oidc.Provider
+	tenantTrust map[string]oidc.Provider
 
-	getForTenantErr, createErr, deleteErr, updateErr error
+	getErr, createErr, deleteErr, updateErr error
 }
 
-func NewInMemRepository(getForTenantErr, createErr, deleteErr, updateErr error) *Repository {
-	return &Repository{
-		ProvidersToTenant: make(map[string]oidc.Provider),
-
-		getForTenantErr: getForTenantErr,
-		createErr:       createErr,
-		deleteErr:       deleteErr,
-		updateErr:       updateErr,
-	}
+func WithTrust(tenantID string, provider oidc.Provider) RepositoryOption {
+	return func(r *Repository) { r.tenantTrust[tenantID] = provider }
+}
+func WithGetError(err error) RepositoryOption {
+	return func(r *Repository) { r.getErr = err }
+}
+func WithCreateError(err error) RepositoryOption {
+	return func(r *Repository) { r.createErr = err }
+}
+func WithDeleteError(err error) RepositoryOption {
+	return func(r *Repository) { r.deleteErr = err }
+}
+func WithUpdateError(err error) RepositoryOption {
+	return func(r *Repository) { r.updateErr = err }
 }
 
-func (r *Repository) Get(ctx context.Context, tenantID string) (oidc.Provider, error) {
-	if r.getForTenantErr != nil {
-		return oidc.Provider{}, r.getForTenantErr
-	}
+var _ = oidc.ProviderRepository(&Repository{})
 
-	if provider, ok := r.ProvidersToTenant[tenantID]; ok {
+func NewInMemRepository(opts ...RepositoryOption) *Repository {
+	r := &Repository{
+		tenantTrust: make(map[string]oidc.Provider),
+	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(r)
+		}
+	}
+	return r
+}
+
+// TAdd is a helper method for tests to add a trust relationship.
+func (r *Repository) TAdd(tenantID string, provider oidc.Provider) {
+	r.tenantTrust[tenantID] = provider
+}
+
+// TGet is a helper method for tests to get a trust relationship.
+func (r *Repository) TGet(tenantID string) oidc.Provider {
+	return r.tenantTrust[tenantID]
+}
+
+func (r *Repository) Get(_ context.Context, tenantID string) (oidc.Provider, error) {
+	if r.getErr != nil {
+		return oidc.Provider{}, r.getErr
+	}
+	if provider, ok := r.tenantTrust[tenantID]; ok {
 		return provider, nil
 	}
-
-	return oidc.Provider{}, nil
+	return oidc.Provider{}, serviceerr.ErrNotFound
 }
 
-func (r *Repository) Add(tenantID string, provider oidc.Provider) {
-	r.ProvidersToTenant[tenantID] = provider
-}
-
-func (r *Repository) Create(ctx context.Context, tenantID string, provider oidc.Provider) error {
+func (r *Repository) Create(_ context.Context, tenantID string, provider oidc.Provider) error {
 	if r.createErr != nil {
 		return r.createErr
 	}
-
-	r.Add(tenantID, provider)
-
+	r.tenantTrust[tenantID] = provider
 	return nil
 }
 
-func (r *Repository) Delete(ctx context.Context, tenantID string) error {
+func (r *Repository) Delete(_ context.Context, tenantID string) error {
 	if r.deleteErr != nil {
 		return r.deleteErr
 	}
-
-	if _, ok := r.ProvidersToTenant[tenantID]; !ok {
+	if _, ok := r.tenantTrust[tenantID]; !ok {
 		return serviceerr.ErrNotFound
 	}
-
-	delete(r.ProvidersToTenant, tenantID)
-
+	delete(r.tenantTrust, tenantID)
 	return nil
 }
 
-func (r *Repository) Update(ctx context.Context, tenantID string, provider oidc.Provider) error {
+func (r *Repository) Update(_ context.Context, tenantID string, provider oidc.Provider) error {
 	if r.updateErr != nil {
 		return r.updateErr
 	}
-
-	r.ProvidersToTenant[tenantID] = provider
-
+	r.tenantTrust[tenantID] = provider
 	return nil
 }
