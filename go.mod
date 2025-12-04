@@ -17,7 +17,7 @@ require (
 	github.com/openkcm/common-sdk v1.8.0
 	github.com/pressly/goose/v3 v3.26.0
 	github.com/samber/oops v1.19.4
-	github.com/spf13/cobra v1.10.1
+	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.40.0
 	github.com/testcontainers/testcontainers-go/modules/valkey v0.40.0
