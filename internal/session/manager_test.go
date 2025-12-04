@@ -50,12 +50,6 @@ func TestManager_Auth(t *testing.T) {
 			"paramToken1": "paramToken1",
 		},
 	}
-	newOIDCRepo := func(getErr, createErr, deleteErr, updateErr error) *oidcmock.Repository {
-		oidcRepo := oidcmock.NewInMemRepository(getErr, createErr, deleteErr, updateErr)
-		oidcRepo.Add(tenantID, oidcProvider)
-
-		return oidcRepo
-	}
 
 	tests := []struct {
 		name        string
@@ -71,8 +65,8 @@ func TestManager_Auth(t *testing.T) {
 	}{
 		{
 			name:       "Success",
-			oidc:       newOIDCRepo(nil, nil, nil, nil),
-			sessions:   sessionmock.NewInMemRepository(nil, nil, nil, nil, nil),
+			oidc:       oidcmock.NewInMemRepository(oidcmock.WithTrust(tenantID, oidcProvider)),
+			sessions:   sessionmock.NewInMemRepository(),
 			requestURI: requestURI,
 			cfg: &config.SessionManager{
 				SessionDuration:                    time.Hour,
@@ -89,9 +83,12 @@ func TestManager_Auth(t *testing.T) {
 			errAssert:   assert.NoError,
 		},
 		{
-			name:       "Get OIDC error",
-			oidc:       newOIDCRepo(errors.New("faield to get oidc provider"), nil, nil, nil),
-			sessions:   sessionmock.NewInMemRepository(nil, nil, nil, nil, nil),
+			name: "Get OIDC error",
+			oidc: oidcmock.NewInMemRepository(
+				oidcmock.WithTrust(tenantID, oidcProvider),
+				oidcmock.WithGetError(errors.New("faield to get oidc provider")),
+			),
+			sessions:   sessionmock.NewInMemRepository(),
 			requestURI: requestURI,
 			cfg: &config.SessionManager{
 				SessionDuration: time.Hour,
@@ -105,8 +102,8 @@ func TestManager_Auth(t *testing.T) {
 		},
 		{
 			name:       "Save state error",
-			oidc:       newOIDCRepo(nil, nil, nil, nil),
-			sessions:   sessionmock.NewInMemRepository(nil, errors.New("failed to save state"), nil, nil, nil),
+			oidc:       oidcmock.NewInMemRepository(oidcmock.WithTrust(tenantID, oidcProvider)),
+			sessions:   sessionmock.NewInMemRepository(sessionmock.WithStoreStateError(errors.New("failed to save state"))),
 			requestURI: requestURI,
 			cfg: &config.SessionManager{
 				SessionDuration: time.Hour,
@@ -144,7 +141,7 @@ func TestManager_Auth(t *testing.T) {
 			}
 
 			// Validate that the data has been inserted into the repository
-			assert.Equal(t, oidcProvider, tt.oidc.ProvidersToTenant[tt.tenantID], "OIDC Provider has not been inserted")
+			assert.Equal(t, oidcProvider, tt.oidc.TGet(tt.tenantID), "OIDC Provider has not been inserted")
 
 			// Check the returned URL
 			u, err := url.Parse(got)
@@ -218,20 +215,6 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 		Expiry:       time.Now().Add(time.Hour),
 	}
 
-	newSessionRepo := func(loadStateErr, storeStateErr, storeSessionErr, deleteStateErr, deleteSessionErr error, state *session.State) *sessionmock.Repository {
-		sessionRepo := sessionmock.NewInMemRepository(loadStateErr, storeStateErr, storeSessionErr, deleteStateErr, deleteSessionErr)
-		if storeSessionErr != nil {
-			t.Logf("Session repo configured with store session error: %v", storeSessionErr)
-		}
-		if state != nil && loadStateErr == nil {
-			if sessionRepo.States == nil {
-				sessionRepo.States = make(map[string]session.State)
-			}
-			sessionRepo.States[state.ID] = *state
-		}
-		return sessionRepo
-	}
-
 	tests := []struct {
 		name            string
 		oidc            *oidcmock.Repository
@@ -248,8 +231,8 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 	}{
 		{
 			name:        "Success",
-			oidc:        oidcmock.NewInMemRepository(nil, nil, nil, nil),
-			sessions:    newSessionRepo(nil, nil, nil, nil, nil, &validState),
+			oidc:        oidcmock.NewInMemRepository(),
+			sessions:    sessionmock.NewInMemRepository(sessionmock.WithState(validState)),
 			stateID:     stateID,
 			code:        code,
 			fingerprint: fingerprint,
@@ -267,8 +250,8 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 		},
 		{
 			name:        "State load error",
-			oidc:        oidcmock.NewInMemRepository(nil, nil, nil, nil),
-			sessions:    newSessionRepo(errors.New("state not found"), nil, nil, nil, nil, nil),
+			oidc:        oidcmock.NewInMemRepository(),
+			sessions:    sessionmock.NewInMemRepository(sessionmock.WithLoadStateError(errors.New("state not found"))),
 			stateID:     stateID,
 			code:        code,
 			fingerprint: fingerprint,
@@ -283,8 +266,8 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 		},
 		{
 			name:        "State expired",
-			oidc:        oidcmock.NewInMemRepository(nil, nil, nil, nil),
-			sessions:    newSessionRepo(nil, nil, nil, nil, nil, &expiredState),
+			oidc:        oidcmock.NewInMemRepository(),
+			sessions:    sessionmock.NewInMemRepository(sessionmock.WithState(expiredState)),
 			stateID:     stateID,
 			code:        code,
 			fingerprint: fingerprint,
@@ -298,8 +281,8 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 		},
 		{
 			name:        "Fingerprint mismatch",
-			oidc:        oidcmock.NewInMemRepository(nil, nil, nil, nil),
-			sessions:    newSessionRepo(nil, nil, nil, nil, nil, &mismatchState),
+			oidc:        oidcmock.NewInMemRepository(),
+			sessions:    sessionmock.NewInMemRepository(sessionmock.WithState(mismatchState)),
 			stateID:     stateID,
 			code:        code,
 			fingerprint: fingerprint,
@@ -313,8 +296,8 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 		},
 		{
 			name:        "OIDC provider get error",
-			oidc:        oidcmock.NewInMemRepository(errors.New("provider not found"), nil, nil, nil),
-			sessions:    newSessionRepo(nil, nil, nil, nil, nil, &validState),
+			oidc:        oidcmock.NewInMemRepository(oidcmock.WithGetError(errors.New("provider not found"))),
+			sessions:    sessionmock.NewInMemRepository(sessionmock.WithState(validState)),
 			stateID:     stateID,
 			code:        code,
 			fingerprint: fingerprint,
@@ -328,8 +311,8 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 		},
 		{
 			name:        "Token exchange error",
-			oidc:        oidcmock.NewInMemRepository(nil, nil, nil, nil),
-			sessions:    newSessionRepo(nil, nil, nil, nil, nil, &validState),
+			oidc:        oidcmock.NewInMemRepository(),
+			sessions:    sessionmock.NewInMemRepository(sessionmock.WithState(validState)),
 			stateID:     stateID,
 			code:        code,
 			fingerprint: fingerprint,
@@ -344,8 +327,8 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 		},
 		{
 			name:        "Auth context error",
-			oidc:        oidcmock.NewInMemRepository(nil, nil, nil, nil),
-			sessions:    newSessionRepo(nil, nil, nil, nil, nil, &validState),
+			oidc:        oidcmock.NewInMemRepository(),
+			sessions:    sessionmock.NewInMemRepository(sessionmock.WithState(validState)),
 			stateID:     stateID,
 			code:        code,
 			fingerprint: fingerprint,
@@ -365,6 +348,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
 			oidcServer := StartOIDCServer(t, tt.oidcServerFail)
 			defer oidcServer.Close()
 
@@ -388,7 +372,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 				},
 			}
 
-			tt.oidc.Add(tenantID, localOIDCProvider)
+			tt.oidc.TAdd(tenantID, localOIDCProvider)
 
 			m, err := session.NewManager(tt.cfg, tt.oidc, tt.sessions, auditLogger, http.DefaultClient)
 			require.NoError(t, err)
@@ -406,7 +390,8 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 
 			require.NotNil(t, result, "Result should not be nil on success")
 
-			sess := tt.sessions.Sessions[result.SessionID]
+			sess, err := tt.sessions.LoadSession(ctx, result.SessionID)
+			require.NoError(t, err, "Loading session from repository failed")
 			assert.NotNil(t, sess.AuthContext)
 			expKeys := []string{"issuer", "client_id"}
 			for _, k := range expKeys {
