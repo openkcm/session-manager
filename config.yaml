@@ -247,5 +247,6 @@ migrate:
 
 housekeeper:
     tokenRefreshInterval: 30m
+    tokenRefreshTriggerInterval: 5m
     idleSessionCleanupInterval: 30m
     idleSessionTimeout: 90m
