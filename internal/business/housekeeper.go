@@ -55,9 +55,10 @@ func HousekeeperMain(ctx context.Context, cfg *config.Config) error {
 
 func startExpiringTokenRefresh(ctx context.Context, sessionManager *session.Manager, cfg *config.Housekeeper) error {
 	c := time.Tick(cfg.TokenRefreshInterval)
+	triggerInterval := cfg.TokenRefreshTriggerInterval
 	for {
 		slogctx.Info(ctx, "Triggering refresh of expiring tokens")
-		if err := sessionManager.RefreshExpiringTokens(ctx); err != nil {
+		if err := sessionManager.RefreshExpiringTokens(ctx, triggerInterval); err != nil {
 			slogctx.Error(ctx, "failed to refresh expiring tokens", "error", err)
 		}
 

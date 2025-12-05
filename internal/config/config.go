@@ -22,7 +22,8 @@ type Config struct {
 }
 
 type Housekeeper struct {
-	TokenRefreshInterval time.Duration `yaml:"tokenRefreshInterval" default:"30m"`
+	TokenRefreshInterval        time.Duration `yaml:"tokenRefreshInterval" default:"30m"`
+	TokenRefreshTriggerInterval time.Duration `yaml:"tokenRefreshTriggerInterval" default:"5m"`
 
 	IdleSessionCleanupInterval time.Duration `yaml:"idleSessionCleanupInterval" default:"30m"`
 	IdleSessionTimeout         time.Duration `yaml:"idleSessionTimeout" default:"90m"`

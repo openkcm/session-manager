@@ -15,7 +15,7 @@ import (
 )
 
 // RefreshExpiringTokens refreshes access tokens that are nearing expiration.
-func (m *Manager) RefreshExpiringTokens(ctx context.Context) error {
+func (m *Manager) RefreshExpiringTokens(ctx context.Context, refreshTriggerInterval time.Duration) error {
 	sessions, err := m.sessions.ListSessions(ctx)
 	if err != nil {
 		return err
@@ -26,7 +26,7 @@ func (m *Manager) RefreshExpiringTokens(ctx context.Context) error {
 			return fmt.Errorf("getting OIDC provider: %w", err)
 		}
 
-		if shouldRefresh(s) {
+		if shouldRefresh(s, refreshTriggerInterval) {
 			if err := m.refreshExpiringToken(ctx, &s, provider); err != nil {
 				slogctx.Warn(ctx, "Could not refresh token", "tenant_id", s.TenantID, "error", err)
 				continue
@@ -41,9 +41,9 @@ func (m *Manager) RefreshExpiringTokens(ctx context.Context) error {
 	return nil
 }
 
-func shouldRefresh(s Session) bool {
-	// refresh if token expires in less than 5 minutes
-	return time.Until(s.AccessTokenExpiry) < 5*time.Minute
+func shouldRefresh(s Session, refreshTriggerInterval time.Duration) bool {
+	// refresh if token expires in less than refreshTriggerInterval set in the config
+	return time.Until(s.AccessTokenExpiry) < refreshTriggerInterval
 }
 
 // refreshExpiringToken refreshes the access token for the given session if needed.
