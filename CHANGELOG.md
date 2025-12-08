@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.13.0](https://github.com/openkcm/session-manager/compare/v0.12.3...v0.13.0) (2025-12-08)
+
+
+### Features
+
+* cleanup idle sessions ([#156](https://github.com/openkcm/session-manager/issues/156)) ([6e125e0](https://github.com/openkcm/session-manager/commit/6e125e03d794d135a3d45062268de5581509bad9))
+
+
+### Bug Fixes
+
+* deny session on fingerprint mismatch ([#154](https://github.com/openkcm/session-manager/issues/154)) ([b24d4e5](https://github.com/openkcm/session-manager/commit/b24d4e57cb3e51f163647c19b9fdf9aa9c3b935f))
+* Remove invalid golangci-lint config ([#161](https://github.com/openkcm/session-manager/issues/161)) ([4b4bc3f](https://github.com/openkcm/session-manager/commit/4b4bc3f05920eaeed36a520a519f1ef88ede5a66))
+* token introspection ([#155](https://github.com/openkcm/session-manager/issues/155)) ([c4a32a6](https://github.com/openkcm/session-manager/commit/c4a32a6c7f57b829904acdfc5a20ab70561162f1))
+
 ## [0.12.3](https://github.com/openkcm/session-manager/compare/v0.12.2...v0.12.3) (2025-12-01)
 
 
