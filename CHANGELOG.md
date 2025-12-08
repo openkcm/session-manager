@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.1](https://github.com/openkcm/session-manager/compare/v0.13.0...v0.13.1) (2025-12-08)
+
+
+### Bug Fixes
+
+* client ID handling ([#166](https://github.com/openkcm/session-manager/issues/166)) ([bcde51b](https://github.com/openkcm/session-manager/commit/bcde51b0a93b23c2ebfb0aaa4993284d463dd915))
+
 ## [0.13.0](https://github.com/openkcm/session-manager/compare/v0.12.3...v0.13.0) (2025-12-08)
 
 
