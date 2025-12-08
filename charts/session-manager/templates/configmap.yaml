@@ -51,4 +51,7 @@ data:
 
     migrate:
       {{- toYaml .migrate | nindent 6 }}
+
+    housekeeper:
+      {{- toYaml .housekeeper | nindent 6 }}
     {{- end }}
