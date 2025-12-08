@@ -51,8 +51,7 @@ func (m *Manager) refreshExpiringToken(ctx context.Context, s *Session, provider
 	data := url.Values{}
 	data.Set("grant_type", "refresh_token")
 	data.Set("refresh_token", s.RefreshToken)
-	// The client_id is already set in the manager's secureClient.
-	// data.Set("client_id", m.clientID)
+	data.Set("client_id", m.clientID)
 	for _, parameter := range m.queryParametersToken {
 		value, ok := provider.Properties[parameter]
 		if !ok {
