@@ -415,8 +415,7 @@ func (m *Manager) exchangeCode(ctx context.Context, openidConf oidc.Configuratio
 	data.Set("code", code)
 	data.Set("code_verifier", codeVerifier)
 	data.Set("redirect_uri", m.callbackURL.String())
-	// The client_id is already set in the manager's secureClient.
-	// data.Set("client_id", m.clientID)
+	data.Set("client_id", m.clientID)
 	for _, parameter := range m.queryParametersToken {
 		value, ok := properties[parameter]
 		if !ok {
