@@ -45,6 +45,37 @@ paths:
                         application/json:
                             schema:
                                 $ref: "#/components/schemas/ErrorModel"
+    /sm/logout:
+        get:
+            operationId: logout
+            description: |
+                When the user clicks the logout button, the CMK UI calls this endpoint. Steps:
+
+                - lookup the session details using the given session ID
+                - lookup the end session endpoint of the related OIDC provider
+                - delete the session from the storage
+                - (un)set the session and CSRF cookies in the response (see chapter Cookies)
+                - return a 302 response to the end session endpoint of the OIDC provider (simplified for readability):
+
+                This allows the CMK UI to iniate the SLO.
+            parameters:
+                - name: "Cookie"
+                  in: header
+                  required: true
+                  schema:
+                      type: string
+            responses:
+                "302":
+                    headers:
+                        Location:
+                            schema:
+                                type: string
+                default:
+                    description: Error
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorModel"
     /sm/callback:
         get:
             description: |

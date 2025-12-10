@@ -9,6 +9,7 @@ import (
 
 	slogctx "github.com/veqryn/slog-context"
 
+	"github.com/openkcm/session-manager/internal/middleware"
 	"github.com/openkcm/session-manager/internal/middleware/responsewriter"
 	"github.com/openkcm/session-manager/internal/openapi"
 	"github.com/openkcm/session-manager/internal/serviceerr"
@@ -144,6 +145,30 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 	return openapi.Callback302Response{
 		Headers: openapi.Callback302ResponseHeaders{
 			Location: result.RequestURI,
+		},
+	}, nil
+}
+
+// Logout implements openapi.StrictServerInterface.
+func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutRequestObject) (openapi.LogoutResponseObject, error) {
+	slogctx.Debug(ctx, "Logout() called")
+	defer slogctx.Debug(ctx, "Callback() completed")
+
+	sessionID := request.Params.Cookie
+	logoutURL, err := s.sManager.Logout(ctx, sessionID)
+	if err != nil {
+		slogctx.Error(ctx, "failed to logout user", "error", err)
+
+		body, status := s.toErrorModel(err)
+		return openapi.LogoutdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+
+	return openapi.Logout302Response{
+		Headers: openapi.Logout302ResponseHeaders{
+			Location: logoutURL,
 		},
 	}, nil
 }

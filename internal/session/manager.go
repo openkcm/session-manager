@@ -323,6 +323,58 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 	}, nil
 }
 
+func (m *Manager) Logout(ctx context.Context, sessionID string) (string, error) {
+	ctx = slogctx.With(ctx, "session_id", sessionID)
+
+	session, err := m.sessions.LoadSession(ctx, sessionID)
+	if err != nil {
+		slogctx.Warn(ctx, "failed to get session by id", "error", err)
+		return "", fmt.Errorf("getting session id: %w", err)
+	}
+
+	ctx = slogctx.With(ctx, "tenant_id", session.TenantID)
+
+	oidcProvider, err := m.oidc.Get(ctx, session.TenantID)
+	if err != nil {
+		slogctx.Error(ctx, "failed to get oidc provider for a tenant", "error", err)
+		return "", fmt.Errorf("getting oidc provider: %w", err)
+	}
+
+	ctx = slogctx.With(ctx, "issuer_url", oidcProvider.IssuerURL)
+
+	oidcConf, err := oidcProvider.GetOpenIDConfig(ctx, m.secureClient)
+	if err != nil {
+		slogctx.Warn(ctx, "failed to get oidc configuration", "error", err)
+		return "", fmt.Errorf("getting oidc configuration: %w", err)
+	}
+
+	if oidcConf.EndSessionEndpoint == "" {
+		slogctx.Warn(ctx, "the provider does not support RP-Initiated Logout")
+		return "", serviceerr.ErrEndSessionNotSupported
+	}
+
+	redirectURL, err := url.Parse(oidcConf.EndSessionEndpoint)
+	if err != nil {
+		slogctx.Warn(ctx, "failed to parse oidc session endpont", "error", err)
+		return "", serviceerr.ErrInvalidOIDCProvider
+	}
+
+	vals := make(url.Values)
+	vals.Add("client_id", m.clientID)
+
+	// TODO: additional parameters
+	vals.Add("post_logout_redirect_uri", "TODO")
+
+	redirectURL.RawQuery = vals.Encode()
+
+	if err := m.sessions.DeleteSession(ctx, session); err != nil {
+		slogctx.Error(ctx, "failed to delete a session", "error", err)
+		return "", fmt.Errorf("deleting session: %w", err)
+	}
+
+	return redirectURL.String(), nil
+}
+
 func (m *Manager) MakeSessionCookie(ctx context.Context, value string) (*http.Cookie, error) {
 	sessionCookie := m.sessionCookieTemplate.ToCookie(value)
 
