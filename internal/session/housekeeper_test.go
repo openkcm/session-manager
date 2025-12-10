@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/stretchr/testify/require"
 
 	"github.com/openkcm/session-manager/internal/config"
@@ -19,7 +18,7 @@ func TestCleanupIdleSessions(t *testing.T) {
 	ctx := t.Context()
 	sessionID := "test-session-id"
 	cfg := &config.SessionManager{
-		CSRFSecret: commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: testCSRFSecret},
+		CSRFSecretParsed: []byte(testCSRFSecret),
 	}
 	sessions := sessionmock.NewInMemRepository(
 		sessionmock.WithSession(session.Session{

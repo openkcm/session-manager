@@ -59,6 +59,16 @@ func Main(ctx context.Context, cfg *config.Config) error {
 
 // publicMain starts the HTTP REST public API server.
 func publicMain(ctx context.Context, cfg *config.Config) error {
+	csrfSecret, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.CSRFSecret)
+	if err != nil {
+		return fmt.Errorf("loading csrf token from source ref: %w", err)
+	}
+	if len(csrfSecret) < 32 {
+		return errors.New("CSRF secret must be at least 32 bytes")
+	}
+
+	cfg.SessionManager.CSRFSecretParsed = csrfSecret
+
 	sessionManager, closeFn, err := initSessionManager(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to initialise the session manager: %w", err)

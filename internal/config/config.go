@@ -62,10 +62,13 @@ type SessionManager struct {
 	CallbackURL                         string              `yaml:"callbackURL" default:"/sm/callback"`
 	ClientAuth                          ClientAuth          `yaml:"clientAuth"`
 	CSRFSecret                          commoncfg.SourceRef `yaml:"csrfSecret"`
+	CSRFSecretParsed                    []byte              `yaml:"-"`
 	AdditionalQueryParametersAuthorize  []string            `yaml:"additionalQueryParametersAuthorize"`
 	AdditionalQueryParametersToken      []string            `yaml:"additionalQueryParametersToken"`
 	AdditionalQueryParametersIntrospect []string            `yaml:"additionalQueryParametersIntrospect"`
+	AdditionalQueryParametersLogout     []string            `yaml:"additionalQueryParametersLogout"`
 	AdditionalAuthContextKeys           []string            `yaml:"additionalAuthContextKeys"`
+	PostLogoutRedirectURL               string              `yaml:"postLogoutRedirectURL"`
 	// SessionCookieTemplate defines the template attributes for the session cookie.
 	SessionCookieTemplate CookieTemplate `yaml:"sessionCookieTemplate"`
 	// CSRFCookieTemplate defines the template attributes for the CSRF cookie.

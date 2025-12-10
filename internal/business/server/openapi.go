@@ -2,14 +2,16 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"net/http"
 
+	"github.com/openkcm/common-sdk/pkg/csrf"
 	"github.com/openkcm/common-sdk/pkg/fingerprint"
 
 	slogctx "github.com/veqryn/slog-context"
 
-	"github.com/openkcm/session-manager/internal/middleware/responsewriter"
+	"github.com/openkcm/session-manager/internal/middleware"
 	"github.com/openkcm/session-manager/internal/openapi"
 	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/internal/session"
@@ -18,15 +20,28 @@ import (
 // openAPIServer is an implementation of the OpenAPI interface.
 type openAPIServer struct {
 	sManager *session.Manager
+
+	csrfSecret []byte
+
+	sessionIDCookieName,
+	csrfTokenCookieName string
 }
 
 // Ensure openAPIServer implements [openapi.StrictServerInterface]
 var _ openapi.StrictServerInterface = (*openAPIServer)(nil)
 
 // newOpenAPIServer creates a new implementation of the openapi.StrictServerInterface.
-func newOpenAPIServer(sManager *session.Manager) *openAPIServer {
+func newOpenAPIServer(
+	sManager *session.Manager,
+	csrfSecret []byte,
+	sessionIDCookieName,
+	csrfTokenCookieName string,
+) *openAPIServer {
 	return &openAPIServer{
-		sManager: sManager,
+		sManager:            sManager,
+		csrfSecret:          csrfSecret,
+		sessionIDCookieName: sessionIDCookieName,
+		csrfTokenCookieName: csrfTokenCookieName,
 	}
 }
 
@@ -82,7 +97,7 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 	}
 
 	// Get the response writer from the context
-	rw, err := responsewriter.ResponseWriterFromContext(ctx)
+	rw, err := middleware.ResponseWriterFromContext(ctx)
 	if err != nil {
 		slogctx.Error(ctx, "Failed to get response writer from context", "error", err)
 
@@ -176,6 +191,107 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 	}, nil
 }
 
+// Logout implements openapi.StrictServerInterface.
+func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutRequestObject) (openapi.LogoutResponseObject, error) {
+	slogctx.Debug(ctx, "Logout() called")
+	defer slogctx.Debug(ctx, "Callback() completed")
+
+	rw, err := middleware.ResponseWriterFromContext(ctx)
+	if err != nil {
+		slogctx.Error(ctx, "Failed to get response writer from context", "error", err)
+
+		body, status := s.toErrorModel(serviceerr.ErrUnknown)
+		return openapi.LogoutdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+
+	cookies, err := http.ParseCookie(request.Params.Cookie)
+	if err != nil {
+		slogctx.Warn(ctx, "failed to parse 'Cookie' header", "error", err)
+
+		body, status := newBadRequest("invalid 'Cookie' header")
+		return openapi.LogoutdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+
+	var sessionCookie *http.Cookie
+	var csrfCookie *http.Cookie
+
+	// http.ParseCookie limits the number of cookies to 3000
+	// (configurable with $GODEBUG environment variable, see httpcookiemaxnum),
+	// so we can safely iterate over the cookies.
+	for _, cookie := range cookies {
+		switch cookie.Name {
+		case s.csrfTokenCookieName:
+			csrfCookie = cookie
+		case s.sessionIDCookieName:
+			sessionCookie = cookie
+		}
+
+		if sessionCookie.Value != "" && csrfCookie.Value != "" {
+			break
+		}
+	}
+
+	if sessionCookie.Value == "" {
+		body, status := newBadRequest("missing session id in the cookies")
+		return openapi.LogoutdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+
+	if csrfCookie.Value == "" {
+		body, status := newBadRequest("missing csrf token in the cookies")
+		return openapi.LogoutdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+
+	if !csrf.Validate(request.Params.XCSRFToken, sessionCookie.Value, s.csrfSecret) {
+		csrfTokenHash := sha256.New().Sum([]byte(csrfCookie.Value))
+		csrfSecretHash := sha256.New().Sum(s.csrfSecret)
+		sessionIDHash := sha256.New().Sum([]byte(sessionCookie.Value))
+
+		slogctx.Warn(ctx, "received invalid csrf token value", "csrf_token_hash", csrfTokenHash[:5], "csrf_secret_hash", csrfSecretHash[:5], "session_id_hash", sessionIDHash[:5])
+
+		body, status := s.toErrorModel(serviceerr.ErrInvalidCSRFToken)
+		return openapi.LogoutdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+
+	logoutURL, err := s.sManager.Logout(ctx, sessionCookie.Value)
+	if err != nil {
+		slogctx.Error(ctx, "failed to logout user", "error", err)
+
+		body, status := s.toErrorModel(err)
+		return openapi.LogoutdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+
+	// Reset all cookies
+	for _, cookie := range []*http.Cookie{csrfCookie, sessionCookie} {
+		cookie.MaxAge = -1
+		cookie.Value = ""
+		http.SetCookie(rw, cookie)
+	}
+
+	return openapi.Logout302Response{
+		Headers: openapi.Logout302ResponseHeaders{
+			Location: logoutURL,
+		},
+	}, nil
+}
+
 func (s *openAPIServer) toErrorModel(err error) (model openapi.ErrorModel, httpStatus int) {
 	var serviceErr *serviceerr.Error
 	if !errors.As(err, &serviceErr) {
@@ -186,4 +302,10 @@ func (s *openAPIServer) toErrorModel(err error) (model openapi.ErrorModel, httpS
 		ErrorCode: (*int)(&serviceErr.Code),
 		ErrorMsg:  &serviceErr.Message,
 	}, serviceErr.HTTPStatus()
+}
+
+func newBadRequest(msg string) (model openapi.ErrorModel, httpStatus int) {
+	return openapi.ErrorModel{
+		ErrorMsg: &msg,
+	}, http.StatusBadRequest
 }

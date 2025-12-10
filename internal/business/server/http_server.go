@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -13,14 +14,19 @@ import (
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/session-manager/internal/config"
-	"github.com/openkcm/session-manager/internal/middleware/responsewriter"
+	"github.com/openkcm/session-manager/internal/middleware"
 	"github.com/openkcm/session-manager/internal/openapi"
 	"github.com/openkcm/session-manager/internal/session"
 )
 
 // createStatusServer creates an API http server using the given config
-func createHTTPServer(_ context.Context, cfg *config.Config, sManager *session.Manager) *http.Server {
-	openAPIServer := newOpenAPIServer(sManager)
+func createHTTPServer(_ context.Context, cfg *config.Config, sManager *session.Manager) (*http.Server, error) {
+	openAPIServer := newOpenAPIServer(
+		sManager,
+		cfg.SessionManager.CSRFSecretParsed,
+		cfg.SessionManager.SessionCookieTemplate.Name,
+		cfg.SessionManager.CSRFCookieTemplate.Name,
+	)
 	strictHandler := openapi.NewStrictHandler(
 		openAPIServer,
 		[]openapi.StrictMiddlewareFunc{
@@ -29,12 +35,12 @@ func createHTTPServer(_ context.Context, cfg *config.Config, sManager *session.M
 	)
 
 	handler := fingerprint.FingerprintCtxMiddleware(openapi.Handler(strictHandler))
-	handler = responsewriter.ResponseWriterMiddleware(handler)
+	handler = middleware.ResponseWriterMiddleware(handler)
 
 	return &http.Server{
 		Addr:    cfg.HTTP.Address,
 		Handler: handler,
-	}
+	}, nil
 }
 
 // StartHTTPServer starts the gRPC server using the given config.
@@ -44,7 +50,10 @@ func StartHTTPServer(ctx context.Context, cfg *config.Config, sManager *session.
 		return err
 	}
 
-	server := createHTTPServer(ctx, cfg, sManager)
+	server, err := createHTTPServer(ctx, cfg, sManager)
+	if err != nil {
+		return fmt.Errorf("creating http server: %w", err)
+	}
 
 	slogctx.Info(ctx, "Starting a listener", "address", server.Addr)
 
