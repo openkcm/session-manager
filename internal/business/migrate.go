@@ -29,11 +29,13 @@ func MigrateMain(ctx context.Context, cfg *config.Config) error {
 
 	goose.SetBaseFS(migrations.FS)
 
-	if err := goose.SetDialect("pgx"); err != nil {
+	err = goose.SetDialect("pgx")
+	if err != nil {
 		return fmt.Errorf("setting goose dialect: %w", err)
 	}
 
-	if err := goose.UpContext(ctx, db, "."); err != nil {
+	err = goose.UpContext(ctx, db, ".")
+	if err != nil {
 		return fmt.Errorf("applying migrations: %w", err)
 	}
 

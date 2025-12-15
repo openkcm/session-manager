@@ -43,7 +43,8 @@ var _ = session.Repository(&Repository{})
 
 func (r *Repository) ListSessions(ctx context.Context) ([]session.Session, error) {
 	var sessions []session.Session
-	if err := getStoreObjects(ctx, r.store, objectTypeSession, "*", &sessions); err != nil {
+	err := getStoreObjects(ctx, r.store, objectTypeSession, "*", &sessions)
+	if err != nil {
 		return nil, errors.Join(ErrGetSessions, err)
 	}
 
@@ -58,7 +59,8 @@ func NewRepository(valkeyClient valkey.Client, prefix string) *Repository {
 
 func (r *Repository) LoadState(ctx context.Context, stateID string) (session.State, error) {
 	var state session.State
-	if err := r.store.Get(ctx, objectTypeState, stateID, &state); err != nil {
+	err := r.store.Get(ctx, objectTypeState, stateID, &state)
+	if err != nil {
 		return session.State{}, errors.Join(ErrGetState, err)
 	}
 
@@ -67,7 +69,8 @@ func (r *Repository) LoadState(ctx context.Context, stateID string) (session.Sta
 
 func (r *Repository) StoreState(ctx context.Context, state session.State) error {
 	duration := time.Until(state.Expiry)
-	if err := r.store.Set(ctx, objectTypeState, state.ID, state, duration); err != nil {
+	err := r.store.Set(ctx, objectTypeState, state.ID, state, duration)
+	if err != nil {
 		return errors.Join(ErrStoreState, err)
 	}
 
@@ -76,7 +79,8 @@ func (r *Repository) StoreState(ctx context.Context, state session.State) error 
 
 func (r *Repository) LoadSession(ctx context.Context, sessionID string) (session.Session, error) {
 	var s session.Session
-	if err := r.store.Get(ctx, objectTypeSession, sessionID, &s); err != nil {
+	err := r.store.Get(ctx, objectTypeSession, sessionID, &s)
+	if err != nil {
 		return session.Session{}, errors.Join(ErrGetSession, err)
 	}
 
@@ -85,7 +89,8 @@ func (r *Repository) LoadSession(ctx context.Context, sessionID string) (session
 
 func (r *Repository) GetSessIDByProviderID(ctx context.Context, providerID string) (string, error) {
 	var s string
-	if err := r.store.Get(ctx, objectTypeProviderSession, getObjectID(objectTypeProviderSession, providerID), &s); err != nil {
+	err := r.store.Get(ctx, objectTypeProviderSession, getObjectID(objectTypeProviderSession, providerID), &s)
+	if err != nil {
 		return "", errors.Join(ErrGetSessIDByProviderID, err)
 	}
 
@@ -94,7 +99,8 @@ func (r *Repository) GetSessIDByProviderID(ctx context.Context, providerID strin
 
 func (r *Repository) GetAccessTokenForSession(ctx context.Context, sessionID string) (string, error) {
 	var accessToken string
-	if err := r.store.Get(ctx, objectTypeAccessToken, getObjectID(objectTypeAccessToken, sessionID), &accessToken); err != nil {
+	err := r.store.Get(ctx, objectTypeAccessToken, getObjectID(objectTypeAccessToken, sessionID), &accessToken)
+	if err != nil {
 		return "", errors.Join(ErrGetAccessToken, err)
 	}
 
@@ -103,7 +109,8 @@ func (r *Repository) GetAccessTokenForSession(ctx context.Context, sessionID str
 
 func (r *Repository) GetRefreshTokenForSession(ctx context.Context, sessionID string) (string, error) {
 	var refreshToken string
-	if err := r.store.Get(ctx, objectTypeRefreshToken, getObjectID(objectTypeRefreshToken, sessionID), &refreshToken); err != nil {
+	err := r.store.Get(ctx, objectTypeRefreshToken, getObjectID(objectTypeRefreshToken, sessionID), &refreshToken)
+	if err != nil {
 		return "", errors.Join(ErrGetRefreshToken, err)
 	}
 
@@ -113,19 +120,23 @@ func (r *Repository) GetRefreshTokenForSession(ctx context.Context, sessionID st
 func (r *Repository) StoreSession(ctx context.Context, s session.Session) error {
 	duration := time.Until(s.Expiry)
 	var errs []error
-	if err := r.store.Set(ctx, objectTypeProviderSession, getObjectID(objectTypeProviderSession, s.ProviderID), s.ID, duration); err != nil {
+	err := r.store.Set(ctx, objectTypeProviderSession, getObjectID(objectTypeProviderSession, s.ProviderID), s.ID, duration)
+	if err != nil {
 		errs = append(errs, err)
 	}
 
-	if err := r.store.Set(ctx, objectTypeAccessToken, getObjectID(objectTypeAccessToken, s.ID), s.AccessToken, duration); err != nil {
+	err = r.store.Set(ctx, objectTypeAccessToken, getObjectID(objectTypeAccessToken, s.ID), s.AccessToken, duration)
+	if err != nil {
 		errs = append(errs, err)
 	}
 
-	if err := r.store.Set(ctx, objectTypeRefreshToken, getObjectID(objectTypeRefreshToken, s.ID), s.RefreshToken, duration); err != nil {
+	err = r.store.Set(ctx, objectTypeRefreshToken, getObjectID(objectTypeRefreshToken, s.ID), s.RefreshToken, duration)
+	if err != nil {
 		errs = append(errs, err)
 	}
 
-	if err := r.store.Set(ctx, objectTypeSession, s.ID, s, duration); err != nil {
+	err = r.store.Set(ctx, objectTypeSession, s.ID, s, duration)
+	if err != nil {
 		errs = append(errs, err)
 	}
 
@@ -142,7 +153,8 @@ func (r *Repository) StoreSession(ctx context.Context, s session.Session) error 
 }
 
 func (r *Repository) DeleteState(ctx context.Context, stateID string) error {
-	if err := r.store.Destroy(ctx, objectTypeState, stateID); err != nil {
+	err := r.store.Destroy(ctx, objectTypeState, stateID)
+	if err != nil {
 		return fmt.Errorf("deleting state from store: %w", err)
 	}
 

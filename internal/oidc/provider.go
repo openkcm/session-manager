@@ -42,7 +42,8 @@ func (p *Provider) GetOpenIDConfig(ctx context.Context, httpClient *http.Client)
 	}
 
 	var conf Configuration
-	if err := json.NewDecoder(resp.Body).Decode(&conf); err != nil {
+	err = json.NewDecoder(resp.Body).Decode(&conf)
+	if err != nil {
 		return Configuration{}, fmt.Errorf("decoding a well-known openid config: %w", err)
 	}
 

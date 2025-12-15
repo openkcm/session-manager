@@ -37,20 +37,24 @@ func (r *Repository) Get(ctx context.Context, tenantID string) (oidc.Provider, e
 func (r *Repository) get(ctx context.Context, tx pgx.Tx, row pgx.Row) (oidc.Provider, error) {
 	var propsBytes []byte
 	var provider oidc.Provider
-	if err := row.Scan(&provider.IssuerURL, &provider.Blocked, &provider.JWKSURI, &provider.Audiences, &propsBytes); err != nil {
+
+	err := row.Scan(&provider.IssuerURL, &provider.Blocked, &provider.JWKSURI, &provider.Audiences, &propsBytes)
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return oidc.Provider{}, serviceerr.ErrNotFound
+		} else {
+			return oidc.Provider{}, fmt.Errorf("scanning rows: %w", err)
 		}
-
-		return oidc.Provider{}, fmt.Errorf("scanning rows: %w", err)
 	}
 
-	if err := tx.Commit(ctx); err != nil {
+	err = tx.Commit(ctx)
+	if err != nil {
 		return oidc.Provider{}, fmt.Errorf("committing tx: %w", err)
 	}
 
 	if len(propsBytes) > 0 {
-		if err := json.Unmarshal(propsBytes, &provider.Properties); err != nil {
+		err := json.Unmarshal(propsBytes, &provider.Properties)
+		if err != nil {
 			return oidc.Provider{}, fmt.Errorf("unmarshalling properties: %w", err)
 		}
 	} else {
@@ -74,11 +78,12 @@ func (r *Repository) Create(ctx context.Context, tenantID string, provider oidc.
 	}
 
 	// The audiences value is optional, so we use COALESCE to default to an empty array if it's nil
-	if _, err := tx.Exec(ctx,
+	_, err = tx.Exec(ctx,
 		`INSERT INTO trust (tenant_id, blocked, issuer, jwks_uri, audiences, properties)
 			 VALUES ($1, $2, $3, $4, COALESCE($5, '{}'::text[]), $6);`,
 		tenantID, provider.Blocked, provider.IssuerURL, provider.JWKSURI, provider.Audiences, propsBytes,
-	); err != nil {
+	)
+	if err != nil {
 		if err, ok := handlePgError(err); ok {
 			return err
 		}
@@ -86,7 +91,8 @@ func (r *Repository) Create(ctx context.Context, tenantID string, provider oidc.
 		return fmt.Errorf("inserting into trust: %w", err)
 	}
 
-	if err := tx.Commit(ctx); err != nil {
+	err = tx.Commit(ctx)
+	if err != nil {
 		return fmt.Errorf("committing transaction: %w", err)
 	}
 
@@ -109,7 +115,8 @@ func (r *Repository) Delete(ctx context.Context, tenantID string) error {
 		return serviceerr.ErrNotFound
 	}
 
-	if err := tx.Commit(ctx); err != nil {
+	err = tx.Commit(ctx)
+	if err != nil {
 		return fmt.Errorf("committing tx: %w", err)
 	}
 
@@ -142,7 +149,8 @@ func (r *Repository) Update(ctx context.Context, tenantID string, provider oidc.
 		return serviceerr.ErrNotFound
 	}
 
-	if err := tx.Commit(ctx); err != nil {
+	err = tx.Commit(ctx)
+	if err != nil {
 		return fmt.Errorf("committing tx: %w", err)
 	}
 

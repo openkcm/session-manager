@@ -39,7 +39,8 @@ func createHTTPServer(_ context.Context, cfg *config.Config, sManager *session.M
 
 // StartHTTPServer starts the gRPC server using the given config.
 func StartHTTPServer(ctx context.Context, cfg *config.Config, sManager *session.Manager) error {
-	if err := initMeters(ctx, cfg); err != nil {
+	err := initMeters(ctx, cfg)
+	if err != nil {
 		return err
 	}
 
@@ -82,7 +83,8 @@ func StartHTTPServer(ctx context.Context, cfg *config.Config, sManager *session.
 	shutdownCtx, shutdownRelease := context.WithTimeout(ctx, cfg.HTTP.ShutdownTimeout)
 	defer shutdownRelease()
 
-	if err := server.Shutdown(shutdownCtx); err != nil {
+	err = server.Shutdown(shutdownCtx)
+	if err != nil {
 		return oops.In("HTTP Server").
 			WithContext(ctx).
 			Wrapf(err, "Failed shutting down HTTP server")

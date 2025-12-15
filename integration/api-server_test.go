@@ -48,7 +48,8 @@ func TestSessionManager(t *testing.T) {
 	cmd.Stdout = cmdOut
 	cmd.Stderr = cmdOut
 	t.Logf("starting an app process. Logs will be saved into %s", cmdOutPath)
-	if err := cmd.Run(); err != nil && !errors.Is(err, context.Canceled) {
+	err := cmd.Run()
+	if err != nil && !errors.Is(err, context.Canceled) {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) && !exitErr.Sys().(syscall.WaitStatus).Signaled() {
 			t.Fatalf("process exited abnormally: %s", err)
