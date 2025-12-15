@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.3](https://github.com/openkcm/session-manager/compare/v0.13.2...v0.13.3) (2025-12-15)
+
+
+### Bug Fixes
+
+* use the default http client for the WKOC endpoint ([#176](https://github.com/openkcm/session-manager/issues/176)) ([4571e47](https://github.com/openkcm/session-manager/commit/4571e4719439e9871aa88bc1f0df1cfb7df5e5c3))
+
 ## [0.13.2](https://github.com/openkcm/session-manager/compare/v0.13.1...v0.13.2) (2025-12-15)
 
 
