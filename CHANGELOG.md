@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.2](https://github.com/openkcm/session-manager/compare/v0.13.1...v0.13.2) (2025-12-15)
+
+
+### Bug Fixes
+
+* the round tripper to actually add the client_id ([#174](https://github.com/openkcm/session-manager/issues/174)) ([de06e4f](https://github.com/openkcm/session-manager/commit/de06e4fc7b55f0fdacbb90c7cfb3b9ca466cad3d))
+
 ## [0.13.1](https://github.com/openkcm/session-manager/compare/v0.13.0...v0.13.1) (2025-12-08)
 
 
