@@ -237,11 +237,12 @@ type clientAuthRoundTripper struct {
 
 func (t *clientAuthRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	q := req.URL.Query()
-	q.Set("client_id", t.clientID)
 
+	q.Set("client_id", t.clientID)
 	if t.clientSecret != "" {
 		q.Set("client_secret", t.clientSecret)
 	}
+	req.URL.RawQuery = q.Encode()
 
 	return t.next.RoundTrip(req)
 }
