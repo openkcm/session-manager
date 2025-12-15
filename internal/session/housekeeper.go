@@ -21,21 +21,30 @@ func (m *Manager) RefreshExpiringTokens(ctx context.Context, refreshTriggerInter
 		return err
 	}
 	for _, s := range sessions {
-		provider, err := m.oidc.Get(ctx, s.TenantID)
-		if err != nil {
-			return fmt.Errorf("getting OIDC provider: %w", err)
+		if !shouldRefresh(s, refreshTriggerInterval) {
+			continue
 		}
 
-		if shouldRefresh(s, refreshTriggerInterval) {
-			if err := m.refreshExpiringToken(ctx, &s, provider); err != nil {
-				slogctx.Warn(ctx, "Could not refresh token", "tenant_id", s.TenantID, "error", err)
-				continue
-			}
+		provider, err := m.oidc.Get(ctx, s.TenantID)
+		if err != nil {
+			slogctx.Error(ctx, "Could not get OIDC provider", "tenant_id", s.TenantID, "error", err)
+			continue
+		}
 
-			if err := m.sessions.StoreSession(ctx, s); err != nil {
-				slogctx.Warn(ctx, "Could not store refreshed session", "tenant_id", s.TenantID, "error", err)
-				continue
-			}
+		openidConf, err := provider.GetOpenIDConfig(ctx, http.DefaultClient)
+		if err != nil {
+			slogctx.Error(ctx, "Could not get OpenID configuration", "issuerURL", provider.IssuerURL, "error", err)
+			continue
+		}
+
+		if err := m.refreshExpiringToken(ctx, openidConf, &s, provider); err != nil {
+			slogctx.Error(ctx, "Could not refresh token", "tenant_id", s.TenantID, "error", err)
+			continue
+		}
+
+		if err := m.sessions.StoreSession(ctx, s); err != nil {
+			slogctx.Error(ctx, "Could not store refreshed session", "tenant_id", s.TenantID, "error", err)
+			continue
 		}
 	}
 	return nil
@@ -47,7 +56,7 @@ func shouldRefresh(s Session, refreshTriggerInterval time.Duration) bool {
 }
 
 // refreshExpiringToken refreshes the access token for the given session if needed.
-func (m *Manager) refreshExpiringToken(ctx context.Context, s *Session, provider oidc.Provider) error {
+func (m *Manager) refreshExpiringToken(ctx context.Context, openidConf oidc.Configuration, s *Session, provider oidc.Provider) error {
 	data := url.Values{}
 	data.Set("grant_type", "refresh_token")
 	data.Set("refresh_token", s.RefreshToken)
@@ -60,12 +69,7 @@ func (m *Manager) refreshExpiringToken(ctx context.Context, s *Session, provider
 		data.Set(parameter, value)
 	}
 
-	tokenEndpoint, err := url.JoinPath(provider.IssuerURL, "/token")
-	if err != nil {
-		return fmt.Errorf("making issuer token path: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenEndpoint, bytes.NewBufferString(data.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, openidConf.TokenEndpoint, bytes.NewBufferString(data.Encode()))
 	if err != nil {
 		return err
 	}
