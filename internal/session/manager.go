@@ -93,7 +93,7 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 		return "", fmt.Errorf("getting oidc provider: %w", err)
 	}
 
-	openidConf, err := provider.GetOpenIDConfig(ctx, m.secureClient)
+	openidConf, err := provider.GetOpenIDConfig(ctx, http.DefaultClient)
 	if err != nil {
 		return "", fmt.Errorf("getting an openid config: %w", err)
 	}
@@ -200,7 +200,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("getting oidc provider: %w", err)
 	}
 
-	openidConf, err := provider.GetOpenIDConfig(ctx, m.secureClient)
+	openidConf, err := provider.GetOpenIDConfig(ctx, http.DefaultClient)
 	if err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get openid configuration")
 		return OIDCSessionData{}, fmt.Errorf("getting openid configuration: %w", err)
