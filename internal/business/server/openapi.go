@@ -111,7 +111,7 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 	}
 
 	// Session cookie
-	sessionCookie, err := s.sManager.MakeSessionCookie(ctx, result.SessionID)
+	sessionCookie, err := s.sManager.MakeSessionCookie(ctx, result.TenantID, result.SessionID)
 	if err != nil {
 		slogctx.Error(ctx, "Failed to create session cookie", "error", err)
 
@@ -122,9 +122,33 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 		}, nil
 	}
 
-	csrfCookie, err := s.sManager.MakeCSRFCookie(ctx, result.CSRFToken)
+	// CSRF cookie
+	csrfCookie, err := s.sManager.MakeCSRFCookie(ctx, result.TenantID, result.CSRFToken)
 	if err != nil {
 		slogctx.Error(ctx, "Failed to create CSRF cookie", "error", err)
+
+		body, status := s.toErrorModel(serviceerr.ErrUnknown)
+		return openapi.CallbackdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+
+	// Create old cookies without tenant suffix for backward compatibility
+	// TODO: Remove these cookies as soon as UI and ExtAuthZ use the new cookies with tenant suffix
+	oldSessionCookie, err := s.sManager.MakeSessionCookie(ctx, "", result.SessionID)
+	if err != nil {
+		slogctx.Error(ctx, "Failed to create old session cookie", "error", err)
+
+		body, status := s.toErrorModel(serviceerr.ErrUnknown)
+		return openapi.CallbackdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+	oldCsrfCookie, err := s.sManager.MakeCSRFCookie(ctx, "", result.CSRFToken)
+	if err != nil {
+		slogctx.Error(ctx, "Failed to create old CSRF cookie", "error", err)
 
 		body, status := s.toErrorModel(serviceerr.ErrUnknown)
 		return openapi.CallbackdefaultJSONResponse{
@@ -139,6 +163,10 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 	// See https://github.com/OAI/OpenAPI-Specification/issues/1237 for details.
 	http.SetCookie(rw, sessionCookie)
 	http.SetCookie(rw, csrfCookie)
+	// Set old cookies without tenant suffix for backward compatibility
+	// TODO: Remove these cookies as soon as UI and ExtAuthZ use the new cookies with tenant suffix
+	http.SetCookie(rw, oldSessionCookie)
+	http.SetCookie(rw, oldCsrfCookie)
 
 	slogctx.Debug(ctx, "Redirecting user", "to", result.RequestURI)
 	return openapi.Callback302Response{

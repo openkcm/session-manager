@@ -43,6 +43,7 @@ type Claims struct {
 // OIDCSessionData represents a data from the last step of the OIDC flow.
 type OIDCSessionData struct {
 	SessionID  string
+	TenantID   string
 	CSRFToken  string
 	RequestURI string
 }
