@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.4](https://github.com/openkcm/session-manager/compare/v0.13.3...v0.13.4) (2025-12-16)
+
+
+### Bug Fixes
+
+* token refresh not using WKOC endpoint ([#179](https://github.com/openkcm/session-manager/issues/179)) ([4f7939e](https://github.com/openkcm/session-manager/commit/4f7939e582d799a60fe03dbbd658ee02d6f22bda))
+
 ## [0.13.3](https://github.com/openkcm/session-manager/compare/v0.13.2...v0.13.3) (2025-12-15)
 
 
