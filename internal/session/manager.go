@@ -318,13 +318,17 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 
 	return OIDCSessionData{
 		SessionID:  sessionID,
+		TenantID:   state.TenantID,
 		CSRFToken:  csrfToken,
 		RequestURI: state.RequestURI,
 	}, nil
 }
 
-func (m *Manager) MakeSessionCookie(ctx context.Context, value string) (*http.Cookie, error) {
+func (m *Manager) MakeSessionCookie(ctx context.Context, tenantID, value string) (*http.Cookie, error) {
 	sessionCookie := m.sessionCookieTemplate.ToCookie(value)
+	if tenantID != "" {
+		sessionCookie.Name = sessionCookie.Name + "-" + tenantID
+	}
 
 	err := sessionCookie.Valid()
 	if err != nil {
@@ -344,8 +348,11 @@ func (m *Manager) MakeSessionCookie(ctx context.Context, value string) (*http.Co
 	return sessionCookie, nil
 }
 
-func (m *Manager) MakeCSRFCookie(ctx context.Context, value string) (*http.Cookie, error) {
+func (m *Manager) MakeCSRFCookie(ctx context.Context, tenantID, value string) (*http.Cookie, error) {
 	csrfCookie := m.csrfCookieTemplate.ToCookie(value)
+	if tenantID != "" {
+		csrfCookie.Name = csrfCookie.Name + "-" + tenantID
+	}
 
 	err := csrfCookie.Valid()
 	if err != nil {
