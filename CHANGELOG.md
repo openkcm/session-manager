@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.1](https://github.com/openkcm/session-manager/compare/v0.14.0...v0.14.1) (2025-12-17)
+
+
+### Bug Fixes
+
+* syntax errors in integration tests ([#184](https://github.com/openkcm/session-manager/issues/184)) ([3b4ed57](https://github.com/openkcm/session-manager/commit/3b4ed57ff9ebc11b6af46b446e501b768c309661))
+
 ## [0.14.0](https://github.com/openkcm/session-manager/compare/v0.13.4...v0.14.0) (2025-12-17)
 
 
