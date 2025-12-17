@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.14.0](https://github.com/openkcm/session-manager/compare/v0.13.4...v0.14.0) (2025-12-17)
+
+
+### Features
+
+* use tenant specific cookies ([#180](https://github.com/openkcm/session-manager/issues/180)) ([0c47910](https://github.com/openkcm/session-manager/commit/0c47910645d55971280ec0bcb7763361d9b59ffb))
+
+
+### Bug Fixes
+
+* token introspection: deny if invalid ([#182](https://github.com/openkcm/session-manager/issues/182)) ([60db523](https://github.com/openkcm/session-manager/commit/60db52309469248fc8ef389e1a4891f8f728873b))
+
 ## [0.13.4](https://github.com/openkcm/session-manager/compare/v0.13.3...v0.13.4) (2025-12-16)
 
 
