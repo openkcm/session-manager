@@ -65,7 +65,8 @@ func execute() error {
 	ctx, cancelOnSignal := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
 	defer cancelOnSignal()
 
-	if err := rootCmd().ExecuteContext(ctx); err != nil {
+	err := rootCmd().ExecuteContext(ctx)
+	if err != nil {
 		slogctx.Error(ctx, "failed to start the application", "error", err)
 		_, _ = fmt.Fprintln(os.Stderr, err)
 
@@ -81,7 +82,8 @@ func execute() error {
 }
 
 func main() {
-	if err := execute(); err != nil {
+	err := execute()
+	if err != nil {
 		os.Exit(1)
 	}
 }

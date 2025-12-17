@@ -37,12 +37,14 @@ func (m *Manager) RefreshExpiringTokens(ctx context.Context, refreshTriggerInter
 			continue
 		}
 
-		if err := m.refreshExpiringToken(ctx, openidConf, &s, provider); err != nil {
+		err = m.refreshExpiringToken(ctx, openidConf, &s, provider)
+		if err != nil {
 			slogctx.Error(ctx, "Could not refresh token", "tenant_id", s.TenantID, "error", err)
 			continue
 		}
 
-		if err := m.sessions.StoreSession(ctx, s); err != nil {
+		err = m.sessions.StoreSession(ctx, s)
+		if err != nil {
 			slogctx.Error(ctx, "Could not store refreshed session", "tenant_id", s.TenantID, "error", err)
 			continue
 		}
@@ -108,7 +110,8 @@ func (m *Manager) CleanupIdleSessions(ctx context.Context, timeout time.Duration
 		if time.Since(s.LastVisited) < timeout {
 			continue
 		}
-		if err := m.sessions.DeleteSession(ctx, s); err != nil {
+		err := m.sessions.DeleteSession(ctx, s)
+		if err != nil {
 			slogctx.Warn(ctx, "Could not delete idle session", "tenant_id", s.TenantID, "error", err)
 			continue
 		}

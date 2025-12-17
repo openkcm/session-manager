@@ -45,7 +45,8 @@ func Main(ctx context.Context, cfg *config.Config) error {
 	})
 
 	// wait for any error to initiate the shutdown
-	if err := <-errChan; err != nil {
+	err := <-errChan
+	if err != nil {
 		slogctx.Error(ctx, "Shutting down servers", "error", err)
 	}
 	cancel()

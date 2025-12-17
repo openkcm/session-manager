@@ -42,7 +42,8 @@ func HousekeeperMain(ctx context.Context, cfg *config.Config) error {
 	})
 
 	// wait for any error to initiate the shutdown
-	if err := <-errChan; err != nil {
+	err = <-errChan
+	if err != nil {
 		slogctx.Error(ctx, "Shutting down servers", "error", err)
 	}
 	cancel()
@@ -58,7 +59,8 @@ func startExpiringTokenRefresh(ctx context.Context, sessionManager *session.Mana
 	triggerInterval := cfg.TokenRefreshTriggerInterval
 	for {
 		slogctx.Info(ctx, "Triggering refresh of expiring tokens")
-		if err := sessionManager.RefreshExpiringTokens(ctx, triggerInterval); err != nil {
+		err := sessionManager.RefreshExpiringTokens(ctx, triggerInterval)
+		if err != nil {
 			slogctx.Error(ctx, "failed to refresh expiring tokens", "error", err)
 		}
 
@@ -75,7 +77,8 @@ func startIdleSessionCleanup(ctx context.Context, sessionManager *session.Manage
 	c := time.Tick(cfg.IdleSessionCleanupInterval)
 	for {
 		slogctx.Info(ctx, "Triggering cleanup of idle sessions")
-		if err := sessionManager.CleanupIdleSessions(ctx, cfg.IdleSessionTimeout); err != nil {
+		err := sessionManager.CleanupIdleSessions(ctx, cfg.IdleSessionTimeout)
+		if err != nil {
 			slogctx.Error(ctx, "failed to cleanup idle sessions", "error", err)
 		}
 

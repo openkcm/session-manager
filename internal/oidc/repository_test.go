@@ -123,11 +123,13 @@ func migrateDB(ctx context.Context, connStr string) error {
 	defer db.Close()
 
 	goose.SetBaseFS(migrations.FS)
-	if err := goose.SetDialect("pgx"); err != nil {
+	err = goose.SetDialect("pgx")
+	if err != nil {
 		return err
 	}
 
-	if err := goose.UpContext(ctx, db, "."); err != nil {
+	err = goose.UpContext(ctx, db, ".")
+	if err != nil {
 		return err
 	}
 	return nil

@@ -110,7 +110,8 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 		Expiry:       time.Now().Add(m.sessionDuration),
 	}
 
-	if err := m.sessions.StoreState(ctx, state); err != nil {
+	err = m.sessions.StoreState(ctx, state)
+	if err != nil {
 		return "", fmt.Errorf("storing session: %w", err)
 	}
 
@@ -162,7 +163,8 @@ func (m *Manager) getProviderKeySet(ctx context.Context, oidcConf oidc.Configura
 		return nil, fmt.Errorf("executing an http request: %w", err)
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&keySet); err != nil {
+	err = json.NewDecoder(resp.Body).Decode(&keySet)
+	if err != nil {
 		return nil, fmt.Errorf("decoding keyset response: %w", err)
 	}
 
@@ -248,13 +250,15 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 	var standardClaims jwt.Claims
 	var customClaims CustomClaims
 	var extraClaims ExtraClaims
-	if err := token.Claims(keyset, &standardClaims, &customClaims, &extraClaims); err != nil {
+	err = token.Claims(keyset, &standardClaims, &customClaims, &extraClaims)
+	if err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get JWT claims")
 		return OIDCSessionData{}, fmt.Errorf("getting JWT claims: %w", err)
 	}
 
 	if extraClaims.AtHash != "" {
-		if err := m.verifyAccessToken(tokens.AccessToken, extraClaims.AtHash, token); err != nil {
+		err := m.verifyAccessToken(tokens.AccessToken, extraClaims.AtHash, token)
+		if err != nil {
 			return OIDCSessionData{}, err
 		}
 	}
@@ -294,12 +298,14 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		AuthContext:  authContext,
 	}
 
-	if err := m.sessions.StoreSession(ctx, session); err != nil {
+	err = m.sessions.StoreSession(ctx, session)
+	if err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to store session")
 		return OIDCSessionData{}, fmt.Errorf("storing session: %w", err)
 	}
 
-	if err := m.sessions.DeleteState(ctx, stateID); err != nil {
+	err = m.sessions.DeleteState(ctx, stateID)
+	if err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to delete state")
 		return OIDCSessionData{}, fmt.Errorf("deleting state: %w", err)
 	}
@@ -387,7 +393,8 @@ func (m *Manager) sendUserLoginFailureAudit(ctx context.Context, metadata otlpau
 		return
 	}
 
-	if err := m.audit.SendEvent(ctx, event); err != nil {
+	err = m.audit.SendEvent(ctx, event)
+	if err != nil {
 		slogctx.Error(ctx, "Failed to send audit log for user login failure", "error", err)
 	}
 	slogctx.Debug(ctx, "sent audit log for user login failure")
@@ -448,7 +455,8 @@ func (m *Manager) exchangeCode(ctx context.Context, openidConf oidc.Configuratio
 	}
 
 	var tokens tokenResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tokens); err != nil {
+	err = json.NewDecoder(resp.Body).Decode(&tokens)
+	if err != nil {
 		return tokenResponse{}, fmt.Errorf("decoding response: %w", err)
 	}
 

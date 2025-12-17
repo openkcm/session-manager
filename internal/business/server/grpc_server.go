@@ -39,7 +39,8 @@ func StartGRPCServer(ctx context.Context, cfg *config.Config,
 
 	go func() {
 		slogctx.Info(ctx, "Serving a gRPC server", "address", listener.Addr().String())
-		if err := grpcServer.Serve(listener); err != nil {
+		err := grpcServer.Serve(listener)
+		if err != nil {
 			slogctx.Error(ctx, "Failed to serve gRPC endpoint", "error", err)
 		}
 

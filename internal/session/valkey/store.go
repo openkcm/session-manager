@@ -39,7 +39,8 @@ func (s *store) Set(ctx context.Context, objectType ObjectType, id string, val a
 		return fmt.Errorf("encoding data: %w", err)
 	}
 
-	if err := s.valkey.Do(ctx, s.valkey.B().Set().Key(key).Value(valkey.BinaryString(bytes)).Ex(duration).Build()).Error(); err != nil {
+	err = s.valkey.Do(ctx, s.valkey.B().Set().Key(key).Value(valkey.BinaryString(bytes)).Ex(duration).Build()).Error()
+	if err != nil {
 		return fmt.Errorf("executing set command: %w", err)
 	}
 
@@ -48,7 +49,8 @@ func (s *store) Set(ctx context.Context, objectType ObjectType, id string, val a
 
 func (s *store) Destroy(ctx context.Context, objectType ObjectType, id string) error {
 	key := s.key(objectType, id)
-	if err := s.valkey.Do(ctx, s.valkey.B().Del().Key(key).Build()).Error(); err != nil {
+	err := s.valkey.Do(ctx, s.valkey.B().Del().Key(key).Build()).Error()
+	if err != nil {
 		return fmt.Errorf("executing del command: %w", err)
 	}
 
@@ -66,7 +68,8 @@ func (s *store) get(ctx context.Context, key string, decodeInto any) error {
 		return fmt.Errorf("executing get command: %w", err)
 	}
 
-	if err := s.decode(bytes, decodeInto); err != nil {
+	err = s.decode(bytes, decodeInto)
+	if err != nil {
 		return fmt.Errorf("decoding state: %w", err)
 	}
 
@@ -87,7 +90,8 @@ func (s *store) encode(v any) ([]byte, error) {
 }
 
 func (s *store) decode(data []byte, into any) error {
-	if err := json.Unmarshal(data, into); err != nil {
+	err := json.Unmarshal(data, into)
+	if err != nil {
 		return fmt.Errorf("unmarshaling json: %w", err)
 	}
 
@@ -107,7 +111,8 @@ func getStoreObjects[T any](ctx context.Context, s *store, objectType ObjectType
 		*decodeInto = slices.Grow(*decodeInto, len(scan.Elements))
 		for _, key := range scan.Elements {
 			var decoded T
-			if err := s.get(ctx, key, &decoded); err != nil {
+			err := s.get(ctx, key, &decoded)
+			if err != nil {
 				return fmt.Errorf("getting an element: %w", err)
 			}
 

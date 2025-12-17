@@ -410,7 +410,8 @@ func (sh *strictHandler) Auth(w http.ResponseWriter, r *http.Request, params Aut
 	if err != nil {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AuthResponseObject); ok {
-		if err := validResponse.VisitAuthResponse(w); err != nil {
+		err := validResponse.VisitAuthResponse(w)
+		if err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -436,7 +437,8 @@ func (sh *strictHandler) Callback(w http.ResponseWriter, r *http.Request, params
 	if err != nil {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CallbackResponseObject); ok {
-		if err := validResponse.VisitCallbackResponse(w); err != nil {
+		err := validResponse.VisitCallbackResponse(w)
+		if err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

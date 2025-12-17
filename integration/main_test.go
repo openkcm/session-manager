@@ -26,7 +26,8 @@ func init() {
 func buildCommandsAndRunTests(m *testing.M, cmds ...string) int {
 	for _, name := range cmds {
 		cmd := exec.Command("go", "build", "-buildvcs=false", "-race", "-cover", "-o", name, "../cmd/"+name)
-		if output, err := cmd.CombinedOutput(); err != nil {
+		output, err := cmd.CombinedOutput()
+		if err != nil {
 			log.Printf("output: %s", output)
 			log.Fatalf("error: %v", err)
 		}

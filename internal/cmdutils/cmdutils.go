@@ -77,7 +77,8 @@ func run(ctx context.Context, withTelemetry, withStatusServer bool, fn func(cont
 	// Status Server
 	if withStatusServer {
 		go func() {
-			if err := startStatusServer(ctx, cfg); err != nil {
+			err := startStatusServer(ctx, cfg)
+			if err != nil {
 				slogctx.Error(ctx, "Failure on the status server", "error", err)
 				_ = syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
 			}
@@ -85,7 +86,8 @@ func run(ctx context.Context, withTelemetry, withStatusServer bool, fn func(cont
 	}
 
 	// Business Logic
-	if err = fn(ctx, cfg); err != nil {
+	err = fn(ctx, cfg)
+	if err != nil {
 		return oops.In("main").Wrapf(err, "Failed to start the main business application")
 	}
 
@@ -96,21 +98,23 @@ func loadConfig(buildInfo string) (*config.Config, error) {
 	defaultValues := map[string]any{}
 	cfg := &config.Config{}
 
-	if err := commoncfg.LoadConfig(
+	err := commoncfg.LoadConfig(
 		cfg,
 		defaultValues,
 		"/etc/session-manager",
 		"$HOME/.session-manager",
 		".",
-	); err != nil {
+	)
+	if err != nil {
 		return nil, fmt.Errorf("loading configuration: %w", err)
 	}
 
 	// Update Version
-	if err := commoncfg.UpdateConfigVersion(
+	err = commoncfg.UpdateConfigVersion(
 		&cfg.BaseConfig,
 		buildInfo,
-	); err != nil {
+	)
+	if err != nil {
 		return nil, fmt.Errorf("updating the version configuration: %w", err)
 	}
 
@@ -144,7 +148,8 @@ func startStatusServer(ctx context.Context, cfg *config.Config) error {
 		),
 	)
 
-	if err := status.Start(ctx, &cfg.BaseConfig, liveness, readiness); err != nil {
+	err = status.Start(ctx, &cfg.BaseConfig, liveness, readiness)
+	if err != nil {
 		return fmt.Errorf("starting status server: %w", err)
 	}
 

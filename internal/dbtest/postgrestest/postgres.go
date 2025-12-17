@@ -65,7 +65,8 @@ func Start(ctx context.Context) (*pgxpool.Pool, nat.Port, func(ctx context.Conte
 	prepareDB(ctx, dbPool, port)
 
 	terminate := func(ctx context.Context) {
-		if err := pgContainer.Terminate(ctx); err != nil {
+		err := pgContainer.Terminate(ctx)
+		if err != nil {
 			slogctx.Error(ctx, "Failed to terminate PosgtgreSQL container", slog.String("error", err.Error()))
 			panic(err)
 		}
@@ -96,11 +97,13 @@ func migrateDB(ctx context.Context, port nat.Port) {
 	defer db.Close()
 
 	goose.SetBaseFS(migrations.FS)
-	if err := goose.SetDialect("pgx"); err != nil {
+	err = goose.SetDialect("pgx")
+	if err != nil {
 		panic(err)
 	}
 
-	if err := goose.UpContext(ctx, db, "."); err != nil {
+	err = goose.UpContext(ctx, db, ".")
+	if err != nil {
 		panic(err)
 	}
 }
@@ -114,7 +117,8 @@ func prepareDB(ctx context.Context, dbPool *pgxpool.Pool, port nat.Port) {
 	b.Queue(`INSERT INTO trust (tenant_id, blocked, issuer, jwks_uri, audiences, properties) VALUES ('tenant3-id', false, 'url-three', '', '{}', '{}');`)
 
 	res := dbPool.SendBatch(ctx, b)
-	if err := res.Close(); err != nil {
+	err := res.Close()
+	if err != nil {
 		panic(err)
 	}
 }

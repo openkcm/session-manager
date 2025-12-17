@@ -61,7 +61,8 @@ func (s *Service) BlockMapping(ctx context.Context, tenantID string) error {
 }
 
 func (s *Service) RemoveMapping(ctx context.Context, tenantID string) error {
-	if err := s.repository.Delete(ctx, tenantID); err != nil {
+	err := s.repository.Delete(ctx, tenantID)
+	if err != nil {
 		return fmt.Errorf("deleting provider for tenant: %w", err)
 	}
 
