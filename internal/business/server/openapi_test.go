@@ -14,7 +14,7 @@ import (
 func TestOpenAPIServer_Auth_ContextCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	server := newOpenAPIServer(nil)
+	server := newOpenAPIServer(nil, nil, "", "")
 	req := openapi.AuthRequestObject{}
 	resp, err := server.Auth(ctx, req)
 	assert.NoError(t, err)
@@ -30,7 +30,7 @@ func TestOpenAPIServer_Auth_ContextCanceled(t *testing.T) {
 func TestOpenAPIServer_Callback_ContextCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	server := newOpenAPIServer(nil)
+	server := newOpenAPIServer(nil, nil, "", "")
 	req := openapi.CallbackRequestObject{}
 	resp, err := server.Callback(ctx, req)
 	assert.NoError(t, err)

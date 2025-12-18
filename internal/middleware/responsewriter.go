@@ -1,6 +1,6 @@
-// Package responsewriter provides utilities to inject the response writer
+// Package middleware provides utilities to inject the response writer and request reader
 // for the original *http.Request into the context and also retrieve it.
-package responsewriter
+package middleware
 
 import (
 	"context"

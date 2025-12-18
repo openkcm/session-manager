@@ -6,7 +6,6 @@ import (
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"hash"
 	"net/http"
@@ -17,7 +16,6 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/google/uuid"
-	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/openkcm/common-sdk/pkg/csrf"
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
@@ -36,12 +34,14 @@ type Manager struct {
 	audit        *otlpaudit.AuditLogger
 	secureClient *http.Client
 
-	sessionDuration      time.Duration
-	callbackURL          *url.URL
-	clientID             string
-	queryParametersAuth  []string
-	queryParametersToken []string
-	authContextKeys      []string
+	sessionDuration       time.Duration
+	callbackURL           *url.URL
+	clientID              string
+	queryParametersAuth   []string
+	queryParametersToken  []string
+	authContextKeys       []string
+	queryParametersLogout []string
+	postLogoutRedirectURL string
 
 	sessionCookieTemplate config.CookieTemplate
 	csrfCookieTemplate    config.CookieTemplate
@@ -56,14 +56,6 @@ func NewManager(
 	auditLogger *otlpaudit.AuditLogger,
 	httpClient *http.Client,
 ) (*Manager, error) {
-	csrfSecret, err := commoncfg.LoadValueFromSourceRef(cfg.CSRFSecret)
-	if err != nil {
-		return nil, fmt.Errorf("loading csrf token from source ref: %w", err)
-	}
-	if len(csrfSecret) < 32 {
-		return nil, errors.New("CSRF secret must be at least 32 bytes")
-	}
-
 	callbackURL, err := url.Parse(cfg.CallbackURL)
 	if err != nil {
 		return nil, fmt.Errorf("parsing callback URL: %w", err)
@@ -77,12 +69,14 @@ func NewManager(
 		queryParametersAuth:   cfg.AdditionalQueryParametersAuthorize,
 		queryParametersToken:  cfg.AdditionalQueryParametersToken,
 		authContextKeys:       cfg.AdditionalAuthContextKeys,
+		queryParametersLogout: cfg.AdditionalQueryParametersLogout,
+		postLogoutRedirectURL: cfg.PostLogoutRedirectURL,
 		sessionCookieTemplate: cfg.SessionCookieTemplate,
 		csrfCookieTemplate:    cfg.CSRFCookieTemplate,
 		callbackURL:           callbackURL,
 		clientID:              cfg.ClientAuth.ClientID,
 		secureClient:          httpClient,
-		csrfSecret:            csrfSecret,
+		csrfSecret:            cfg.CSRFSecretParsed,
 	}, nil
 }
 
@@ -328,6 +322,71 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		CSRFToken:  csrfToken,
 		RequestURI: state.RequestURI,
 	}, nil
+}
+
+func (m *Manager) Logout(ctx context.Context, sessionID string) (string, error) {
+	session, err := m.sessions.LoadSession(ctx, sessionID)
+	if err != nil {
+		slogctx.Warn(ctx, "failed to get session by id", "error", err)
+		return "", fmt.Errorf("getting session id: %w", err)
+	}
+
+	ctx = slogctx.With(ctx, "tenant_id", session.TenantID)
+
+	oidcProvider, err := m.oidc.Get(ctx, session.TenantID)
+	if err != nil {
+		slogctx.Error(ctx, "failed to get oidc provider for a tenant", "error", err)
+		return "", fmt.Errorf("getting oidc provider: %w", err)
+	}
+
+	ctx = slogctx.With(ctx, "issuer_url", oidcProvider.IssuerURL)
+
+	oidcConf, err := oidcProvider.GetOpenIDConfig(ctx, m.secureClient)
+	if err != nil {
+		slogctx.Warn(ctx, "failed to get oidc configuration", "error", err)
+		return "", fmt.Errorf("getting oidc configuration: %w", err)
+	}
+
+	if err := m.sessions.DeleteSession(ctx, session); err != nil {
+		slogctx.Error(ctx, "failed to delete a session", "error", err)
+		return "", fmt.Errorf("deleting session: %w", err)
+	}
+
+	if oidcConf.EndSessionEndpoint == "" {
+		slogctx.Warn(ctx, "the provider does not support RP-Initiated Logout")
+
+		// Redirect to the landing page if possible
+		if m.postLogoutRedirectURL != "" {
+			return m.postLogoutRedirectURL, nil
+		}
+
+		return "", serviceerr.ErrEndSessionNotSupported
+	}
+
+	redirectURL, err := url.Parse(oidcConf.EndSessionEndpoint)
+	if err != nil {
+		slogctx.Warn(ctx, "failed to parse oidc session endpont", "error", err)
+		return "", serviceerr.ErrInvalidOIDCProvider
+	}
+
+	vals := make(url.Values)
+	vals.Set("client_id", m.clientID)
+	if m.postLogoutRedirectURL != "" {
+		vals.Set("post_logout_redirect_uri", m.postLogoutRedirectURL)
+	}
+
+	for _, p := range m.queryParametersLogout {
+		v, ok := oidcProvider.Properties[p]
+		if !ok {
+			return "", fmt.Errorf("missing auth parameter: %s", p)
+		}
+
+		vals.Set(p, v)
+	}
+
+	redirectURL.RawQuery = vals.Encode()
+
+	return redirectURL.String(), nil
 }
 
 func (m *Manager) MakeSessionCookie(ctx context.Context, tenantID, value string) (*http.Cookie, error) {

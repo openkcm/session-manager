@@ -1,4 +1,4 @@
-package responsewriter_test
+package middleware_test
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/openkcm/session-manager/internal/middleware/responsewriter"
+	"github.com/openkcm/session-manager/internal/middleware"
 )
 
 func TestResponseWriterMiddleware(t *testing.T) {
@@ -27,7 +27,7 @@ func TestResponseWriterMiddleware(t *testing.T) {
 		calledNextHandler = true
 
 		// a) Verify the injected writer matches the original writer
-		injectedWriter, err := responsewriter.ResponseWriterFromContext(r.Context())
+		injectedWriter, err := middleware.ResponseWriterFromContext(r.Context())
 		//nolint:testifylint
 		require.NoError(t, err, "ResponseWriterFromContext should not return an error")
 		assert.Same(t, rec, injectedWriter, "Injected ResponseWriter must be the same instance")
@@ -37,7 +37,7 @@ func TestResponseWriterMiddleware(t *testing.T) {
 	})
 
 	// 2. Wrap and execute the middleware
-	handler := responsewriter.ResponseWriterMiddleware(next)
+	handler := middleware.ResponseWriterMiddleware(next)
 	handler.ServeHTTP(rec, req)
 
 	// 3. Final assertion: check that the next handler was called
@@ -50,10 +50,10 @@ func TestResponseWriterFromContext(t *testing.T) {
 
 	t.Run("Success", func(t *testing.T) {
 		// 1. Setup: Inject the ResponseWriter into the context
-		ctx := context.WithValue(context.Background(), responsewriter.ResponseWriterKey, rec)
+		ctx := context.WithValue(context.Background(), middleware.ResponseWriterKey, rec)
 
 		// 2. Execution
-		retrievedWriter, err := responsewriter.ResponseWriterFromContext(ctx)
+		retrievedWriter, err := middleware.ResponseWriterFromContext(ctx)
 
 		// 3. Assertions
 		require.NoError(t, err, "Should successfully retrieve the ResponseWriter")
@@ -65,7 +65,7 @@ func TestResponseWriterFromContext(t *testing.T) {
 		ctx := context.Background()
 
 		// 2. Execution
-		_, err := responsewriter.ResponseWriterFromContext(ctx)
+		_, err := middleware.ResponseWriterFromContext(ctx)
 
 		// 3. Assertions
 		require.Error(t, err, "Should return an error when the key is not found")
@@ -74,10 +74,10 @@ func TestResponseWriterFromContext(t *testing.T) {
 
 	t.Run("Failure_WrongType", func(t *testing.T) {
 		// 1. Setup: Inject a string instead of a ResponseWriter
-		ctx := context.WithValue(context.Background(), responsewriter.ResponseWriterKey, "i-am-a-string")
+		ctx := context.WithValue(context.Background(), middleware.ResponseWriterKey, "i-am-a-string")
 
 		// 2. Execution
-		_, err := responsewriter.ResponseWriterFromContext(ctx)
+		_, err := middleware.ResponseWriterFromContext(ctx)
 
 		// 3. Assertions
 		require.Error(t, err, "Should return an error when the value type is incorrect")

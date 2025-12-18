@@ -14,6 +14,7 @@ const (
 	CodeInvalidCSRFToken
 	CodeUnauthorized
 	CodeInvalidAtHashToken
+	CodeEndSessionNotSupported
 )
 
 var ErrUnknown = newErr("unknown error", CodeUnknown)
@@ -25,6 +26,7 @@ var ErrInvalidOIDCProvider = newErr("invalid OIDC provider", CodeInvalidOIDCProv
 var ErrInvalidCSRFToken = newErr("invalid CSRF token", CodeInvalidCSRFToken)
 var ErrUnauthorized = newErr("unauthorized", CodeUnauthorized)
 var ErrInvalidAtHash = newErr("invalid atHash token", CodeInvalidAtHashToken)
+var ErrEndSessionNotSupported = newErr("the provider does not support end session", CodeEndSessionNotSupported)
 
 //nolint:recvcheck
 type Error struct {
@@ -61,6 +63,8 @@ func (e Error) HTTPStatus() int {
 		return http.StatusForbidden
 	case CodeInvalidAtHashToken:
 		return http.StatusUnauthorized
+	case CodeEndSessionNotSupported:
+		return http.StatusPreconditionFailed
 	default:
 		return http.StatusInternalServerError
 	}

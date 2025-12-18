@@ -16,4 +16,5 @@ type Configuration struct {
 	ScopesSupported                   []string `json:"scopes_supported,omitempty"`
 	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported,omitempty"`
 	ClaimsSupported                   []string `json:"claims_supported,omitempty"`
+	EndSessionEndpoint                string   `json:"end_session_endpoint,omitempty"` // Defined in https://openid.net/specs/openid-connect-rpinitiated-1_0.html#OPMetadata
 }
