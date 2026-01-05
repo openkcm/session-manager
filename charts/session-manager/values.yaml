@@ -101,6 +101,10 @@ service:
       protocol: TCP
       targetPort: http
       name: http
+    - port: 8888
+      protocol: TCP
+      targetPort: http-status
+      name: http-status
     - port: 9091
       protocol: TCP
       targetPort: grpc
