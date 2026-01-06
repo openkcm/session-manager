@@ -3,8 +3,9 @@ package session
 import (
 	"bytes"
 	"context"
-	"errors"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -83,14 +84,19 @@ func (m *Manager) refreshExpiringToken(ctx context.Context, openidConf oidc.Conf
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return errors.New("token endpoint returned non-200 status")
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("could not read token endpoint response body: %w", err)
 	}
 
-	var respData struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		ExpiresIn    int    `json:"expires_in"`
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("token endpoint returned non-200 status: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	var respData tokenResponse
+	err = json.Unmarshal(body, &respData)
+	if err != nil {
+		return fmt.Errorf("could not unmarshal token endpoint response: %w", err)
 	}
 
 	s.AccessToken = respData.AccessToken
