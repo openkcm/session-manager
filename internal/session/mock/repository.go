@@ -10,8 +10,9 @@ import (
 type RepositoryOption func(*Repository)
 
 type Repository struct {
-	states   map[string]session.State
-	sessions map[string]session.Session
+	states          map[string]session.State
+	sessions        map[string]session.Session
+	providerSession map[string]session.Session
 
 	loadStateErr, storeStateErr, deleteStateErr       error
 	loadSessionErr, storeSessionErr, deleteSessionErr error
@@ -54,8 +55,9 @@ func (r *Repository) ListSessions(ctx context.Context) ([]session.Session, error
 
 func NewInMemRepository(opts ...RepositoryOption) *Repository {
 	r := &Repository{
-		states:   make(map[string]session.State),
-		sessions: make(map[string]session.Session),
+		states:          make(map[string]session.State),
+		sessions:        make(map[string]session.Session),
+		providerSession: make(map[string]session.Session),
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -106,6 +108,16 @@ func (r *Repository) LoadSession(_ context.Context, sessionID string) (session.S
 	return session.Session{}, serviceerr.ErrNotFound
 }
 
+func (r *Repository) LoadSessionByProviderID(_ context.Context, providerID string) (session.Session, error) {
+	if r.loadSessionErr != nil {
+		return session.Session{}, r.loadSessionErr
+	}
+	if s, ok := r.providerSession[providerID]; ok {
+		return s, nil
+	}
+	return session.Session{}, serviceerr.ErrNotFound
+}
+
 func (r *Repository) StoreSession(_ context.Context, sess session.Session) error {
 	if r.storeSessionErr != nil {
 		return r.storeSessionErr
@@ -114,6 +126,7 @@ func (r *Repository) StoreSession(_ context.Context, sess session.Session) error
 		return serviceerr.ErrConflict
 	}
 	r.sessions[sess.ID] = sess
+	r.providerSession[sess.ProviderID] = sess
 	return nil
 }
 
@@ -125,5 +138,6 @@ func (r *Repository) DeleteSession(_ context.Context, sess session.Session) erro
 		return serviceerr.ErrNotFound
 	}
 	delete(r.sessions, sess.ID)
+	delete(r.providerSession, sess.ProviderID)
 	return nil
 }
