@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.15.0](https://github.com/openkcm/session-manager/compare/v0.14.1...v0.15.0) (2026-01-06)
+
+
+### Features
+
+* logout ([#173](https://github.com/openkcm/session-manager/issues/173)) ([b748864](https://github.com/openkcm/session-manager/commit/b74886408b7080f40d01e73cca6d604201764085))
+
+
+### Bug Fixes
+
+* token refresh ([#190](https://github.com/openkcm/session-manager/issues/190)) ([a42955d](https://github.com/openkcm/session-manager/commit/a42955d096da46099a1470bf0df709141672c847))
+
 ## [0.14.1](https://github.com/openkcm/session-manager/compare/v0.14.0...v0.14.1) (2025-12-17)
 
 
