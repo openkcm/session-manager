@@ -87,6 +87,20 @@ func (r *Repository) LoadSession(ctx context.Context, sessionID string) (session
 	return s, nil
 }
 
+func (r *Repository) LoadSessionByProviderID(ctx context.Context, providerID string) (session.Session, error) {
+	sID, err := r.GetSessIDByProviderID(ctx, providerID)
+	if err != nil {
+		return session.Session{}, fmt.Errorf("getting session id by provider id: %w", err)
+	}
+
+	sess, err := r.LoadSession(ctx, sID)
+	if err != nil {
+		return session.Session{}, fmt.Errorf("getting session by id: %w", err)
+	}
+
+	return sess, nil
+}
+
 func (r *Repository) GetSessIDByProviderID(ctx context.Context, providerID string) (string, error) {
 	var s string
 	err := r.store.Get(ctx, objectTypeProviderSession, getObjectID(objectTypeProviderSession, providerID), &s)

@@ -11,6 +11,7 @@ type Repository interface {
 	// Session operations
 	ListSessions(ctx context.Context) ([]Session, error)
 	LoadSession(ctx context.Context, sessionID string) (Session, error)
+	LoadSessionByProviderID(ctx context.Context, providerID string) (Session, error)
 	StoreSession(ctx context.Context, session Session) error
 	DeleteSession(ctx context.Context, session Session) error
 }

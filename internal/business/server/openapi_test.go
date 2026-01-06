@@ -23,7 +23,7 @@ func TestOpenAPIServer_Auth_ContextCanceled(t *testing.T) {
 
 	// Already asserted above
 	r, _ := resp.(openapi.AuthdefaultJSONResponse)
-	assert.Equal(t, int(serviceerr.CodeUnknown), *r.Body.ErrorCode)
+	assert.Equal(t, string(serviceerr.CodeUnknown), r.Body.Error)
 	assert.Equal(t, http.StatusInternalServerError, r.StatusCode)
 }
 
@@ -39,6 +39,6 @@ func TestOpenAPIServer_Callback_ContextCanceled(t *testing.T) {
 
 	// Already asserted above
 	r, _ := resp.(openapi.CallbackdefaultJSONResponse)
-	assert.Equal(t, int(serviceerr.CodeUnknown), *r.Body.ErrorCode)
+	assert.Equal(t, string(serviceerr.CodeUnknown), r.Body.Error)
 	assert.Equal(t, http.StatusInternalServerError, r.StatusCode)
 }

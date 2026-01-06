@@ -389,6 +389,84 @@ func (m *Manager) Logout(ctx context.Context, sessionID string) (string, error) 
 	return redirectURL.String(), nil
 }
 
+func (m *Manager) BCLogout(ctx context.Context, logoutJWT string) error {
+	token, err := jwt.ParseSigned(logoutJWT, []jose.SignatureAlgorithm{
+		jose.EdDSA,
+		jose.HS256,
+		jose.HS384,
+		jose.HS512,
+		jose.RS256,
+		jose.RS384,
+		jose.RS512,
+		jose.ES256,
+		jose.ES384,
+		jose.ES512,
+		jose.PS256,
+		jose.PS384,
+		jose.PS512,
+	})
+	if err != nil {
+		return fmt.Errorf("parsing jwt: %w", err)
+	}
+
+	// Logout token must contain either a sub or a sid Claim, and may contain both.
+	type logoutTokenClaims struct {
+		jwt.Claims
+
+		// Events is always "http://schemas.openid.net/event/backchannel-logout": {}
+		Events    map[string]json.RawMessage `json:"events,omitempty"`
+		SessionID string                     `json:"sid,omitempty"`
+	}
+
+	var unsafeClaims logoutTokenClaims
+	if err := token.UnsafeClaimsWithoutVerification(&unsafeClaims); err != nil {
+		slogctx.FromCtx(ctx).WarnContext(ctx, "failed to parse claims", "error", err)
+		return fmt.Errorf("parsing claims unsafe: %w", err)
+	}
+
+	if _, ok := unsafeClaims.Events["http://schemas.openid.net/event/backchannel-logout"]; !ok {
+		slogctx.FromCtx(ctx).WarnContext(ctx, "backchannel-logout: JWT token is not a logout token")
+		return serviceerr.ErrInvalidRequest
+	}
+
+	if unsafeClaims.SessionID == "" {
+		slogctx.FromCtx(ctx).WarnContext(ctx, "missing session id in the claims")
+		return serviceerr.ErrInvalidRequest
+	}
+
+	session, err := m.sessions.LoadSessionByProviderID(ctx, unsafeClaims.SessionID)
+	if err != nil {
+		slogctx.FromCtx(ctx).WarnContext(ctx, "backchannel-logout: session is not open")
+		return nil
+	}
+
+	provider, err := m.oidc.Get(ctx, session.TenantID)
+	if err != nil {
+		return fmt.Errorf("getting oidc provider: %w", err)
+	}
+
+	oidcConf, err := provider.GetOpenIDConfig(ctx, m.secureClient)
+	if err != nil {
+		return fmt.Errorf("getting oidc config: %w", err)
+	}
+
+	keyset, err := m.getProviderKeySet(ctx, oidcConf)
+	if err != nil {
+		return fmt.Errorf("getting jwks for a provider: %w", err)
+	}
+
+	var claims logoutTokenClaims
+	if err := token.Claims(keyset, &claims); err != nil {
+		return fmt.Errorf("parsing claims: %w", err)
+	}
+
+	if err := m.sessions.DeleteSession(ctx, session); err != nil {
+		return fmt.Errorf("deleting session: %w", err)
+	}
+
+	return nil
+}
+
 func (m *Manager) MakeSessionCookie(ctx context.Context, tenantID, value string) (*http.Cookie, error) {
 	sessionCookie := m.sessionCookieTemplate.ToCookie(value)
 	if tenantID != "" {

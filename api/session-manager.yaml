@@ -87,6 +87,39 @@ paths:
                         application/json:
                             schema:
                                 $ref: "#/components/schemas/ErrorModel"
+    /sm/bclogout:
+        post:
+            operationId: bclogout
+            description: |
+                When the OIDC provider initiates the logout, this endpoint is called. Steps:
+                - lookup the session details using the given OIDC session ID sid
+                - validate the logout token
+                - delete the session from the storage
+                - respond with header Cache-Control: no-store
+                This allows the OIDC provider to terminate the CMK session as part of an SLO.
+            requestBody:
+                content:
+                    application/x-www-form-urlencoded:
+                        schema:
+                            type: object
+                            properties:
+                                logout_token:
+                                    description: Logout token
+                                    type: string
+                            required: [logout_token]
+            responses:
+                "200":
+                    headers:
+                        Cache-Control:
+                            description: Always no-store
+                            schema:
+                                type: string
+                "400":
+                    description: Logout failed
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorModel"
     /sm/callback:
         get:
             description: |
@@ -147,7 +180,8 @@ components:
         ErrorModel:
             type: object
             properties:
-                error_code:
-                    type: integer
-                error_msg:
+                error:
                     type: string
+                error_description:
+                    type: string
+            required: ["error"]

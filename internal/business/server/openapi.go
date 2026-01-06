@@ -292,6 +292,15 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 	}, nil
 }
 
+func (s *openAPIServer) Bclogout(ctx context.Context, request openapi.BclogoutRequestObject) (openapi.BclogoutResponseObject, error) {
+	if err := s.sManager.BCLogout(ctx, request.Body.LogoutToken); err != nil {
+		body, _ := s.toErrorModel(err)
+		return openapi.Bclogout400JSONResponse(body), nil
+	}
+
+	return openapi.Bclogout200Response{}, nil
+}
+
 func (s *openAPIServer) toErrorModel(err error) (model openapi.ErrorModel, httpStatus int) {
 	var serviceErr *serviceerr.Error
 	if !errors.As(err, &serviceErr) {
@@ -299,13 +308,14 @@ func (s *openAPIServer) toErrorModel(err error) (model openapi.ErrorModel, httpS
 	}
 
 	return openapi.ErrorModel{
-		ErrorCode: (*int)(&serviceErr.Code),
-		ErrorMsg:  &serviceErr.Message,
+		Error:            string(serviceErr.Err),
+		ErrorDescription: &serviceErr.Description,
 	}, serviceErr.HTTPStatus()
 }
 
-func newBadRequest(msg string) (model openapi.ErrorModel, httpStatus int) {
+func newBadRequest(description string) (model openapi.ErrorModel, httpStatus int) {
 	return openapi.ErrorModel{
-		ErrorMsg: &msg,
+		Error:            string(serviceerr.CodeInvalidRequest),
+		ErrorDescription: &description,
 	}, http.StatusBadRequest
 }

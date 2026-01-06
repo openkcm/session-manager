@@ -2,13 +2,19 @@ package session_test
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 	"time"
 
+	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -412,4 +418,133 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestManager_BCLogout(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		panic(err)
+	}
+
+	jwks := jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{
+		Key:       key,
+		KeyID:     "kid1",
+		Algorithm: string(jose.RS256),
+	}}}
+	signer, err := jose.NewSigner(jose.SigningKey{
+		Algorithm: jose.RS256,
+		Key:       jwks.Keys[0],
+	}, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	newJwt := func(claims any) string {
+		token, err := jwt.Signed(signer).Claims(claims).Serialize()
+		if err != nil {
+			panic(err)
+		}
+
+		return token
+	}
+
+	jwksSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		publicJwks := jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{
+			Key:       &key.PublicKey,
+			KeyID:     "kid1",
+			Algorithm: string(jose.RS256),
+		}}}
+		b, err := json.Marshal(publicJwks)
+		if err != nil {
+			panic(err)
+		}
+
+		if _, err := w.Write(b); err != nil {
+			panic(err)
+		}
+	}))
+
+	tests := []struct {
+		name      string
+		cfg       *config.SessionManager
+		jwt       string
+		setupMock func(*oidcmock.Repository, *sessionmock.Repository)
+		errAssert assert.ErrorAssertionFunc
+	}{
+		{
+			name: "Success",
+			cfg:  &config.SessionManager{},
+			jwt: newJwt(struct {
+				Events    map[string]struct{} `json:"events"`
+				SessionID string              `json:"sid"`
+				KeyID     string              `json:"kid"`
+			}{
+				Events:    map[string]struct{}{"http://schemas.openid.net/event/backchannel-logout": {}},
+				SessionID: "sid-1",
+			}),
+			setupMock: func(oidcs *oidcmock.Repository, sessions *sessionmock.Repository) {
+				_ = oidcs.Create(context.Background(), "tid-1", oidc.Provider{
+					IssuerURL: jwksSrv.URL,
+				})
+				_ = sessions.StoreSession(context.Background(), session.Session{ID: "sid-1", TenantID: "tid-1"})
+			},
+			errAssert: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			oidcServer := StartOIDCServer(t, false)
+			defer oidcServer.Close()
+
+			auditServer := StartAuditServer(t)
+			defer auditServer.Close()
+
+			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+			require.NoError(t, err)
+
+			oidcMock := oidcmock.NewInMemRepository()
+			sessionMock := sessionmock.NewInMemRepository()
+
+			cli := &http.Client{
+				Transport: localRoundTripper{
+					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						b, err := json.Marshal(oidc.Configuration{
+							JwksURI: jwksSrv.URL,
+							Issuer:  jwksSrv.URL,
+						})
+						if err != nil {
+							panic(err)
+						}
+
+						if _, err := w.Write(b); err != nil {
+							panic(err)
+						}
+					}),
+				},
+			}
+
+			tt.setupMock(oidcMock, sessionMock)
+
+			m, err := session.NewManager(tt.cfg, oidcMock, sessionMock, auditLogger, cli)
+			require.NoError(t, err)
+
+			err = m.BCLogout(ctx, tt.jwt)
+			if !tt.errAssert(t, err, fmt.Sprintf("Manager.BCLogout() error = %v", err)) {
+				return
+			}
+		})
+	}
+}
+
+// localRoundTripper is an http.RoundTripper that executes HTTP transactions by
+// using handler directly, instead of going over an HTTP connection.
+type localRoundTripper struct {
+	handler http.Handler
+}
+
+func (l localRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	w := httptest.NewRecorder()
+	l.handler.ServeHTTP(w, req)
+	return w.Result(), nil
 }

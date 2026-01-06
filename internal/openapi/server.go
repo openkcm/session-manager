@@ -17,14 +17,20 @@ import (
 
 // ErrorModel defines model for ErrorModel.
 type ErrorModel struct {
-	ErrorCode *int    `json:"error_code,omitempty"`
-	ErrorMsg  *string `json:"error_msg,omitempty"`
+	Error            string  `json:"error"`
+	ErrorDescription *string `json:"error_description,omitempty"`
 }
 
 // AuthParams defines parameters for Auth.
 type AuthParams struct {
 	TenantID   string `form:"tenant_id" json:"tenant_id"`
 	RequestURI string `form:"request_uri" json:"request_uri"`
+}
+
+// BclogoutFormdataBody defines parameters for Bclogout.
+type BclogoutFormdataBody struct {
+	// LogoutToken Logout token
+	LogoutToken string `form:"logout_token" json:"logout_token"`
 }
 
 // CallbackParams defines parameters for Callback.
@@ -39,11 +45,17 @@ type LogoutParams struct {
 	XCSRFToken string `json:"X-CSRF-Token"`
 }
 
+// BclogoutFormdataRequestBody defines body for Bclogout for application/x-www-form-urlencoded ContentType.
+type BclogoutFormdataRequestBody BclogoutFormdataBody
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 
 	// (GET /sm/auth)
 	Auth(w http.ResponseWriter, r *http.Request, params AuthParams)
+
+	// (POST /sm/bclogout)
+	Bclogout(w http.ResponseWriter, r *http.Request)
 
 	// (GET /sm/callback)
 	Callback(w http.ResponseWriter, r *http.Request, params CallbackParams)
@@ -101,6 +113,20 @@ func (siw *ServerInterfaceWrapper) Auth(w http.ResponseWriter, r *http.Request) 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Auth(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Bclogout operation middleware
+func (siw *ServerInterfaceWrapper) Bclogout(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Bclogout(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -347,6 +373,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc("GET "+options.BaseURL+"/sm/auth", wrapper.Auth)
+	m.HandleFunc("POST "+options.BaseURL+"/sm/bclogout", wrapper.Bclogout)
 	m.HandleFunc("GET "+options.BaseURL+"/sm/callback", wrapper.Callback)
 	m.HandleFunc("GET "+options.BaseURL+"/sm/logout", wrapper.Logout)
 
@@ -385,6 +412,37 @@ func (response AuthdefaultJSONResponse) VisitAuthResponse(w http.ResponseWriter)
 	w.WriteHeader(response.StatusCode)
 
 	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type BclogoutRequestObject struct {
+	Body *BclogoutFormdataRequestBody
+}
+
+type BclogoutResponseObject interface {
+	VisitBclogoutResponse(w http.ResponseWriter) error
+}
+
+type Bclogout200ResponseHeaders struct {
+	CacheControl string
+}
+
+type Bclogout200Response struct {
+	Headers Bclogout200ResponseHeaders
+}
+
+func (response Bclogout200Response) VisitBclogoutResponse(w http.ResponseWriter) error {
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+	return nil
+}
+
+type Bclogout400JSONResponse ErrorModel
+
+func (response Bclogout400JSONResponse) VisitBclogoutResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type CallbackRequestObject struct {
@@ -470,6 +528,9 @@ type StrictServerInterface interface {
 	// (GET /sm/auth)
 	Auth(ctx context.Context, request AuthRequestObject) (AuthResponseObject, error)
 
+	// (POST /sm/bclogout)
+	Bclogout(ctx context.Context, request BclogoutRequestObject) (BclogoutResponseObject, error)
+
 	// (GET /sm/callback)
 	Callback(ctx context.Context, request CallbackRequestObject) (CallbackResponseObject, error)
 
@@ -525,6 +586,41 @@ func (sh *strictHandler) Auth(w http.ResponseWriter, r *http.Request, params Aut
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AuthResponseObject); ok {
 		if err := validResponse.VisitAuthResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// Bclogout operation middleware
+func (sh *strictHandler) Bclogout(w http.ResponseWriter, r *http.Request) {
+	var request BclogoutRequestObject
+
+	if err := r.ParseForm(); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode formdata: %w", err))
+		return
+	}
+	var body BclogoutFormdataRequestBody
+	if err := runtime.BindForm(&body, r.Form, nil, nil); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't bind formdata: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.Bclogout(ctx, request.(BclogoutRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "Bclogout")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(BclogoutResponseObject); ok {
+		if err := validResponse.VisitBclogoutResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
