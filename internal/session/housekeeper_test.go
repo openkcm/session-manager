@@ -13,7 +13,7 @@ import (
 	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
 )
 
-func TestCleanupIdleSessions(t *testing.T) {
+func TestDeleteIdleSessions(t *testing.T) {
 	// Arrange
 	ctx := t.Context()
 	sessionID := "test-session-id"
@@ -22,9 +22,10 @@ func TestCleanupIdleSessions(t *testing.T) {
 	}
 	sessions := sessionmock.NewInMemRepository(
 		sessionmock.WithSession(session.Session{
-			ID:          sessionID,
-			TenantID:    "CMKTenantID",
-			LastVisited: time.Now(),
+			ID:                sessionID,
+			TenantID:          "CMKTenantID",
+			LastVisited:       time.Now(),
+			AccessTokenExpiry: time.Now().Add(2 * time.Hour),
 		}),
 	)
 	manager, err := session.NewManager(cfg, nil, sessions, nil, http.DefaultClient)
@@ -35,14 +36,14 @@ func TestCleanupIdleSessions(t *testing.T) {
 	require.NoError(t, err)
 
 	// Perform cleanup with 1 hour idle duration
-	err = manager.CleanupIdleSessions(ctx, time.Hour)
+	err = manager.TriggerHousekeeping(ctx, 2, time.Hour, time.Hour)
 	require.NoError(t, err)
 	// Session should still be there after cleanup
 	_, err = sessions.LoadSession(ctx, sessionID)
 	require.NoError(t, err)
 
 	// Now perform cleanup with 0 second idle duration
-	err = manager.CleanupIdleSessions(ctx, 0)
+	err = manager.TriggerHousekeeping(ctx, 2, 0, time.Hour)
 	require.NoError(t, err)
 	// Session should be deleted after cleanup
 	_, err = sessions.LoadSession(ctx, sessionID)
