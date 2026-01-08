@@ -22,11 +22,15 @@ type Config struct {
 }
 
 type Housekeeper struct {
-	TokenRefreshInterval        time.Duration `yaml:"tokenRefreshInterval" default:"30m"`
-	TokenRefreshTriggerInterval time.Duration `yaml:"tokenRefreshTriggerInterval" default:"5m"`
-
-	IdleSessionCleanupInterval time.Duration `yaml:"idleSessionCleanupInterval" default:"30m"`
-	IdleSessionTimeout         time.Duration `yaml:"idleSessionTimeout" default:"90m"`
+	// TriggerInterval defines how often the housekeeper jobs run.
+	TriggerInterval time.Duration `yaml:"triggerInterval" default:"10m"`
+	// ConcurrencyLimit defines the maximum number of sessions handled concurrently during housekeeping.
+	ConcurrencyLimit int `yaml:"concurrencyLimit" default:"10"`
+	// TokenRefreshTriggerInterval defines the duration before token expiry when a token refresh should be triggered.
+	// This should at least match the TriggerInterval to ensure that expiring tokens are refreshed in time.
+	TokenRefreshTriggerInterval time.Duration `yaml:"tokenRefreshTriggerInterval" default:"15m"`
+	// IdleSessionTimeout defines the duration after which an idle session should be deleted.
+	IdleSessionTimeout time.Duration `yaml:"idleSessionTimeout" default:"90m"`
 }
 
 type HTTPServer struct {
