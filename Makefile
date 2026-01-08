@@ -127,6 +127,7 @@ test: clean
 	GOCOVERDIR="${CURDIR}/cover/integration" go test -count=1 -race --tags=integration ./integration
 
 	@go tool covdata textfmt -i=./cover/unit,./cover/integration -o cover.out
+	@go tool cover -func=cover.out
 
 	@echo "On a Mac, you can use the following command to open the coverage report in the browser\ngo tool cover -html=cover.out -o cover.html && open cover.html"
 
