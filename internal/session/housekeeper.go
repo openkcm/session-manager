@@ -15,7 +15,7 @@ import (
 	slogctx "github.com/veqryn/slog-context"
 )
 
-func (m *Manager) TriggerHousekeeping(ctx context.Context, concurrencyLimit int, idleSessionTimeout, refreshTriggerInterval time.Duration) error {
+func (m *Manager) TriggerHousekeeping(ctx context.Context, concurrencyLimit int, refreshTriggerInterval time.Duration) error {
 	sessions, err := m.sessions.ListSessions(ctx)
 	if err != nil {
 		return err
@@ -23,7 +23,6 @@ func (m *Manager) TriggerHousekeeping(ctx context.Context, concurrencyLimit int,
 	slogctx.Info(ctx, "Start housekeeping sessions",
 		"session_count", len(sessions),
 		"concurrency_limit", concurrencyLimit,
-		"idle_session_timeout", idleSessionTimeout.String(),
 		"token_refresh_trigger_interval", refreshTriggerInterval.String(),
 	)
 
@@ -44,7 +43,7 @@ func (m *Manager) TriggerHousekeeping(ctx context.Context, concurrencyLimit int,
 		// Acquire a token before starting a new goroutine
 		sem <- token{}
 		go func(s Session) {
-			m.housekeepSession(ctx, s, idleSessionTimeout, refreshTriggerInterval)
+			m.housekeepSession(ctx, s, refreshTriggerInterval)
 			// Release the token after the goroutine is done
 			<-sem
 		}(s)
@@ -58,7 +57,7 @@ func (m *Manager) TriggerHousekeeping(ctx context.Context, concurrencyLimit int,
 	return nil
 }
 
-func (m *Manager) housekeepSession(ctx context.Context, s Session, idleSessionTimeout, refreshTriggerInterval time.Duration) {
+func (m *Manager) housekeepSession(ctx context.Context, s Session, refreshTriggerInterval time.Duration) {
 	// Create a short hash of the session ID for logging
 	sessionIDHashBytes := sha256.Sum256([]byte(s.ID))
 	sessionIDHash := hex.EncodeToString(sessionIDHashBytes[:])[:8]
@@ -67,8 +66,14 @@ func (m *Manager) housekeepSession(ctx context.Context, s Session, idleSessionTi
 		"tenant_id", s.TenantID,
 	)
 
+	active, err := m.sessions.IsActive(ctx, s.ID)
+	if err != nil {
+		slogctx.Error(ctx, "Failed to get the session active status", "error", err)
+		return
+	}
+
 	// Delete idle sessions if they have been idle for longer than the configured timeout
-	if time.Since(s.LastVisited) > idleSessionTimeout {
+	if !active {
 		err := m.sessions.DeleteSession(ctx, s)
 		if err != nil {
 			slogctx.Error(ctx, "Error deleting idle session", "error", err)

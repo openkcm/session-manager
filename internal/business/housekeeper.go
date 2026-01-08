@@ -20,11 +20,10 @@ func HousekeeperMain(ctx context.Context, cfg *config.Config) error {
 
 	// Start the housekeeper loop
 	c := time.Tick(cfg.Housekeeper.TriggerInterval)
-	idleSessionTimeout := cfg.Housekeeper.IdleSessionTimeout
 	refreshTriggerInterval := cfg.Housekeeper.TokenRefreshTriggerInterval
 	concurrencyLimit := cfg.Housekeeper.ConcurrencyLimit
 	for {
-		err := sessionManager.TriggerHousekeeping(ctx, concurrencyLimit, idleSessionTimeout, refreshTriggerInterval)
+		err := sessionManager.TriggerHousekeeping(ctx, concurrencyLimit, refreshTriggerInterval)
 		if err != nil {
 			slogctx.Error(ctx, "Error during session housekeeping", "error", err)
 		}

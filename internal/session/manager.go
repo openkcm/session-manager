@@ -35,6 +35,7 @@ type Manager struct {
 	secureClient *http.Client
 
 	sessionDuration       time.Duration
+	idleSessionTimeout    time.Duration
 	callbackURL           *url.URL
 	clientID              string
 	queryParametersAuth   []string
@@ -66,6 +67,7 @@ func NewManager(
 		sessions:              sessions,
 		audit:                 auditLogger,
 		sessionDuration:       cfg.SessionDuration,
+		idleSessionTimeout:    cfg.IdleSessionTimeout,
 		queryParametersAuth:   cfg.AdditionalQueryParametersAuthorize,
 		queryParametersToken:  cfg.AdditionalQueryParametersToken,
 		authContextKeys:       cfg.AdditionalAuthContextKeys,
@@ -288,7 +290,6 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		AccessToken:  tokens.AccessToken,
 		RefreshToken: tokens.RefreshToken,
 		Expiry:       time.Now().Add(m.sessionDuration),
-		LastVisited:  time.Now(),
 		AuthContext:  authContext,
 	}
 
@@ -296,6 +297,11 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 	if err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to store session")
 		return OIDCSessionData{}, fmt.Errorf("storing session: %w", err)
+	}
+
+	if err := m.sessions.BumpActive(ctx, session.ID, m.idleSessionTimeout); err != nil {
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to bump the session active status")
+		return OIDCSessionData{}, fmt.Errorf("bumping session active status: %w", err)
 	}
 
 	err = m.sessions.DeleteState(ctx, stateID)

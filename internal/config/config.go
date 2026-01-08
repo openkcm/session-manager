@@ -29,8 +29,6 @@ type Housekeeper struct {
 	// TokenRefreshTriggerInterval defines the duration before token expiry when a token refresh should be triggered.
 	// This should at least match the TriggerInterval to ensure that expiring tokens are refreshed in time.
 	TokenRefreshTriggerInterval time.Duration `yaml:"tokenRefreshTriggerInterval" default:"15m"`
-	// IdleSessionTimeout defines the duration after which an idle session should be deleted.
-	IdleSessionTimeout time.Duration `yaml:"idleSessionTimeout" default:"90m"`
 }
 
 type HTTPServer struct {
@@ -61,7 +59,9 @@ type ValKey struct {
 }
 
 type SessionManager struct {
-	SessionDuration time.Duration `yaml:"sessionDuration" default:"12h"`
+	IdleSessionTimeout time.Duration `yaml:"idleSessionDuration" default:"90m"`
+	SessionDuration    time.Duration `yaml:"sessionDuration" default:"12h"`
+
 	// CallbackURL is the URL path for the OAuth2 callback endpoint, where we receive the authorization code.
 	CallbackURL                         string              `yaml:"callbackURL" default:"/sm/callback"`
 	ClientAuth                          ClientAuth          `yaml:"clientAuth"`

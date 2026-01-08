@@ -1,6 +1,9 @@
 package session
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type Repository interface {
 	// State operations
@@ -14,4 +17,6 @@ type Repository interface {
 	LoadSessionByProviderID(ctx context.Context, providerID string) (Session, error)
 	StoreSession(ctx context.Context, session Session) error
 	DeleteSession(ctx context.Context, session Session) error
+	IsActive(ctx context.Context, sessionID string) (bool, error)
+	BumpActive(ctx context.Context, sessionID string, timeout time.Duration) error
 }

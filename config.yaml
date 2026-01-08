@@ -219,6 +219,7 @@ valkey:
 
 sessionManager:
     sessionDuration: 12h
+    idleSessionTimeout: 90m
     callbackURL: http://localhost:8080/sm/callback
     clientAuth:
         clientID: "client-id"
@@ -249,4 +250,3 @@ housekeeper:
     triggerInterval: 10m
     concurrencyLimit: 10
     tokenRefreshTriggerInterval: 15m
-    idleSessionTimeout: 90m

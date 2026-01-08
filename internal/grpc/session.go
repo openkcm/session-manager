@@ -28,12 +28,14 @@ type SessionServer struct {
 	httpClient   *http.Client
 
 	queryParametersIntrospect []string
+	idleSessionTimeout        time.Duration
 }
 
 func NewSessionServer(
 	sessionRepo session.Repository,
 	providerRepo oidc.ProviderRepository,
 	httpClient *http.Client,
+	idleSessionDuration time.Duration,
 	opts ...SessionServerOption,
 ) *SessionServer {
 	s := &SessionServer{
@@ -52,6 +54,16 @@ func NewSessionServer(
 func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessionRequest) (*sessionv1.GetSessionResponse, error) {
 	slogctx.Debug(ctx, "GetSession called")
 	defer slogctx.Debug(ctx, "GetSession completed")
+
+	active, err := s.sessionRepo.IsActive(ctx, req.GetSessionId())
+	if err != nil {
+		slogctx.Error(ctx, "failed to get the session active state", "error", err)
+		return &sessionv1.GetSessionResponse{Valid: false}, nil
+	}
+
+	if !active {
+		return &sessionv1.GetSessionResponse{Valid: false}, nil
+	}
 
 	// Load session for the given session ID
 	sess, err := s.sessionRepo.LoadSession(ctx, req.GetSessionId())
@@ -102,11 +114,9 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 		}
 	}
 
-	// Update last visited time
-	sess.LastVisited = time.Now()
-	err = s.sessionRepo.StoreSession(ctx, sess)
-	if err != nil {
-		slogctx.Error(ctx, "could not update last visited time", "error", err)
+	if err := s.sessionRepo.BumpActive(ctx, req.GetSessionId(), s.idleSessionTimeout); err != nil {
+		slogctx.Error(ctx, "failed to bump the session status", "error", err)
+		return &sessionv1.GetSessionResponse{Valid: false}, nil
 	}
 
 	// Return info of the valid session
