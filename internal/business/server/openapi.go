@@ -194,7 +194,7 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 // Logout implements openapi.StrictServerInterface.
 func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutRequestObject) (openapi.LogoutResponseObject, error) {
 	slogctx.Debug(ctx, "Logout() called")
-	defer slogctx.Debug(ctx, "Callback() completed")
+	defer slogctx.Debug(ctx, "Logout() completed")
 
 	rw, err := middleware.ResponseWriterFromContext(ctx)
 	if err != nil {
@@ -293,6 +293,9 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 }
 
 func (s *openAPIServer) Bclogout(ctx context.Context, request openapi.BclogoutRequestObject) (openapi.BclogoutResponseObject, error) {
+	slogctx.Debug(ctx, "Bclogout() called")
+	defer slogctx.Debug(ctx, "Bclogout() completed")
+
 	if err := s.sManager.BCLogout(ctx, request.Body.LogoutToken); err != nil {
 		body, _ := s.toErrorModel(err)
 		return openapi.Bclogout400JSONResponse(body), nil
