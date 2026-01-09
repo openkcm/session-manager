@@ -62,7 +62,7 @@ func (s *store) get(ctx context.Context, key string, decodeInto any) error {
 	if err != nil {
 		valkeyErr, ok := valkey.IsValkeyErr(err)
 		if ok && valkeyErr.IsNil() {
-			return errors.Join(valkeyErr, serviceerr.ErrConflict)
+			return errors.Join(valkeyErr, serviceerr.ErrNotFound)
 		}
 
 		return fmt.Errorf("executing get command: %w", err)

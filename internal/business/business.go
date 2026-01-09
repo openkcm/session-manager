@@ -107,7 +107,7 @@ func internalMain(ctx context.Context, cfg *config.Config) error {
 	opts := []grpc.SessionServerOption{
 		grpc.WithQueryParametersIntrospect(cfg.SessionManager.AdditionalQueryParametersIntrospect),
 	}
-	sessionsrv := grpc.NewSessionServer(sessionRepo, oidcProviderRepo, httpClient, opts...)
+	sessionsrv := grpc.NewSessionServer(sessionRepo, oidcProviderRepo, httpClient, cfg.SessionManager.IdleSessionTimeout, opts...)
 	return server.StartGRPCServer(ctx, cfg, oidcmappingsrv, sessionsrv)
 }
 

@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -148,7 +149,7 @@ func startServer(t *testing.T, port int) (*stdgrpc.Server, *oidc.Service, func(c
 
 	srv := stdgrpc.NewServer()
 	oidcmappingv1.RegisterServiceServer(srv, grpc.NewOIDCMappingServer(service))
-	sessionv1.RegisterServiceServer(srv, grpc.NewSessionServer(nil, oidcProviderRepo, http.DefaultClient))
+	sessionv1.RegisterServiceServer(srv, grpc.NewSessionServer(nil, oidcProviderRepo, http.DefaultClient, time.Hour))
 
 	// start
 	go func() {

@@ -2,6 +2,7 @@ package sessionmock
 
 import (
 	"context"
+	"time"
 
 	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/internal/session"
@@ -13,6 +14,7 @@ type Repository struct {
 	states          map[string]session.State
 	sessions        map[string]session.Session
 	providerSession map[string]session.Session
+	active          map[string]time.Time
 
 	loadStateErr, storeStateErr, deleteStateErr       error
 	loadSessionErr, storeSessionErr, deleteSessionErr error
@@ -58,6 +60,7 @@ func NewInMemRepository(opts ...RepositoryOption) *Repository {
 		states:          make(map[string]session.State),
 		sessions:        make(map[string]session.Session),
 		providerSession: make(map[string]session.Session),
+		active:          make(map[string]time.Time),
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -139,5 +142,20 @@ func (r *Repository) DeleteSession(_ context.Context, sess session.Session) erro
 	}
 	delete(r.sessions, sess.ID)
 	delete(r.providerSession, sess.ProviderID)
+	delete(r.active, sess.ID)
+	return nil
+}
+
+func (r *Repository) IsActive(ctx context.Context, sessionID string) (bool, error) {
+	active, ok := r.active[sessionID]
+	if !ok {
+		return false, nil
+	}
+
+	return !active.Before(time.Now()), nil
+}
+
+func (r *Repository) BumpActive(ctx context.Context, sessionID string, timeout time.Duration) error {
+	r.active[sessionID] = time.Now().Add(timeout)
 	return nil
 }

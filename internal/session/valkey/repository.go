@@ -10,6 +10,7 @@ import (
 
 	slogctx "github.com/veqryn/slog-context"
 
+	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/internal/session"
 )
 
@@ -22,6 +23,7 @@ const (
 	objectTypeAccessToken     ObjectType = "accessToken"
 	objectTypeRefreshToken    ObjectType = "refreshToken"
 	objectTypeProviderToken   ObjectType = "providerToken"
+	objectTypeActive          ObjectType = "active"
 )
 
 var (
@@ -192,6 +194,27 @@ func (r *Repository) DeleteSession(ctx context.Context, s session.Session) error
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func (r *Repository) IsActive(ctx context.Context, sessionID string) (bool, error) {
+	var b bool
+	if err := r.store.Get(ctx, objectTypeActive, sessionID, &b); err != nil {
+		if errors.Is(err, serviceerr.ErrNotFound) {
+			return false, nil
+		}
+
+		return false, fmt.Errorf("getting active object: %w", err)
+	}
+
+	return true, nil
+}
+
+func (r *Repository) BumpActive(ctx context.Context, sessionID string, timeout time.Duration) error {
+	if err := r.store.Set(ctx, objectTypeActive, sessionID, true, timeout); err != nil {
+		return fmt.Errorf("storing an active object: %w", err)
+	}
+
 	return nil
 }
 
