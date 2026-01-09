@@ -59,7 +59,7 @@ type ValKey struct {
 }
 
 type SessionManager struct {
-	IdleSessionTimeout time.Duration `yaml:"idleSessionDuration" default:"90m"`
+	IdleSessionTimeout time.Duration `yaml:"idleSessionTimeout" default:"90m"`
 	SessionDuration    time.Duration `yaml:"sessionDuration" default:"12h"`
 
 	// CallbackURL is the URL path for the OAuth2 callback endpoint, where we receive the authorization code.
