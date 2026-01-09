@@ -125,9 +125,6 @@ func (r *Repository) StoreSession(_ context.Context, sess session.Session) error
 	if r.storeSessionErr != nil {
 		return r.storeSessionErr
 	}
-	if _, ok := r.sessions[sess.ID]; ok {
-		return serviceerr.ErrConflict
-	}
 	r.sessions[sess.ID] = sess
 	r.providerSession[sess.ProviderID] = sess
 	return nil
