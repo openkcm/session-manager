@@ -337,7 +337,7 @@ config:
     source: file:///sql
 
   housekeeper:
-    tokenRefreshInterval: 30m
-    tokenRefreshTriggerInterval: 5m
-    idleSessionCleanupInterval: 30m
+    triggerInterval: 10m
+    concurrencyLimit: 10
+    tokenRefreshTriggerInterval: 15m
     idleSessionTimeout: 90m
