@@ -54,14 +54,38 @@ func TestToCookie(t *testing.T) {
 				Secure:   true,
 				SameSite: CookieSameSiteStrict,
 			},
+			value: "csrf-token-value",
 			want: &http.Cookie{
 				Name:     "csrf",
+				Value:    "csrf-token-value",
 				MaxAge:   0,
 				Path:     "/",
 				Domain:   "",
 				Secure:   true,
 				SameSite: http.SameSiteStrictMode,
 				HttpOnly: false,
+			},
+		}, {
+			name: "none-samesite",
+			template: CookieTemplate{
+				Name:     "test-none",
+				Path:     "/api",
+				Domain:   "example.com",
+				Secure:   true,
+				SameSite: CookieSameSiteNone,
+				HTTPOnly: true,
+				MaxAge:   3600,
+			},
+			value: "test-value",
+			want: &http.Cookie{
+				Name:     "test-none",
+				Value:    "test-value",
+				MaxAge:   3600,
+				Path:     "/api",
+				Domain:   "example.com",
+				Secure:   true,
+				SameSite: http.SameSiteNoneMode,
+				HttpOnly: true,
 			},
 		},
 	}
@@ -70,6 +94,7 @@ func TestToCookie(t *testing.T) {
 			c := tt.template.ToCookie(tt.value)
 			t.Logf("Got cookie: %+v", c)
 			assert.Equal(t, tt.want.Name, c.Name)
+			assert.Equal(t, tt.want.Value, c.Value)
 			assert.Equal(t, tt.want.MaxAge, c.MaxAge)
 			assert.Equal(t, tt.want.Path, c.Path)
 			assert.Equal(t, tt.want.Domain, c.Domain)

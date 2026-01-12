@@ -123,6 +123,187 @@ func TestGRPCServer(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, removeRes.GetSuccess())
 	})
+
+	t.Run("ApplyOIDCMapping with multiple audiences", func(t *testing.T) {
+		expJwks := "jks-multi"
+		expTenantID := uuid.NewString()
+		expIssuer := uuid.NewString()
+		audiences := []string{"aud1", "aud2", "aud3"}
+
+		applyResp, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
+			TenantId:  expTenantID,
+			Issuer:    expIssuer,
+			JwksUri:   &expJwks,
+			Audiences: audiences,
+		})
+		assert.NoError(t, err)
+		assert.True(t, applyResp.GetSuccess())
+	})
+
+	t.Run("ApplyOIDCMapping idempotent - applying same mapping twice", func(t *testing.T) {
+		expJwks := "jks-idempotent"
+		expTenantID := uuid.NewString()
+		expIssuer := uuid.NewString()
+
+		// First application
+		applyResp1, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
+			TenantId:  expTenantID,
+			Issuer:    expIssuer,
+			JwksUri:   &expJwks,
+			Audiences: []string{"aud"},
+		})
+		assert.NoError(t, err)
+		assert.True(t, applyResp1.GetSuccess())
+
+		// Second application (should be idempotent)
+		applyResp2, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
+			TenantId:  expTenantID,
+			Issuer:    expIssuer,
+			JwksUri:   &expJwks,
+			Audiences: []string{"aud"},
+		})
+		assert.NoError(t, err)
+		assert.True(t, applyResp2.GetSuccess())
+	})
+
+	t.Run("BlockOIDCMapping idempotent - blocking twice", func(t *testing.T) {
+		expJwks := "jks-block-twice"
+		expTenantID := uuid.NewString()
+		expIssuer := uuid.NewString()
+
+		applyResp, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
+			TenantId:  expTenantID,
+			Issuer:    expIssuer,
+			JwksUri:   &expJwks,
+			Audiences: []string{"aud"},
+		})
+		assert.NoError(t, err)
+		assert.True(t, applyResp.GetSuccess())
+
+		// First block
+		blockResp1, err := mappingClient.BlockOIDCMapping(ctx, &oidcmappingv1.BlockOIDCMappingRequest{
+			TenantId: expTenantID,
+		})
+		assert.NoError(t, err)
+		assert.True(t, blockResp1.GetSuccess())
+
+		// Second block (should be idempotent)
+		blockResp2, err := mappingClient.BlockOIDCMapping(ctx, &oidcmappingv1.BlockOIDCMappingRequest{
+			TenantId: expTenantID,
+		})
+		assert.NoError(t, err)
+		assert.True(t, blockResp2.GetSuccess())
+	})
+
+	t.Run("UnblockOIDCMapping idempotent - unblocking twice", func(t *testing.T) {
+		expJwks := "jks-unblock-twice"
+		expTenantID := uuid.NewString()
+		expIssuer := uuid.NewString()
+
+		applyRes, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
+			TenantId:  expTenantID,
+			Issuer:    expIssuer,
+			JwksUri:   &expJwks,
+			Audiences: []string{"audience"},
+		})
+		assert.NoError(t, err)
+		assert.True(t, applyRes.GetSuccess())
+
+		blockRes, err := mappingClient.BlockOIDCMapping(ctx, &oidcmappingv1.BlockOIDCMappingRequest{
+			TenantId: expTenantID,
+		})
+		assert.NoError(t, err)
+		assert.True(t, blockRes.GetSuccess())
+
+		// First unblock
+		unblockRes1, err := mappingClient.UnblockOIDCMapping(ctx, &oidcmappingv1.UnblockOIDCMappingRequest{
+			TenantId: expTenantID,
+		})
+		assert.NoError(t, err)
+		assert.True(t, unblockRes1.GetSuccess())
+
+		// Second unblock (should be idempotent)
+		unblockRes2, err := mappingClient.UnblockOIDCMapping(ctx, &oidcmappingv1.UnblockOIDCMappingRequest{
+			TenantId: expTenantID,
+		})
+		assert.NoError(t, err)
+		assert.True(t, unblockRes2.GetSuccess())
+	})
+
+	t.Run("Block and Unblock workflow", func(t *testing.T) {
+		expJwks := "jks-workflow"
+		expTenantID := uuid.NewString()
+		expIssuer := uuid.NewString()
+
+		// Apply mapping
+		applyRes, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
+			TenantId:  expTenantID,
+			Issuer:    expIssuer,
+			JwksUri:   &expJwks,
+			Audiences: []string{"audience"},
+		})
+		assert.NoError(t, err)
+		assert.True(t, applyRes.GetSuccess())
+
+		// Block it
+		blockRes, err := mappingClient.BlockOIDCMapping(ctx, &oidcmappingv1.BlockOIDCMappingRequest{
+			TenantId: expTenantID,
+		})
+		assert.NoError(t, err)
+		assert.True(t, blockRes.GetSuccess())
+
+		// Unblock it
+		unblockRes, err := mappingClient.UnblockOIDCMapping(ctx, &oidcmappingv1.UnblockOIDCMappingRequest{
+			TenantId: expTenantID,
+		})
+		assert.NoError(t, err)
+		assert.True(t, unblockRes.GetSuccess())
+
+		// Block again
+		blockRes2, err := mappingClient.BlockOIDCMapping(ctx, &oidcmappingv1.BlockOIDCMappingRequest{
+			TenantId: expTenantID,
+		})
+		assert.NoError(t, err)
+		assert.True(t, blockRes2.GetSuccess())
+
+		// Unblock again
+		unblockRes2, err := mappingClient.UnblockOIDCMapping(ctx, &oidcmappingv1.UnblockOIDCMappingRequest{
+			TenantId: expTenantID,
+		})
+		assert.NoError(t, err)
+		assert.True(t, unblockRes2.GetSuccess())
+	})
+
+	t.Run("RemoveOIDCMapping idempotent - removing twice", func(t *testing.T) {
+		expJwks := "jks-remove-twice"
+		expTenantID := uuid.NewString()
+		expIssuer := uuid.NewString()
+
+		applyRes, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
+			TenantId:  expTenantID,
+			Issuer:    expIssuer,
+			JwksUri:   &expJwks,
+			Audiences: []string{"audience"},
+		})
+		assert.NoError(t, err)
+		assert.True(t, applyRes.GetSuccess())
+
+		// First remove
+		removeRes1, err := mappingClient.RemoveOIDCMapping(ctx, &oidcmappingv1.RemoveOIDCMappingRequest{
+			TenantId: expTenantID,
+		})
+		assert.NoError(t, err)
+		assert.True(t, removeRes1.GetSuccess())
+
+		// Second remove - this should fail since the mapping is already removed
+		// This is expected behavior - not idempotent for remove operations
+		removeRes2, err := mappingClient.RemoveOIDCMapping(ctx, &oidcmappingv1.RemoveOIDCMappingRequest{
+			TenantId: expTenantID,
+		})
+		assert.Error(t, err) // Expect an error on second remove
+		// removeRes2 may be nil due to error
+		_ = removeRes2
+	})
 }
 
 func createClientConn(t *testing.T, port int) (*stdgrpc.ClientConn, error) {
