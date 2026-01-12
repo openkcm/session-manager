@@ -537,6 +537,219 @@ func TestManager_BCLogout(t *testing.T) {
 	}
 }
 
+func TestManager_LogoutEdgeCases(t *testing.T) {
+	const (
+		tenantID  = "tenant-id"
+		sessionID = "session-id"
+	)
+
+	tests := []struct {
+		name      string
+		sessionID string
+		setupMock func(*oidcmock.Repository, *sessionmock.Repository)
+		errAssert assert.ErrorAssertionFunc
+	}{
+		{
+			name:      "Session not found",
+			sessionID: "non-existent",
+			setupMock: func(oidcs *oidcmock.Repository, sessions *sessionmock.Repository) {
+				_ = sessions.StoreSession(context.Background(), session.Session{
+					ID:       sessionID,
+					TenantID: tenantID,
+				})
+			},
+			errAssert: assert.Error,
+		},
+		{
+			name:      "OIDC provider not found",
+			sessionID: sessionID,
+			setupMock: func(oidcs *oidcmock.Repository, sessions *sessionmock.Repository) {
+				_ = sessions.StoreSession(context.Background(), session.Session{
+					ID:       sessionID,
+					TenantID: tenantID,
+				})
+			},
+			errAssert: assert.Error,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			auditServer := StartAuditServer(t)
+			defer auditServer.Close()
+
+			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+			require.NoError(t, err)
+
+			oidcMock := oidcmock.NewInMemRepository()
+			sessionMock := sessionmock.NewInMemRepository()
+
+			tt.setupMock(oidcMock, sessionMock)
+
+			cfg := &config.SessionManager{
+				CSRFSecretParsed: []byte(testCSRFSecret),
+				ClientAuth: config.ClientAuth{
+					ClientID: testClientID,
+				},
+			}
+
+			m, err := session.NewManager(cfg, oidcMock, sessionMock, auditLogger, http.DefaultClient)
+			require.NoError(t, err)
+
+			_, err = m.Logout(ctx, tt.sessionID)
+			tt.errAssert(t, err)
+		})
+	}
+}
+
+func TestManager_BCLogout_ErrorCases(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	jwks := jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{
+		Key:       key,
+		KeyID:     "kid1",
+		Algorithm: string(jose.RS256),
+	}}}
+	signer, err := jose.NewSigner(jose.SigningKey{
+		Algorithm: jose.RS256,
+		Key:       jwks.Keys[0],
+	}, nil)
+	require.NoError(t, err)
+
+	newJwt := func(claims any) string {
+		token, err := jwt.Signed(signer).Claims(claims).Serialize()
+		require.NoError(t, err)
+		return token
+	}
+
+	jwksSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		publicJwks := jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{
+			Key:       &key.PublicKey,
+			KeyID:     "kid1",
+			Algorithm: string(jose.RS256),
+		}}}
+		b, err := json.Marshal(publicJwks)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		_, _ = w.Write(b)
+	}))
+	defer jwksSrv.Close()
+
+	tests := []struct {
+		name      string
+		jwt       string
+		setupMock func(*oidcmock.Repository, *sessionmock.Repository)
+		errAssert assert.ErrorAssertionFunc
+	}{
+		{
+			name: "Invalid JWT",
+			jwt:  "invalid.jwt.token",
+			setupMock: func(oidcs *oidcmock.Repository, sessions *sessionmock.Repository) {
+			},
+			errAssert: assert.Error,
+		},
+		{
+			name: "Missing backchannel-logout event",
+			jwt: newJwt(struct {
+				Events    map[string]struct{} `json:"events"`
+				SessionID string              `json:"sid"`
+			}{
+				Events:    map[string]struct{}{"http://invalid-event": {}},
+				SessionID: "sid-1",
+			}),
+			setupMock: func(oidcs *oidcmock.Repository, sessions *sessionmock.Repository) {
+			},
+			errAssert: assert.Error,
+		},
+		{
+			name: "Missing session ID",
+			jwt: newJwt(struct {
+				Events map[string]struct{} `json:"events"`
+			}{
+				Events: map[string]struct{}{"http://schemas.openid.net/event/backchannel-logout": {}},
+			}),
+			setupMock: func(oidcs *oidcmock.Repository, sessions *sessionmock.Repository) {
+			},
+			errAssert: assert.Error,
+		},
+		{
+			name: "Session not found - should succeed",
+			jwt: newJwt(struct {
+				Events    map[string]struct{} `json:"events"`
+				SessionID string              `json:"sid"`
+			}{
+				Events:    map[string]struct{}{"http://schemas.openid.net/event/backchannel-logout": {}},
+				SessionID: "non-existent-session",
+			}),
+			setupMock: func(oidcs *oidcmock.Repository, sessions *sessionmock.Repository) {
+			},
+			errAssert: assert.NoError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			auditServer := StartAuditServer(t)
+			defer auditServer.Close()
+
+			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+			require.NoError(t, err)
+
+			oidcMock := oidcmock.NewInMemRepository()
+			sessionMock := sessionmock.NewInMemRepository()
+
+			cli := &http.Client{
+				Transport: localRoundTripper{
+					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						b, _ := json.Marshal(oidc.Configuration{
+							JwksURI: jwksSrv.URL,
+							Issuer:  jwksSrv.URL,
+						})
+						_, _ = w.Write(b)
+					}),
+				},
+			}
+
+			tt.setupMock(oidcMock, sessionMock)
+
+			cfg := &config.SessionManager{
+				CSRFSecretParsed: []byte(testCSRFSecret),
+			}
+
+			m, err := session.NewManager(cfg, oidcMock, sessionMock, auditLogger, cli)
+			require.NoError(t, err)
+
+			err = m.BCLogout(ctx, tt.jwt)
+			tt.errAssert(t, err)
+		})
+	}
+}
+
+func TestManager_NewManager_Error(t *testing.T) {
+	auditServer := StartAuditServer(t)
+	defer auditServer.Close()
+
+	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	require.NoError(t, err)
+
+	cfg := &config.SessionManager{
+		CallbackURL:      "://invalid-url",
+		CSRFSecretParsed: []byte(testCSRFSecret),
+	}
+
+	m, err := session.NewManager(cfg, oidcmock.NewInMemRepository(), sessionmock.NewInMemRepository(), auditLogger, http.DefaultClient)
+	assert.Error(t, err)
+	assert.Nil(t, m)
+	assert.Contains(t, err.Error(), "parsing callback URL")
+}
+
 // localRoundTripper is an http.RoundTripper that executes HTTP transactions by
 // using handler directly, instead of going over an HTTP connection.
 type localRoundTripper struct {

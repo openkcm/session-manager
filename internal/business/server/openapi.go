@@ -17,9 +17,20 @@ import (
 	"github.com/openkcm/session-manager/internal/session"
 )
 
+// sessionManager defines the interface for session management operations
+// used by the OpenAPI server.
+type sessionManager interface {
+	MakeAuthURI(ctx context.Context, tenantID, fingerprint, requestURI string) (string, error)
+	FinaliseOIDCLogin(ctx context.Context, state, code, fingerprint string) (session.OIDCSessionData, error)
+	MakeSessionCookie(ctx context.Context, tenantID, sessionID string) (*http.Cookie, error)
+	MakeCSRFCookie(ctx context.Context, tenantID, csrfToken string) (*http.Cookie, error)
+	Logout(ctx context.Context, sessionID string) (string, error)
+	BCLogout(ctx context.Context, logoutToken string) error
+}
+
 // openAPIServer is an implementation of the OpenAPI interface.
 type openAPIServer struct {
-	sManager *session.Manager
+	sManager sessionManager
 
 	csrfSecret []byte
 
@@ -32,7 +43,7 @@ var _ openapi.StrictServerInterface = (*openAPIServer)(nil)
 
 // newOpenAPIServer creates a new implementation of the openapi.StrictServerInterface.
 func newOpenAPIServer(
-	sManager *session.Manager,
+	sManager sessionManager,
 	csrfSecret []byte,
 	sessionIDCookieName,
 	csrfTokenCookieName string,
@@ -232,12 +243,12 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 			sessionCookie = cookie
 		}
 
-		if sessionCookie.Value != "" && csrfCookie.Value != "" {
+		if sessionCookie != nil && sessionCookie.Value != "" && csrfCookie != nil && csrfCookie.Value != "" {
 			break
 		}
 	}
 
-	if sessionCookie.Value == "" {
+	if sessionCookie == nil || sessionCookie.Value == "" {
 		body, status := newBadRequest("missing session id in the cookies")
 		return openapi.LogoutdefaultJSONResponse{
 			Body:       body,
@@ -245,7 +256,7 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 		}, nil
 	}
 
-	if csrfCookie.Value == "" {
+	if csrfCookie == nil || csrfCookie.Value == "" {
 		body, status := newBadRequest("missing csrf token in the cookies")
 		return openapi.LogoutdefaultJSONResponse{
 			Body:       body,
