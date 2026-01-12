@@ -60,11 +60,11 @@ func initInfra(t *testing.T, cmdName string) (istat infraStat) {
 }
 
 func (istat *infraStat) PreparePostgres(t *testing.T) {
+	t.Helper()
+
 	const dbuser = "postgres"
 	const dbpass = "secret"
 	const dbname = "session_manager"
-
-	t.Helper()
 
 	wd, err := os.Getwd()
 	require.NoError(t, err, "getting wd")

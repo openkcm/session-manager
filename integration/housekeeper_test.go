@@ -30,8 +30,7 @@ func TestHousekeeper(t *testing.T) {
 	currdir, err := os.Getwd()
 	require.NoError(t, err, "failed to get wd")
 
-	os.Chdir(istat.Procdir)
-	defer os.Chdir(currdir)
+	t.Chdir(istat.Procdir)
 
 	commandCtx, cancelCommand := context.WithTimeout(ctx, 10*time.Second)
 	defer cancelCommand()
@@ -51,8 +50,10 @@ func TestHousekeeper(t *testing.T) {
 	err = cmd.Run()
 	if err != nil && !errors.Is(err, context.Canceled) {
 		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && !exitErr.Sys().(syscall.WaitStatus).Signaled() {
-			t.Fatalf("housekeeper process exited abnormally: %s", err)
+		if errors.As(err, &exitErr) {
+			if ws, ok := exitErr.Sys().(syscall.WaitStatus); ok && !ws.Signaled() {
+				t.Fatalf("process exited abnormally: %s", err)
+			}
 		}
 	}
 }
