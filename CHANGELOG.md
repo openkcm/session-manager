@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.16.0](https://github.com/openkcm/session-manager/compare/v0.15.0...v0.16.0) (2026-01-12)
+
+
+### Features
+
+* backchannel logout ([#191](https://github.com/openkcm/session-manager/issues/191)) ([8d3beba](https://github.com/openkcm/session-manager/commit/8d3bebae3e6ba5429d0e09ad8c2456213dacd996))
+* store session active state as an object ([#196](https://github.com/openkcm/session-manager/issues/196)) ([b87d0f5](https://github.com/openkcm/session-manager/commit/b87d0f561a36e033824dc1cb94c4c4c7b71b8dbf))
+
+
+### Bug Fixes
+
+* config and session repo mock ([#200](https://github.com/openkcm/session-manager/issues/200)) ([18e2907](https://github.com/openkcm/session-manager/commit/18e2907d64f999edd645d83ba56c5c7e85d0c3e4))
+* config keys in chart values and example config ([#199](https://github.com/openkcm/session-manager/issues/199)) ([7b69b2c](https://github.com/openkcm/session-manager/commit/7b69b2c4d5bbd253e5bdb1aadab74a82fd86a7cd))
+* log messages for logout and bclogout ([#195](https://github.com/openkcm/session-manager/issues/195)) ([e621692](https://github.com/openkcm/session-manager/commit/e6216922a7677434437b710af1d576130ef9bc6f))
+* session housekeeping ([#194](https://github.com/openkcm/session-manager/issues/194)) ([9bdc872](https://github.com/openkcm/session-manager/commit/9bdc872cbccc4647da2cce377247b17a6a932d9b))
+
 ## [0.15.0](https://github.com/openkcm/session-manager/compare/v0.14.1...v0.15.0) (2026-01-06)
 
 
