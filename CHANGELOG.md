@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.16.1](https://github.com/openkcm/session-manager/compare/v0.16.0...v0.16.1) (2026-01-13)
+
+
+### Bug Fixes
+
+* initialise idle session timeout ([#207](https://github.com/openkcm/session-manager/issues/207)) ([e017706](https://github.com/openkcm/session-manager/commit/e017706c7931b7dfb053ddb1c004bbf07ceb7e0d))
+* set idle session timeout correctly ([e017706](https://github.com/openkcm/session-manager/commit/e017706c7931b7dfb053ddb1c004bbf07ceb7e0d))
+
 ## [0.16.0](https://github.com/openkcm/session-manager/compare/v0.15.0...v0.16.0) (2026-01-12)
 
 
