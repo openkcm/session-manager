@@ -35,13 +35,14 @@ func NewSessionServer(
 	sessionRepo session.Repository,
 	providerRepo oidc.ProviderRepository,
 	httpClient *http.Client,
-	idleSessionDuration time.Duration,
+	idleSessionTimeout time.Duration,
 	opts ...SessionServerOption,
 ) *SessionServer {
 	s := &SessionServer{
-		sessionRepo:  sessionRepo,
-		providerRepo: providerRepo,
-		httpClient:   httpClient,
+		sessionRepo:        sessionRepo,
+		providerRepo:       providerRepo,
+		httpClient:         httpClient,
+		idleSessionTimeout: idleSessionTimeout,
 	}
 	for _, opt := range opts {
 		if opt != nil {
