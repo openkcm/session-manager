@@ -123,7 +123,7 @@ test: clean
 	@mkdir -p cover/integration cover/unit
 	@go clean -testcache
 
-	go test -count=1 -race -cover ./... -args -test.gocoverdir="${CURDIR}/cover/unit"
+	gotestsum --junitfile=cover/unit/junit.xml --format=testname -- -count=1 -race -cover ./... -args -test.gocoverdir="${CURDIR}/cover/unit"
 	GOCOVERDIR="${CURDIR}/cover/integration" go test -count=1 -race --tags=integration ./integration
 
 	@go tool covdata textfmt -i=./cover/unit,./cover/integration -o cover.out
