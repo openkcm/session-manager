@@ -302,6 +302,25 @@ func TestRemoveOIDCMapping(t *testing.T) {
 		assert.Equal(t, codes.Internal, st.Code())
 		assert.Contains(t, st.Message(), "failed to remove OIDC mapping")
 	})
+
+	t.Run("error - delete is indempotent", func(t *testing.T) {
+		repo := oidcmock.NewInMemRepository(
+			oidcmock.WithDeleteError(serviceerr.ErrNotFound),
+		)
+		svc := oidc.NewService(repo)
+		server := grpc.NewOIDCMappingServer(svc)
+
+		req := &oidcmappingv1.RemoveOIDCMappingRequest{
+			TenantId: "tenant-123",
+		}
+
+		resp, err := server.RemoveOIDCMapping(ctx, req)
+
+		require.NoError(t, err)
+		assert.NotNil(t, resp)
+		assert.True(t, resp.GetSuccess())
+		assert.Empty(t, resp.GetMessage())
+	})
 }
 
 func TestUnblockOIDCMapping(t *testing.T) {
