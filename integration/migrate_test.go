@@ -91,7 +91,9 @@ func TestMigrate(t *testing.T) {
 		t.Fatalf("failed to write config: %s", err)
 	}
 
+	wd, _ := os.Getwd()
 	t.Chdir(testdir)
+	defer os.Chdir(wd)
 
 	// Run the migrations
 	cmd := exec.CommandContext(ctx, filepath.Join(currdir, "./session-manager"), cmdName)
@@ -188,7 +190,9 @@ func TestMigrateIdempotent(t *testing.T) {
 		t.Fatalf("failed to write config: %s", err)
 	}
 
+	wd, _ := os.Getwd()
 	t.Chdir(testdir)
+	defer os.Chdir(wd)
 
 	// Run migrations the first time
 	cmd := exec.CommandContext(ctx, filepath.Join(currdir, "./session-manager"), cmdName)
