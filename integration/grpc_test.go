@@ -295,14 +295,12 @@ func TestGRPCServer(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, removeRes1.GetSuccess())
 
-		// Second remove - this should fail since the mapping is already removed
-		// This is expected behavior - not idempotent for remove operations
+		// Second remove - idempotence should not cause an error
 		removeRes2, err := mappingClient.RemoveOIDCMapping(ctx, &oidcmappingv1.RemoveOIDCMappingRequest{
 			TenantId: expTenantID,
 		})
-		assert.Error(t, err) // Expect an error on second remove
-		// removeRes2 may be nil due to error
-		_ = removeRes2
+		assert.NoError(t, err)
+		assert.True(t, removeRes2.GetSuccess())
 	})
 }
 
