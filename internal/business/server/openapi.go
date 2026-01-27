@@ -281,6 +281,7 @@ func (s *openAPIServer) Bclogout(ctx context.Context, request openapi.BclogoutRe
 	defer slogctx.Debug(ctx, "Bclogout() completed")
 
 	if err := s.sManager.BCLogout(ctx, request.Body.LogoutToken); err != nil {
+		slogctx.Error(ctx, "back-channel logout failed", "error", err)
 		body, _ := s.toErrorModel(err)
 		return openapi.Bclogout400JSONResponse(body), nil
 	}
