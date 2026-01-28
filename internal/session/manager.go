@@ -89,7 +89,7 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 		return "", fmt.Errorf("getting oidc provider: %w", err)
 	}
 
-	openidConf, err := provider.GetOpenIDConfig(ctx, http.DefaultClient)
+	openidConf, err := provider.GetOpenIDConfig(ctx)
 	if err != nil {
 		return "", fmt.Errorf("getting an openid config: %w", err)
 	}
@@ -198,7 +198,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("getting oidc provider: %w", err)
 	}
 
-	openidConf, err := provider.GetOpenIDConfig(ctx, http.DefaultClient)
+	openidConf, err := provider.GetOpenIDConfig(ctx)
 	if err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get openid configuration")
 		return OIDCSessionData{}, fmt.Errorf("getting openid configuration: %w", err)
@@ -347,7 +347,7 @@ func (m *Manager) Logout(ctx context.Context, sessionID string) (string, error) 
 
 	ctx = slogctx.With(ctx, "issuer_url", oidcProvider.IssuerURL)
 
-	oidcConf, err := oidcProvider.GetOpenIDConfig(ctx, m.secureClient)
+	oidcConf, err := oidcProvider.GetOpenIDConfig(ctx)
 	if err != nil {
 		slogctx.Warn(ctx, "failed to get oidc configuration", "error", err)
 		return "", fmt.Errorf("getting oidc configuration: %w", err)
@@ -451,7 +451,7 @@ func (m *Manager) BCLogout(ctx context.Context, logoutJWT string) error {
 		return fmt.Errorf("getting oidc provider: %w", err)
 	}
 
-	oidcConf, err := provider.GetOpenIDConfig(ctx, m.secureClient)
+	oidcConf, err := provider.GetOpenIDConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("getting oidc config: %w", err)
 	}

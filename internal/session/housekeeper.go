@@ -101,7 +101,7 @@ func (m *Manager) refreshAccessToken(ctx context.Context, s Session) error {
 		return fmt.Errorf("could not get OIDC provider: %w", err)
 	}
 
-	openidConf, err := provider.GetOpenIDConfig(ctx, http.DefaultClient)
+	openidConf, err := provider.GetOpenIDConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("could not get OpenID configuration: %w", err)
 	}
