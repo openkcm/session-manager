@@ -23,7 +23,7 @@ type Provider struct {
 	QueryParametersIntrospect []string
 }
 
-func (p *Provider) GetOpenIDConfig(ctx context.Context, httpClient *http.Client) (Configuration, error) {
+func (p *Provider) GetOpenIDConfig(ctx context.Context) (Configuration, error) {
 	const wellKnownOpenIDConfigPath = "/.well-known/openid-configuration"
 
 	u, err := url.JoinPath(p.IssuerURL, wellKnownOpenIDConfigPath)
@@ -36,19 +36,31 @@ func (p *Provider) GetOpenIDConfig(ctx context.Context, httpClient *http.Client)
 		return Configuration{}, fmt.Errorf("creating an HTTP request: %w", err)
 	}
 
-	resp, err := httpClient.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return Configuration{}, fmt.Errorf("doing an HTTP request: %w", err)
 	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return Configuration{}, fmt.Errorf("reading response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		slogctx.Error(ctx, "OIDC provider returned non-200 status code", "code", resp.StatusCode, "body", string(body))
+		return Configuration{}, serviceerr.ErrInvalidOIDCProvider
+	}
 
 	var conf Configuration
-	err = json.NewDecoder(resp.Body).Decode(&conf)
+	err = json.Unmarshal(body, &conf)
 	if err != nil {
+		slogctx.Error(ctx, "Failed to unmarshal well-known openid config", "body", string(body), "error", err)
 		return Configuration{}, fmt.Errorf("decoding a well-known openid config: %w", err)
 	}
 
 	// Validate the configuration
 	if conf.Issuer != p.IssuerURL {
+		slogctx.Error(ctx, "OIDC provider issuer mismatch", "expected", p.IssuerURL, "got", conf.Issuer)
 		return Configuration{}, serviceerr.ErrInvalidOIDCProvider
 	}
 

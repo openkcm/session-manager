@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const introspectSuffix = "/oauth2/introspect"
+
 // localRoundTripper is an http.RoundTripper that executes HTTP transactions by
 // using handler directly, instead of going over an HTTP connection.
 type localRoundTripper struct {
@@ -27,9 +29,40 @@ func (l localRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 }
 
 func TestGetOpenIDConfig(t *testing.T) {
-	const (
-		issuerURL = "https://example.com"
-	)
+	// Setup test server for well known openid configuration endpoint
+	var testServer *httptest.Server
+	testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(Configuration{
+			Issuer:                testServer.URL,
+			IntrospectionEndpoint: testServer.URL + introspectSuffix,
+		})
+	}))
+	defer testServer.Close()
+
+	// Setup test server that returns non-200 status
+	errorServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("internal server error"))
+	}))
+	defer errorServer.Close()
+
+	// Setup test server that returns invalid JSON
+	invalidJSONServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("invalid json"))
+	}))
+	defer invalidJSONServer.Close()
+
+	// Setup test server that returns mismatched issuer
+	var mismatchServer *httptest.Server
+	mismatchServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(Configuration{
+			Issuer:                "https://different-issuer.com",
+			IntrospectionEndpoint: mismatchServer.URL + introspectSuffix,
+		})
+	}))
+	defer mismatchServer.Close()
+
 	tests := []struct {
 		name      string
 		issuerURL string
@@ -42,11 +75,26 @@ func TestGetOpenIDConfig(t *testing.T) {
 			config:    Configuration{},
 			wantErr:   assert.Error,
 		}, {
+			name:      "Non-200 status code",
+			issuerURL: errorServer.URL,
+			config:    Configuration{},
+			wantErr:   assert.Error,
+		}, {
+			name:      "Invalid JSON response",
+			issuerURL: invalidJSONServer.URL,
+			config:    Configuration{},
+			wantErr:   assert.Error,
+		}, {
+			name:      "Issuer mismatch",
+			issuerURL: mismatchServer.URL,
+			config:    Configuration{},
+			wantErr:   assert.Error,
+		}, {
 			name:      "Valid response",
-			issuerURL: issuerURL,
+			issuerURL: testServer.URL,
 			config: Configuration{
-				Issuer:                issuerURL,
-				IntrospectionEndpoint: issuerURL + "/oauth2/introspect",
+				Issuer:                testServer.URL,
+				IntrospectionEndpoint: testServer.URL + introspectSuffix,
 			},
 			wantErr: assert.NoError,
 		},
@@ -54,22 +102,12 @@ func TestGetOpenIDConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			httpClient := &http.Client{
-				Transport: localRoundTripper{
-					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						err := json.NewEncoder(w).Encode(tt.config)
-						if err != nil {
-							w.WriteHeader(http.StatusInternalServerError)
-						}
-					}),
-				},
-			}
 			provider := &Provider{
 				IssuerURL: tt.issuerURL,
 			}
 
 			// Act
-			got, err := provider.GetOpenIDConfig(t.Context(), httpClient)
+			got, err := provider.GetOpenIDConfig(t.Context())
 
 			// Assert
 			if !tt.wantErr(t, err) {

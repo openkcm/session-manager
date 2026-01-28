@@ -98,7 +98,7 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 
 	// Introspect access token
 	provider.QueryParametersIntrospect = s.queryParametersIntrospect
-	cfg, err := provider.GetOpenIDConfig(ctx, http.DefaultClient)
+	cfg, err := provider.GetOpenIDConfig(ctx)
 	if err != nil {
 		slogctx.Error(ctx, "Could not get OpenID configuration", "issuer", sess.Issuer, "error", err)
 		return &sessionv1.GetSessionResponse{Valid: false}, err
