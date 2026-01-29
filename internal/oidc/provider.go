@@ -109,7 +109,9 @@ func (p *Provider) IntrospectToken(ctx context.Context, httpClient *http.Client,
 }
 
 type Introspection struct {
-	Active bool `json:"active"`
+	Active bool     `json:"active"`
+	Groups []string `json:"groups"`
+
 	// Error response fields e.g. bad credentials
 	Error            string `json:"error,omitempty"`
 	ErrorDescription string `json:"error_description,omitempty"`
