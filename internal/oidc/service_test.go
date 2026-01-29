@@ -469,3 +469,72 @@ func TestService_UnblockMapping(t *testing.T) {
 		})
 	})
 }
+
+func TestService_RemoveMapping(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("success if", func(t *testing.T) {
+		t.Run("the mapping exists", func(t *testing.T) {
+			// given
+			expTenantID := uuid.NewString()
+			expProvider := oidc.Provider{
+				IssuerURL: uuid.NewString(),
+				JWKSURI:   jwksURI,
+				Audiences: []string{requestURI},
+			}
+
+			wrapper := &RepoWrapper{Repo: repo}
+			err := wrapper.Repo.Create(ctx, expTenantID, expProvider)
+			require.NoError(t, err)
+
+			subj := oidc.NewService(wrapper)
+
+			// when
+			err = subj.RemoveMapping(ctx, expTenantID)
+
+			// then
+			assert.NoError(t, err)
+
+			// verify the provider was deleted
+			_, err = wrapper.Repo.Get(ctx, expTenantID)
+			assert.Error(t, err)
+		})
+	})
+
+	t.Run("should return error if", func(t *testing.T) {
+		t.Run("the mapping does not exist", func(t *testing.T) {
+			// given
+			expTenantID := uuid.NewString()
+			wrapper := &RepoWrapper{Repo: repo}
+			subj := oidc.NewService(wrapper)
+
+			// when
+			err := subj.RemoveMapping(ctx, expTenantID)
+
+			// then
+			assert.Error(t, err)
+		})
+
+		t.Run("Delete returns an error", func(t *testing.T) {
+			// given
+			expTenantID := uuid.NewString()
+			wrapper := &RepoWrapper{Repo: repo}
+
+			noOfDeleteCalls := 0
+			wrapper.MockDelete = func(ctx context.Context, tenantID string) error {
+				assert.Equal(t, expTenantID, tenantID)
+				noOfDeleteCalls++
+				return assert.AnError
+			}
+
+			subj := oidc.NewService(wrapper)
+
+			// when
+			err := subj.RemoveMapping(ctx, expTenantID)
+
+			// then
+			assert.ErrorIs(t, err, assert.AnError)
+			assert.Equal(t, 1, noOfDeleteCalls)
+		})
+	})
+}

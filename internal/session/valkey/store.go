@@ -60,9 +60,8 @@ func (s *store) Destroy(ctx context.Context, objectType ObjectType, id string) e
 func (s *store) get(ctx context.Context, key string, decodeInto any) error {
 	bytes, err := s.valkey.Do(ctx, s.valkey.B().Get().Key(key).Build()).AsBytes()
 	if err != nil {
-		valkeyErr, ok := valkey.IsValkeyErr(err)
-		if ok && valkeyErr.IsNil() {
-			return errors.Join(valkeyErr, serviceerr.ErrNotFound)
+		if valkey.IsValkeyNil(err) {
+			return errors.Join(err, serviceerr.ErrNotFound)
 		}
 
 		return fmt.Errorf("executing get command: %w", err)

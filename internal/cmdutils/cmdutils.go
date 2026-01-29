@@ -121,6 +121,19 @@ func loadConfig(buildInfo string) (*config.Config, error) {
 	return cfg, nil
 }
 
+func statusListener(ctx context.Context, state health.State) {
+	subctx := slogctx.With(ctx, "status", state.Status)
+	//nolint:fatcontext
+	for name, substate := range state.CheckState {
+		subctx = slogctx.WithGroup(subctx, name)
+		subctx = slogctx.With(subctx,
+			"status", substate.Status,
+			"result", substate.Result,
+		)
+	}
+	slogctx.Info(subctx, "readiness status changed")
+}
+
 func startStatusServer(ctx context.Context, cfg *config.Config) error {
 	connStr, err := config.MakeConnStr(cfg.Database)
 	if err != nil {
@@ -137,18 +150,7 @@ func startStatusServer(ctx context.Context, cfg *config.Config) error {
 		health.WithDisabledAutostart(),
 		health.WithTimeout(healthStatusTimeout),
 		health.WithDatabaseChecker("pgx", connStr),
-		health.WithStatusListener(func(ctx context.Context, state health.State) {
-			subctx := slogctx.With(ctx, "status", state.Status)
-			//nolint:fatcontext
-			for name, substate := range state.CheckState {
-				subctx = slogctx.WithGroup(subctx, name)
-				subctx = slogctx.With(subctx,
-					"status", substate.Status,
-					"result", substate.Result,
-				)
-			}
-			slogctx.Info(subctx, "readiness status changed")
-		}),
+		health.WithStatusListener(statusListener),
 	}
 
 	readiness := status.WithReadiness(
