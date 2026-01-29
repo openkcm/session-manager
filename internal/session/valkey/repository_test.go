@@ -487,3 +487,140 @@ func TestRepository_DeleteState(t *testing.T) {
 		})
 	}
 }
+
+func prepareActive(t *testing.T, prefix string, sessionID string, timeout time.Duration) {
+	t.Helper()
+
+	key := fmt.Sprintf("%s:active:%s", prefix, sessionID)
+	err := client.Do(t.Context(), client.B().Set().Key(key).Value(valkey.JSON(true)).Ex(timeout).Build()).Error()
+	require.NoError(t, err, "inserting active")
+}
+
+func TestRepository_IsActive(t *testing.T) {
+	const prefix = "session-manager-is-active-test"
+	const activeSessionID = "active-session-id"
+
+	prepareActive(t, prefix, activeSessionID, 1*time.Hour)
+
+	tests := []struct {
+		name       string
+		sessionID  string
+		wantActive bool
+		assertErr  assert.ErrorAssertionFunc
+	}{
+		{
+			name:       "Session is active",
+			sessionID:  activeSessionID,
+			wantActive: true,
+			assertErr:  assert.NoError,
+		},
+		{
+			name:       "Session is not active (does not exist)",
+			sessionID:  "non-existent-session",
+			wantActive: false,
+			assertErr:  assert.NoError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := sessionvalkey.NewRepository(client, prefix)
+
+			gotActive, err := r.IsActive(t.Context(), tt.sessionID)
+			if !tt.assertErr(t, err, fmt.Sprintf("Repository.IsActive() error %v", err)) || err != nil {
+				return
+			}
+
+			assert.Equal(t, tt.wantActive, gotActive, "Repository.IsActive()")
+		})
+	}
+}
+
+func TestRepository_BumpActive(t *testing.T) {
+	const prefix = "session-manager-bump-active-test"
+
+	tests := []struct {
+		name      string
+		sessionID string
+		timeout   time.Duration
+		assertErr assert.ErrorAssertionFunc
+	}{
+		{
+			name:      "Bump active for new session",
+			sessionID: "new-session-id",
+			timeout:   1 * time.Hour,
+			assertErr: assert.NoError,
+		},
+		{
+			name:      "Bump active with minute timeout",
+			sessionID: "minute-timeout-session",
+			timeout:   1 * time.Minute,
+			assertErr: assert.NoError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := sessionvalkey.NewRepository(client, prefix)
+
+			err := r.BumpActive(t.Context(), tt.sessionID, tt.timeout)
+			if !tt.assertErr(t, err, fmt.Sprintf("Repository.BumpActive() error %v", err)) || err != nil {
+				return
+			}
+
+			// Verify the session is now active
+			gotActive, err := r.IsActive(t.Context(), tt.sessionID)
+			assert.NoError(t, err, "Repository.IsActive() should not return error")
+			assert.True(t, gotActive, "Session should be active after BumpActive()")
+		})
+	}
+}
+
+func TestRepository_BumpActive_ExtendsTimeout(t *testing.T) {
+	const prefix = "session-manager-bump-active-extend-test"
+	const sessionID = "extend-timeout-session"
+
+	r := sessionvalkey.NewRepository(client, prefix)
+
+	// Set initial active with 1 second timeout
+	err := r.BumpActive(t.Context(), sessionID, 1*time.Second)
+	require.NoError(t, err, "Initial BumpActive() should not return error")
+
+	// Verify it's active
+	gotActive, err := r.IsActive(t.Context(), sessionID)
+	assert.NoError(t, err, "Repository.IsActive() should not return error")
+	assert.True(t, gotActive, "Session should be active after initial BumpActive()")
+
+	// Bump again with a longer timeout
+	err = r.BumpActive(t.Context(), sessionID, 1*time.Hour)
+	require.NoError(t, err, "Second BumpActive() should not return error")
+
+	// Session should still be active
+	gotActive, err = r.IsActive(t.Context(), sessionID)
+	assert.NoError(t, err, "Repository.IsActive() should not return error")
+	assert.True(t, gotActive, "Session should still be active after timeout extension")
+}
+
+func TestRepository_BumpActive_ThenExpires(t *testing.T) {
+	const prefix = "session-manager-bump-active-expires-test"
+	const sessionID = "expiring-session"
+
+	r := sessionvalkey.NewRepository(client, prefix)
+
+	// Set active with 1 second timeout
+	err := r.BumpActive(t.Context(), sessionID, 1*time.Second)
+	require.NoError(t, err, "BumpActive() should not return error")
+
+	// Verify it's active immediately
+	gotActive, err := r.IsActive(t.Context(), sessionID)
+	assert.NoError(t, err, "Repository.IsActive() should not return error")
+	assert.True(t, gotActive, "Session should be active immediately after BumpActive()")
+
+	// Wait for it to expire
+	time.Sleep(2 * time.Second)
+
+	// Verify it's no longer active
+	gotActive, err = r.IsActive(t.Context(), sessionID)
+	assert.NoError(t, err, "Repository.IsActive() should not return error for expired session")
+	assert.False(t, gotActive, "Session should not be active after timeout expires")
+}
