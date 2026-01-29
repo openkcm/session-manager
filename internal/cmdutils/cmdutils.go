@@ -138,7 +138,16 @@ func startStatusServer(ctx context.Context, cfg *config.Config) error {
 		health.WithTimeout(healthStatusTimeout),
 		health.WithDatabaseChecker("pgx", connStr),
 		health.WithStatusListener(func(ctx context.Context, state health.State) {
-			slogctx.Info(ctx, "readiness status changed", "status", state.Status)
+			subctx := slogctx.With(ctx, "status", state.Status)
+			//nolint:fatcontext
+			for name, substate := range state.CheckState {
+				subctx = slogctx.WithGroup(subctx, name)
+				subctx = slogctx.With(subctx,
+					"status", substate.Status,
+					"result", substate.Result,
+				)
+			}
+			slogctx.Info(subctx, "readiness status changed")
 		}),
 	}
 
