@@ -103,6 +103,18 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 		slogctx.Error(ctx, "Could not get OpenID configuration", "issuer", sess.Issuer, "error", err)
 		return &sessionv1.GetSessionResponse{Valid: false}, err
 	}
+
+	response := &sessionv1.GetSessionResponse{
+		Valid:       true,
+		Issuer:      sess.Issuer,
+		Subject:     sess.Claims.Subject,
+		GivenName:   sess.Claims.GivenName,
+		FamilyName:  sess.Claims.FamilyName,
+		Email:       sess.Claims.Email,
+		Groups:      sess.Claims.Groups,
+		AuthContext: sess.AuthContext,
+	}
+
 	if cfg.IntrospectionEndpoint != "" {
 		result, err := provider.IntrospectToken(ctx, s.httpClient, cfg.IntrospectionEndpoint, sess.AccessToken)
 		if err != nil {
@@ -113,6 +125,10 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 			slogctx.Warn(ctx, "Access token is not active", "result", result)
 			return &sessionv1.GetSessionResponse{Valid: false}, nil
 		}
+
+		if result.Groups != nil {
+			response.Groups = result.Groups
+		}
 	}
 
 	if err := s.sessionRepo.BumpActive(ctx, req.GetSessionId(), s.idleSessionTimeout); err != nil {
@@ -121,14 +137,5 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 	}
 
 	// Return info of the valid session
-	return &sessionv1.GetSessionResponse{
-		Valid:       true,
-		Issuer:      sess.Issuer,
-		Subject:     sess.Claims.Subject,
-		GivenName:   sess.Claims.GivenName,
-		FamilyName:  sess.Claims.FamilyName,
-		Email:       sess.Claims.Email,
-		Groups:      sess.Claims.Groups,
-		AuthContext: sess.AuthContext,
-	}, nil
+	return response, nil
 }
