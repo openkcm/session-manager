@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/openkcm/common-sdk/pkg/openid"
+
 	sessionv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/session/v1"
 	typesv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/types/v1"
 	slogctx "github.com/veqryn/slog-context"
@@ -99,8 +101,7 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 	}
 
 	// Introspect access token
-	provider.QueryParametersIntrospect = s.queryParametersIntrospect
-	cfg, err := provider.GetOpenIDConfig(ctx)
+	cfg, err := openid.GetConfig(ctx, provider.IssuerURL)
 	if err != nil {
 		slogctx.Error(ctx, "Could not get OpenID configuration", "issuer", sess.Issuer, "error", err)
 		return &sessionv1.GetSessionResponse{Valid: false}, err
@@ -118,7 +119,7 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 	}
 
 	if cfg.IntrospectionEndpoint != "" {
-		result, err := provider.IntrospectToken(ctx, s.httpClient, cfg.IntrospectionEndpoint, sess.AccessToken)
+		result, err := cfg.IntrospectToken(ctx, sess.AccessToken, provider.GetIntrospectParameters(s.queryParametersIntrospect))
 		if err != nil {
 			slogctx.Error(ctx, "Could not introspect access token", "error", err)
 			return &sessionv1.GetSessionResponse{Valid: false}, err
