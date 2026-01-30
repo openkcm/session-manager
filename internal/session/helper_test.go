@@ -6,7 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/openkcm/session-manager/internal/oidc"
+	"github.com/openkcm/common-sdk/pkg/openid"
+
 	"github.com/openkcm/session-manager/internal/session"
 )
 
@@ -30,7 +31,7 @@ func StartOIDCServer(t *testing.T, fail bool, algs ...string) *httptest.Server {
 
 		switch r.URL.Path {
 		case "/.well-known/openid-configuration":
-			_ = json.NewEncoder(w).Encode(oidc.Configuration{
+			_ = json.NewEncoder(w).Encode(openid.Configuration{
 				Issuer:                           server.URL,
 				AuthorizationEndpoint:            server.URL + "/oauth2/authorize",
 				TokenEndpoint:                    server.URL + "/oauth2/token",

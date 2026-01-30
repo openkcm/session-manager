@@ -12,6 +12,8 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/openkcm/common-sdk/pkg/openid"
+
 	slogctx "github.com/veqryn/slog-context"
 )
 
@@ -101,7 +103,7 @@ func (m *Manager) refreshAccessToken(ctx context.Context, s Session) error {
 		return fmt.Errorf("could not get OIDC provider: %w", err)
 	}
 
-	openidConf, err := provider.GetOpenIDConfig(ctx)
+	openidConf, err := openid.GetConfig(ctx, provider.IssuerURL)
 	if err != nil {
 		return fmt.Errorf("could not get OpenID configuration: %w", err)
 	}
