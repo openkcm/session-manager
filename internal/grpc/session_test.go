@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/openkcm/common-sdk/pkg/openid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -76,12 +77,12 @@ func TestGetSession(t *testing.T) {
 		testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
 			case "/.well-known/openid-configuration":
-				_ = json.NewEncoder(w).Encode(oidc.Configuration{
+				_ = json.NewEncoder(w).Encode(openid.Configuration{
 					Issuer:                testServer.URL,
 					IntrospectionEndpoint: testServer.URL + "/introspect",
 				})
 			case "/introspect":
-				_ = json.NewEncoder(w).Encode(oidc.Introspection{
+				_ = json.NewEncoder(w).Encode(openid.IntrospectResponse{
 					Active: true,
 				})
 			default:
@@ -149,7 +150,7 @@ func TestGetSession(t *testing.T) {
 		var testServer *httptest.Server
 		testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/.well-known/openid-configuration" {
-				_ = json.NewEncoder(w).Encode(oidc.Configuration{
+				_ = json.NewEncoder(w).Encode(openid.Configuration{
 					Issuer: testServer.URL,
 					// No IntrospectionEndpoint
 				})
@@ -466,7 +467,7 @@ func TestGetSession(t *testing.T) {
 		testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
 			case "/.well-known/openid-configuration":
-				_ = json.NewEncoder(w).Encode(oidc.Configuration{
+				_ = json.NewEncoder(w).Encode(openid.Configuration{
 					Issuer:                testServer.URL,
 					IntrospectionEndpoint: testServer.URL + "/introspect",
 				})
@@ -519,12 +520,12 @@ func TestGetSession(t *testing.T) {
 		testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
 			case "/.well-known/openid-configuration":
-				_ = json.NewEncoder(w).Encode(oidc.Configuration{
+				_ = json.NewEncoder(w).Encode(openid.Configuration{
 					Issuer:                testServer.URL,
 					IntrospectionEndpoint: testServer.URL + "/introspect",
 				})
 			case "/introspect":
-				_ = json.NewEncoder(w).Encode(oidc.Introspection{
+				_ = json.NewEncoder(w).Encode(openid.IntrospectResponse{
 					Active: false, // Token is not active
 				})
 			}
@@ -576,7 +577,7 @@ func TestGetSession(t *testing.T) {
 		var testServer *httptest.Server
 		testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/.well-known/openid-configuration" {
-				_ = json.NewEncoder(w).Encode(oidc.Configuration{
+				_ = json.NewEncoder(w).Encode(openid.Configuration{
 					Issuer: testServer.URL,
 				})
 			}

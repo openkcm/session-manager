@@ -16,6 +16,7 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
+	"github.com/openkcm/common-sdk/pkg/openid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -509,7 +510,7 @@ func TestManager_BCLogout(t *testing.T) {
 			cli := &http.Client{
 				Transport: localRoundTripper{
 					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						b, err := json.Marshal(oidc.Configuration{
+						b, err := json.Marshal(openid.Configuration{
 							JwksURI: jwksSrv.URL,
 							Issuer:  jwksSrv.URL,
 						})
@@ -708,7 +709,7 @@ func TestManager_BCLogout_ErrorCases(t *testing.T) {
 			cli := &http.Client{
 				Transport: localRoundTripper{
 					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						b, _ := json.Marshal(oidc.Configuration{
+						b, _ := json.Marshal(openid.Configuration{
 							JwksURI: jwksSrv.URL,
 							Issuer:  jwksSrv.URL,
 						})

@@ -2,15 +2,8 @@ package oidc
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 
 	slogctx "github.com/veqryn/slog-context"
-
-	"github.com/openkcm/session-manager/internal/serviceerr"
 )
 
 type Provider struct {
@@ -23,96 +16,15 @@ type Provider struct {
 	QueryParametersIntrospect []string
 }
 
-func (p *Provider) GetOpenIDConfig(ctx context.Context) (Configuration, error) {
-	const wellKnownOpenIDConfigPath = "/.well-known/openid-configuration"
-
-	u, err := url.JoinPath(p.IssuerURL, wellKnownOpenIDConfigPath)
-	if err != nil {
-		return Configuration{}, fmt.Errorf("building path to the well-known openid-config endpoint: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return Configuration{}, fmt.Errorf("creating an HTTP request: %w", err)
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return Configuration{}, fmt.Errorf("doing an HTTP request: %w", err)
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return Configuration{}, fmt.Errorf("reading response body: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		slogctx.Error(ctx, "OIDC provider returned non-200 status code", "code", resp.StatusCode, "body", string(body))
-		return Configuration{}, serviceerr.ErrInvalidOIDCProvider
-	}
-
-	var conf Configuration
-	err = json.Unmarshal(body, &conf)
-	if err != nil {
-		slogctx.Error(ctx, "Failed to unmarshal well-known openid config", "body", string(body), "error", err)
-		return Configuration{}, fmt.Errorf("decoding a well-known openid config: %w", err)
-	}
-
-	// Validate the configuration
-	if conf.Issuer != p.IssuerURL {
-		slogctx.Error(ctx, "OIDC provider issuer mismatch", "expected", p.IssuerURL, "got", conf.Issuer)
-		return Configuration{}, serviceerr.ErrInvalidOIDCProvider
-	}
-
-	return conf, nil
-}
-
-func (p *Provider) IntrospectToken(ctx context.Context, httpClient *http.Client, endpoint, token string) (Introspection, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
-	if err != nil {
-		return Introspection{}, fmt.Errorf("creating http request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Accept", "application/json")
-	q := req.URL.Query()
-	q.Set("token", token)
-	for _, parameter := range p.QueryParametersIntrospect {
+func (p *Provider) GetIntrospectParameters(keys []string) map[string]string {
+	params := make(map[string]string, len(keys))
+	for _, parameter := range keys {
 		value, ok := p.Properties[parameter]
 		if !ok {
-			return Introspection{}, fmt.Errorf("missing introspect parameter: %s", parameter)
+			slogctx.Error(context.Background(), "Missing introspect parameter", "parameter", parameter)
+			continue
 		}
-		q.Set(parameter, value)
+		params[parameter] = value
 	}
-
-	req.URL.RawQuery = q.Encode()
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return Introspection{}, fmt.Errorf("executing http request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return Introspection{}, fmt.Errorf("reading introspection response body: %w", err)
-	}
-
-	var result Introspection
-	err = json.Unmarshal(body, &result)
-	if err != nil {
-		slogctx.Error(ctx, "Failed to unmarshal introspection response", "body", string(body), "error", err)
-		return Introspection{}, fmt.Errorf("decoding introspection response: %w", err)
-	}
-
-	return result, nil
-}
-
-type Introspection struct {
-	Active bool     `json:"active"`
-	Groups []string `json:"groups"`
-
-	// Error response fields e.g. bad credentials
-	Error            string `json:"error,omitempty"`
-	ErrorDescription string `json:"error_description,omitempty"`
+	return params
 }
