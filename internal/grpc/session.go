@@ -2,10 +2,12 @@ package grpc
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
 	sessionv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/session/v1"
+	typesv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/types/v1"
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/session-manager/internal/oidc"
@@ -138,4 +140,19 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 
 	// Return info of the valid session
 	return response, nil
+}
+
+func (s *SessionServer) GetOIDCProvider(ctx context.Context, req *sessionv1.GetOIDCProviderRequest) (*sessionv1.GetOIDCProviderResponse, error) {
+	provider, err := s.providerRepo.Get(ctx, req.GetTenantId())
+	if err != nil {
+		return nil, fmt.Errorf("getting odic provider: %w", err)
+	}
+
+	return &sessionv1.GetOIDCProviderResponse{
+		Provider: &typesv1.OIDCProvider{
+			IssuerUrl: provider.IssuerURL,
+			JwksUri:   provider.JWKSURI,
+			Audiences: provider.Audiences,
+		},
+	}, nil
 }
