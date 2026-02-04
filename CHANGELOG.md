@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.17.0](https://github.com/openkcm/session-manager/compare/v0.16.1...v0.17.0) (2026-02-04)
+
+
+### Features
+
+* get oidc provider ([#227](https://github.com/openkcm/session-manager/issues/227)) ([ca1ebf3](https://github.com/openkcm/session-manager/commit/ca1ebf3b27d7f1a877716656a6adf03734a81980))
+* introspect groups ([#224](https://github.com/openkcm/session-manager/issues/224)) ([1e53b2e](https://github.com/openkcm/session-manager/commit/1e53b2e54608a78ace8ac19756f85a028556b1a1))
+* make RemoveOIDCMapping method indempotent ([#215](https://github.com/openkcm/session-manager/issues/215)) ([fc1e3e3](https://github.com/openkcm/session-manager/commit/fc1e3e3dc36a4b72947ea9cf3839faaffc638049))
+
+
+### Bug Fixes
+
+* actually run integration tests ([#217](https://github.com/openkcm/session-manager/issues/217)) ([87415aa](https://github.com/openkcm/session-manager/commit/87415aa22b0e2a8899f1749cb0360871b2e33e6d))
+* add missing log call ([#219](https://github.com/openkcm/session-manager/issues/219)) ([76f0c73](https://github.com/openkcm/session-manager/commit/76f0c73831aa243241f22867adbb5ce04e968cf7))
+* Always use the default client in `GetOpenIDConfig()` ([#220](https://github.com/openkcm/session-manager/issues/220)) ([7ce7d75](https://github.com/openkcm/session-manager/commit/7ce7d75baa7d6fe885f9f6454f5395c8a3ddbf4d))
+
 ## [0.16.1](https://github.com/openkcm/session-manager/compare/v0.16.0...v0.16.1) (2026-01-13)
 
 
