@@ -145,6 +145,71 @@ func TestGetSession(t *testing.T) {
 		assert.Equal(t, map[string]string{"key": "value"}, resp.GetAuthContext())
 	})
 
+	t.Run("success - introspection returns groups overriding session groups", func(t *testing.T) {
+		// Setup test server for OIDC endpoints that returns groups in introspection
+		var testServer *httptest.Server
+		testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/.well-known/openid-configuration":
+				_ = json.NewEncoder(w).Encode(openid.Configuration{
+					Issuer:                testServer.URL,
+					IntrospectionEndpoint: testServer.URL + "/introspect",
+				})
+			case "/introspect":
+				_ = json.NewEncoder(w).Encode(openid.IntrospectResponse{
+					Active: true,
+					Groups: []string{"introspect-group1", "introspect-group2"},
+				})
+			default:
+				w.WriteHeader(http.StatusNotFound)
+			}
+		}))
+		defer testServer.Close()
+
+		sess := session.Session{
+			ID:          "session-groups",
+			TenantID:    "tenant-groups",
+			Fingerprint: "fingerprint-groups",
+			Issuer:      testServer.URL,
+			AccessToken: "access-token-groups",
+			Claims: session.Claims{
+				Subject: "user-groups",
+				Groups:  []string{"session-group1", "session-group2"},
+			},
+		}
+
+		provider := oidc.Provider{
+			IssuerURL: testServer.URL,
+			Blocked:   false,
+		}
+
+		sessionRepo := sessionmock.NewInMemRepository(
+			sessionmock.WithSession(sess),
+		)
+		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
+
+		providerRepo := oidcmock.NewInMemRepository(
+			oidcmock.WithTrust(sess.TenantID, provider),
+		)
+
+		httpClient := &http.Client{}
+		server := grpc.NewSessionServer(sessionRepo, providerRepo, httpClient, 90*time.Minute)
+
+		req := &sessionv1.GetSessionRequest{
+			SessionId:   "session-groups",
+			TenantId:    "tenant-groups",
+			Fingerprint: "fingerprint-groups",
+		}
+
+		resp, err := server.GetSession(ctx, req)
+
+		require.NoError(t, err)
+		assert.NotNil(t, resp)
+		assert.True(t, resp.GetValid())
+		// Groups should be overridden by introspection result
+		assert.Equal(t, []string{"introspect-group1", "introspect-group2"}, resp.GetGroups())
+	})
+
 	t.Run("success - valid session without introspection endpoint", func(t *testing.T) {
 		// Setup test server without introspection endpoint
 		var testServer *httptest.Server
@@ -200,17 +265,16 @@ func TestGetSession(t *testing.T) {
 
 	t.Run("invalid - IsActive returns error", func(t *testing.T) {
 		isActiveErr := errors.New("database error")
-		sessionRepo := sessionmock.NewInMemRepository()
+		sessionRepo := sessionmock.NewInMemRepository(
+			sessionmock.WithIsActiveError(isActiveErr),
+		)
 		providerRepo := oidcmock.NewInMemRepository()
-
-		// We'll need to create a custom mock that returns an error for IsActive
-		// For now, we'll use a different approach - test with session not found
 
 		httpClient := &http.Client{}
 		server := grpc.NewSessionServer(sessionRepo, providerRepo, httpClient, 90*time.Minute)
 
 		req := &sessionv1.GetSessionRequest{
-			SessionId:   "non-existent",
+			SessionId:   "session-123",
 			TenantId:    "tenant-123",
 			Fingerprint: "fingerprint-123",
 		}
@@ -220,7 +284,6 @@ func TestGetSession(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, resp)
 		assert.False(t, resp.GetValid())
-		_ = isActiveErr // suppress unused variable warning
 	})
 
 	t.Run("invalid - session not active", func(t *testing.T) {
@@ -570,10 +633,6 @@ func TestGetSession(t *testing.T) {
 	})
 
 	t.Run("invalid - BumpActive fails", func(t *testing.T) {
-		// We need a custom mock that allows IsActive to pass but BumpActive to fail
-		// Since the current mock doesn't support this, we'll test the case indirectly
-		// by ensuring the session repo is called correctly
-
 		var testServer *httptest.Server
 		testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/.well-known/openid-configuration" {
@@ -591,10 +650,9 @@ func TestGetSession(t *testing.T) {
 			Issuer:      testServer.URL,
 		}
 
-		// Using a custom implementation would be ideal here, but for now
-		// we'll just test that with normal flow, BumpActive is called
 		sessionRepo := sessionmock.NewInMemRepository(
 			sessionmock.WithSession(sess),
+			sessionmock.WithBumpActiveError(errors.New("bump active error")),
 		)
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
@@ -617,10 +675,9 @@ func TestGetSession(t *testing.T) {
 
 		resp, err := server.GetSession(ctx, req)
 
-		// In normal case this should succeed
 		require.NoError(t, err)
 		assert.NotNil(t, resp)
-		assert.True(t, resp.GetValid())
+		assert.False(t, resp.GetValid())
 	})
 }
 
@@ -645,5 +702,76 @@ func TestWithQueryParametersIntrospect(t *testing.T) {
 		)
 
 		assert.NotNil(t, server)
+	})
+}
+
+func TestGetOIDCProvider(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("success - returns OIDC provider", func(t *testing.T) {
+		provider := oidc.Provider{
+			IssuerURL: "https://issuer.example.com",
+			JWKSURI:   "https://issuer.example.com/.well-known/jwks.json",
+			Audiences: []string{"audience1", "audience2"},
+		}
+
+		sessionRepo := sessionmock.NewInMemRepository()
+		providerRepo := oidcmock.NewInMemRepository(
+			oidcmock.WithTrust("tenant-123", provider),
+		)
+
+		httpClient := &http.Client{}
+		server := grpc.NewSessionServer(sessionRepo, providerRepo, httpClient, 90*time.Minute)
+
+		req := &sessionv1.GetOIDCProviderRequest{
+			TenantId: "tenant-123",
+		}
+
+		resp, err := server.GetOIDCProvider(ctx, req)
+
+		require.NoError(t, err)
+		assert.NotNil(t, resp)
+		assert.NotNil(t, resp.GetProvider())
+		assert.Equal(t, "https://issuer.example.com", resp.GetProvider().GetIssuerUrl())
+		assert.Equal(t, "https://issuer.example.com/.well-known/jwks.json", resp.GetProvider().GetJwksUri())
+		assert.Equal(t, []string{"audience1", "audience2"}, resp.GetProvider().GetAudiences())
+	})
+
+	t.Run("error - provider not found", func(t *testing.T) {
+		sessionRepo := sessionmock.NewInMemRepository()
+		providerRepo := oidcmock.NewInMemRepository()
+
+		httpClient := &http.Client{}
+		server := grpc.NewSessionServer(sessionRepo, providerRepo, httpClient, 90*time.Minute)
+
+		req := &sessionv1.GetOIDCProviderRequest{
+			TenantId: "non-existent-tenant",
+		}
+
+		resp, err := server.GetOIDCProvider(ctx, req)
+
+		require.Error(t, err)
+		assert.Nil(t, resp)
+		assert.Contains(t, err.Error(), "getting odic provider")
+	})
+
+	t.Run("error - repository returns error", func(t *testing.T) {
+		sessionRepo := sessionmock.NewInMemRepository()
+		providerRepo := oidcmock.NewInMemRepository(
+			oidcmock.WithGetError(errors.New("database connection error")),
+		)
+
+		httpClient := &http.Client{}
+		server := grpc.NewSessionServer(sessionRepo, providerRepo, httpClient, 90*time.Minute)
+
+		req := &sessionv1.GetOIDCProviderRequest{
+			TenantId: "tenant-123",
+		}
+
+		resp, err := server.GetOIDCProvider(ctx, req)
+
+		require.Error(t, err)
+		assert.Nil(t, resp)
+		assert.Contains(t, err.Error(), "getting odic provider")
 	})
 }
