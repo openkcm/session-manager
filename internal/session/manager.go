@@ -17,6 +17,7 @@ import (
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/google/uuid"
 	"github.com/openkcm/common-sdk/pkg/csrf"
+	"github.com/openkcm/common-sdk/pkg/openid"
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 	slogctx "github.com/veqryn/slog-context"
@@ -89,7 +90,7 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 		return "", fmt.Errorf("getting oidc provider: %w", err)
 	}
 
-	openidConf, err := provider.GetOpenIDConfig(ctx)
+	openidConf, err := openid.GetConfig(ctx, provider.IssuerURL)
 	if err != nil {
 		return "", fmt.Errorf("getting an openid config: %w", err)
 	}
@@ -119,7 +120,7 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 	return u, nil
 }
 
-func (m *Manager) authURI(openidConf oidc.Configuration, state State, pkce pkce.PKCE, properties map[string]string) (string, error) {
+func (m *Manager) authURI(openidConf openid.Configuration, state State, pkce pkce.PKCE, properties map[string]string) (string, error) {
 	u, err := url.Parse(openidConf.AuthorizationEndpoint)
 	if err != nil {
 		return "", fmt.Errorf("parsing authorisation endpoint url: %w", err)
@@ -146,7 +147,7 @@ func (m *Manager) authURI(openidConf oidc.Configuration, state State, pkce pkce.
 	return u.String(), nil
 }
 
-func (m *Manager) getProviderKeySet(ctx context.Context, oidcConf oidc.Configuration) (*jose.JSONWebKeySet, error) {
+func (m *Manager) getProviderKeySet(ctx context.Context, oidcConf openid.Configuration) (*jose.JSONWebKeySet, error) {
 	var keySet jose.JSONWebKeySet
 	uri := oidcConf.JwksURI
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
@@ -198,7 +199,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("getting oidc provider: %w", err)
 	}
 
-	openidConf, err := provider.GetOpenIDConfig(ctx)
+	openidConf, err := openid.GetConfig(ctx, provider.IssuerURL)
 	if err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get openid configuration")
 		return OIDCSessionData{}, fmt.Errorf("getting openid configuration: %w", err)
@@ -347,7 +348,7 @@ func (m *Manager) Logout(ctx context.Context, sessionID string) (string, error) 
 
 	ctx = slogctx.With(ctx, "issuer_url", oidcProvider.IssuerURL)
 
-	oidcConf, err := oidcProvider.GetOpenIDConfig(ctx)
+	oidcConf, err := openid.GetConfig(ctx, oidcProvider.IssuerURL)
 	if err != nil {
 		slogctx.Warn(ctx, "failed to get oidc configuration", "error", err)
 		return "", fmt.Errorf("getting oidc configuration: %w", err)
@@ -451,7 +452,7 @@ func (m *Manager) BCLogout(ctx context.Context, logoutJWT string) error {
 		return fmt.Errorf("getting oidc provider: %w", err)
 	}
 
-	oidcConf, err := provider.GetOpenIDConfig(ctx)
+	oidcConf, err := openid.GetConfig(ctx, provider.IssuerURL)
 	if err != nil {
 		return fmt.Errorf("getting oidc config: %w", err)
 	}
@@ -566,7 +567,7 @@ func (m *Manager) verifyAccessToken(accessToken, atHash string, idToken *jwt.JSO
 	return nil
 }
 
-func (m *Manager) exchangeCode(ctx context.Context, openidConf oidc.Configuration, code, codeVerifier string, properties map[string]string) (tokenResponse, error) {
+func (m *Manager) exchangeCode(ctx context.Context, openidConf openid.Configuration, code, codeVerifier string, properties map[string]string) (tokenResponse, error) {
 	data := url.Values{}
 	data.Set("grant_type", "authorization_code")
 	data.Set("code", code)

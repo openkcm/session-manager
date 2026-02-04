@@ -8,13 +8,12 @@ require (
 	github.com/docker/go-connections v0.6.0
 	github.com/go-jose/go-jose/v4 v4.1.3
 	github.com/go-viper/mapstructure/v2 v2.5.0
-	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/oapi-codegen/runtime v1.1.2
 	github.com/openkcm/api-sdk v0.15.0
-	github.com/openkcm/common-sdk v1.11.0
+	github.com/openkcm/common-sdk v1.11.1-0.20260130145805-3e9f4acbeec3
 	github.com/pressly/goose/v3 v3.26.0
 	github.com/samber/oops v1.21.0
 	github.com/spf13/cobra v1.10.2
@@ -125,7 +124,7 @@ require (
 	github.com/testcontainers/testcontainers-go v0.40.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect
-	github.com/veqryn/slog-context/otel v0.8.0 // indirect
+	github.com/veqryn/slog-context/otel v0.9.0 // indirect
 	github.com/vmware-labs/yaml-jsonpath v0.3.2 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
