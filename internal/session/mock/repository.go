@@ -18,6 +18,7 @@ type Repository struct {
 
 	loadStateErr, storeStateErr, deleteStateErr       error
 	loadSessionErr, storeSessionErr, deleteSessionErr error
+	isActiveErr, bumpActiveErr                        error
 }
 
 func WithState(state session.State) RepositoryOption {
@@ -43,6 +44,12 @@ func WithStoreSessionError(err error) RepositoryOption {
 }
 func WithDeleteSessionError(err error) RepositoryOption {
 	return func(r *Repository) { r.deleteSessionErr = err }
+}
+func WithIsActiveError(err error) RepositoryOption {
+	return func(r *Repository) { r.isActiveErr = err }
+}
+func WithBumpActiveError(err error) RepositoryOption {
+	return func(r *Repository) { r.bumpActiveErr = err }
 }
 
 var _ = session.Repository(&Repository{})
@@ -144,6 +151,9 @@ func (r *Repository) DeleteSession(_ context.Context, sess session.Session) erro
 }
 
 func (r *Repository) IsActive(ctx context.Context, sessionID string) (bool, error) {
+	if r.isActiveErr != nil {
+		return false, r.isActiveErr
+	}
 	active, ok := r.active[sessionID]
 	if !ok {
 		return false, nil
@@ -153,6 +163,9 @@ func (r *Repository) IsActive(ctx context.Context, sessionID string) (bool, erro
 }
 
 func (r *Repository) BumpActive(ctx context.Context, sessionID string, timeout time.Duration) error {
+	if r.bumpActiveErr != nil {
+		return r.bumpActiveErr
+	}
 	r.active[sessionID] = time.Now().Add(timeout)
 	return nil
 }
