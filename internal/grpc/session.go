@@ -119,6 +119,7 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 	}
 
 	if cfg.IntrospectionEndpoint != "" {
+		cfg.HTTPClient = s.httpClient
 		result, err := cfg.IntrospectToken(ctx, sess.AccessToken, provider.GetIntrospectParameters(s.queryParametersIntrospect))
 		if err != nil {
 			slogctx.Error(ctx, "Could not introspect access token", "error", err)
