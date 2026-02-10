@@ -12,8 +12,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/openkcm/common-sdk/pkg/openid"
-
 	slogctx "github.com/veqryn/slog-context"
 )
 
@@ -103,7 +101,7 @@ func (m *Manager) refreshAccessToken(ctx context.Context, s Session) error {
 		return fmt.Errorf("could not get trust mapping: %w", err)
 	}
 
-	openidConf, err := openid.GetConfig(ctx, mapping.IssuerURL)
+	openidConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL)
 	if err != nil {
 		return fmt.Errorf("could not get OpenID configuration: %w", err)
 	}

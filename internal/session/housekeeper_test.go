@@ -136,6 +136,7 @@ func TestRefreshAccessToken(t *testing.T) {
 
 		manager, err := session.NewManager(cfg, oidcRepo, sessions, nil, http.DefaultClient)
 		require.NoError(t, err)
+		manager.SetAllowHttpScheme(true)
 
 		// Trigger housekeeping which should refresh the token
 		err = manager.TriggerHousekeeping(ctx, 1, 1*time.Minute)
@@ -228,6 +229,7 @@ func TestRefreshAccessToken(t *testing.T) {
 
 		manager, err := session.NewManager(cfg, oidcRepo, sessions, nil, http.DefaultClient)
 		require.NoError(t, err)
+		manager.SetAllowHttpScheme(true)
 
 		// Trigger housekeeping - should log error but not fail
 		err = manager.TriggerHousekeeping(ctx, 1, 1*time.Minute)
@@ -280,6 +282,7 @@ func TestRefreshAccessToken(t *testing.T) {
 
 		manager, err := session.NewManager(cfg, oidcRepo, sessions, nil, http.DefaultClient)
 		require.NoError(t, err)
+		manager.SetAllowHttpScheme(true)
 
 		// Trigger housekeeping - should log error but not fail
 		err = manager.TriggerHousekeeping(ctx, 1, 1*time.Minute)

@@ -16,7 +16,7 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
-	"github.com/openkcm/common-sdk/pkg/openid"
+	"github.com/openkcm/common-sdk/pkg/oidc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -141,6 +141,7 @@ func TestManager_Auth(t *testing.T) {
 
 			m, err := session.NewManager(tt.cfg, tt.oidc, tt.sessions, auditLogger, http.DefaultClient)
 			require.NoError(t, err)
+			m.SetAllowHttpScheme(true)
 			got, err := m.MakeAuthURI(t.Context(), tt.tenantID, tt.fingerprint, tt.requestURI)
 
 			if !tt.errAssert(t, err, fmt.Sprintf("Manager.Auth() error = %v", err)) || err != nil {
@@ -383,6 +384,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 
 			m, err := session.NewManager(tt.cfg, tt.oidc, tt.sessions, auditLogger, http.DefaultClient)
 			require.NoError(t, err)
+			m.SetAllowHttpScheme(true)
 
 			result, err := m.FinaliseOIDCLogin(context.Background(), tt.stateID, tt.code, tt.fingerprint)
 
@@ -510,7 +512,7 @@ func TestManager_BCLogout(t *testing.T) {
 			cli := &http.Client{
 				Transport: localRoundTripper{
 					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						b, err := json.Marshal(openid.Configuration{
+						b, err := json.Marshal(oidc.Configuration{
 							JwksURI: jwksSrv.URL,
 							Issuer:  jwksSrv.URL,
 						})
@@ -709,7 +711,7 @@ func TestManager_BCLogout_ErrorCases(t *testing.T) {
 			cli := &http.Client{
 				Transport: localRoundTripper{
 					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						b, _ := json.Marshal(openid.Configuration{
+						b, _ := json.Marshal(oidc.Configuration{
 							JwksURI: jwksSrv.URL,
 							Issuer:  jwksSrv.URL,
 						})

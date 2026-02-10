@@ -16,6 +16,7 @@ require (
 	github.com/oapi-codegen/runtime v1.1.2
 	github.com/openkcm/api-sdk v0.15.0
 	github.com/openkcm/common-sdk v1.13.0
+	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pressly/goose/v3 v3.26.0
 	github.com/samber/oops v1.21.0
 	github.com/spf13/cobra v1.10.2
@@ -171,3 +172,5 @@ retract (
 	v1.0.1
 	v1.0.0
 )
+
+replace github.com/openkcm/common-sdk => ../common-sdk
