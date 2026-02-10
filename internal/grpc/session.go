@@ -2,11 +2,13 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/openkcm/common-sdk/pkg/openid"
+	"github.com/patrickmn/go-cache"
 
 	sessionv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/session/v1"
 	typesv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/types/v1"
@@ -33,6 +35,8 @@ type SessionServer struct {
 
 	queryParametersIntrospect []string
 	idleSessionTimeout        time.Duration
+
+	cache *cache.Cache
 }
 
 func NewSessionServer(
@@ -47,6 +51,7 @@ func NewSessionServer(
 		providerRepo:       providerRepo,
 		httpClient:         httpClient,
 		idleSessionTimeout: idleSessionTimeout,
+		cache:              cache.New(2*time.Minute, 10*time.Minute),
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -77,13 +82,13 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 		return &sessionv1.GetSessionResponse{Valid: false}, nil
 	}
 
-	// Get OIDC provider for the given tenant ID
-	provider, err := s.providerRepo.Get(ctx, req.GetTenantId())
+	// Get the stored trust for the given tenant ID
+	trust, err := s.providerRepo.Get(ctx, req.GetTenantId())
 	if err != nil {
 		slogctx.Warn(ctx, "Is this an attack? Could not get OIDC provider", "issuer", sess.Issuer, "error", err)
 		return &sessionv1.GetSessionResponse{Valid: false}, nil
 	}
-	if provider.Blocked {
+	if trust.Blocked {
 		slogctx.Warn(ctx, "OIDC provider is blocked", "issuer", sess.Issuer)
 		return &sessionv1.GetSessionResponse{Valid: false}, nil
 	}
@@ -100,13 +105,6 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 		return &sessionv1.GetSessionResponse{Valid: false}, nil
 	}
 
-	// Introspect access token
-	cfg, err := openid.GetConfig(ctx, provider.IssuerURL)
-	if err != nil {
-		slogctx.Error(ctx, "Could not get OpenID configuration", "issuer", sess.Issuer, "error", err)
-		return &sessionv1.GetSessionResponse{Valid: false}, err
-	}
-
 	response := &sessionv1.GetSessionResponse{
 		Valid:       true,
 		Issuer:      sess.Issuer,
@@ -118,22 +116,21 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 		AuthContext: sess.AuthContext,
 	}
 
-	if cfg.IntrospectionEndpoint != "" {
-		result, err := cfg.IntrospectToken(ctx, sess.AccessToken, provider.GetIntrospectParameters(s.queryParametersIntrospect))
-		if err != nil {
-			slogctx.Error(ctx, "Could not introspect access token", "error", err)
-			return &sessionv1.GetSessionResponse{Valid: false}, err
-		}
-		if !result.Active {
-			slogctx.Warn(ctx, "Access token is not active", "result", result)
-			return &sessionv1.GetSessionResponse{Valid: false}, nil
-		}
-
-		if result.Groups != nil {
-			response.Groups = result.Groups
-		}
+	// Introspect access token
+	result, err := s.introspectToken(ctx, sess.AccessToken, &trust)
+	if err != nil {
+		slogctx.Error(ctx, "Could not introspect access token", "error", err)
+		return &sessionv1.GetSessionResponse{Valid: false}, err
+	}
+	if !result.Active {
+		slogctx.Warn(ctx, "Access token is not active", "result", result)
+		return &sessionv1.GetSessionResponse{Valid: false}, nil
+	}
+	if result.Groups != nil {
+		response.Groups = result.Groups
 	}
 
+	// Bump the session to keep it active
 	if err := s.sessionRepo.BumpActive(ctx, req.GetSessionId(), s.idleSessionTimeout); err != nil {
 		slogctx.Error(ctx, "failed to bump the session status", "error", err)
 		return &sessionv1.GetSessionResponse{Valid: false}, nil
@@ -156,4 +153,39 @@ func (s *SessionServer) GetOIDCProvider(ctx context.Context, req *sessionv1.GetO
 			Audiences: provider.Audiences,
 		},
 	}, nil
+}
+
+func (s *SessionServer) introspectToken(ctx context.Context, token string, trust *oidc.Provider) (openid.IntrospectResponse, error) {
+	const introspectPrefix = "introspect_"
+
+	// first check the cache for a recent introspection result for this token
+	cacheKey := introspectPrefix + token
+	cache, ok := s.cache.Get(cacheKey)
+	if ok {
+		//nolint:forcetypeassert
+		return cache.(openid.IntrospectResponse), nil
+	}
+
+	// create the provider for the given issuer
+	provider, err := openid.NewProvider(trust.IssuerURL, trust.Audiences,
+		openid.WithIntrospectQueryParameters(trust.GetIntrospectParameters(s.queryParametersIntrospect)),
+	)
+	if err != nil {
+		slogctx.Error(ctx, "Could not create OpenID provider", "issuer", trust.IssuerURL, "error", err)
+		return openid.IntrospectResponse{Active: false}, err
+	}
+
+	// introspect the token and cache the result
+	intr, err := provider.IntrospectToken(ctx, token)
+	if err != nil {
+		if errors.Is(err, openid.ErrNoIntrospectionEndpoint) {
+			slogctx.Debug(ctx, "No introspection endpoint configured", "issuer", provider.Issuer)
+			return openid.IntrospectResponse{Active: true}, nil
+		}
+		slogctx.Error(ctx, "Could not introspect access token", "error", err)
+		return openid.IntrospectResponse{Active: false}, err
+	}
+	s.cache.Set(cacheKey, intr, 0)
+
+	return intr, nil
 }
