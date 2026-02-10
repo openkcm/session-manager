@@ -134,7 +134,9 @@ func TestRefreshAccessToken(t *testing.T) {
 			CSRFSecretParsed:               []byte(testCSRFSecret),
 		}
 
-		manager, err := session.NewManager(cfg, oidcRepo, sessions, nil, http.DefaultClient)
+		manager, err := session.NewManager(cfg, oidcRepo, sessions, nil, http.DefaultClient,
+			session.WithAllowHttpScheme(true),
+		)
 		require.NoError(t, err)
 
 		// Trigger housekeeping which should refresh the token
@@ -226,7 +228,9 @@ func TestRefreshAccessToken(t *testing.T) {
 			CSRFSecretParsed: []byte(testCSRFSecret),
 		}
 
-		manager, err := session.NewManager(cfg, oidcRepo, sessions, nil, http.DefaultClient)
+		manager, err := session.NewManager(cfg, oidcRepo, sessions, nil, http.DefaultClient,
+			session.WithAllowHttpScheme(true),
+		)
 		require.NoError(t, err)
 
 		// Trigger housekeeping - should log error but not fail
@@ -278,7 +282,9 @@ func TestRefreshAccessToken(t *testing.T) {
 			CSRFSecretParsed:               []byte(testCSRFSecret),
 		}
 
-		manager, err := session.NewManager(cfg, oidcRepo, sessions, nil, http.DefaultClient)
+		manager, err := session.NewManager(cfg, oidcRepo, sessions, nil, http.DefaultClient,
+			session.WithAllowHttpScheme(true),
+		)
 		require.NoError(t, err)
 
 		// Trigger housekeeping - should log error but not fail

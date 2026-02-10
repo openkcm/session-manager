@@ -17,7 +17,8 @@ import (
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/google/uuid"
 	"github.com/openkcm/common-sdk/pkg/csrf"
-	"github.com/openkcm/common-sdk/pkg/openid"
+	"github.com/openkcm/common-sdk/pkg/oidc"
+	"github.com/patrickmn/go-cache"
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 	slogctx "github.com/veqryn/slog-context"
@@ -27,6 +28,14 @@ import (
 	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/internal/trust"
 )
+
+type ManagerOption func(*Manager)
+
+func WithAllowHttpScheme(allowHttpScheme bool) ManagerOption {
+	return func(m *Manager) {
+		m.allowHttpScheme = allowHttpScheme
+	}
+}
 
 type Manager struct {
 	trustRepo    trust.OIDCMappingRepository
@@ -49,23 +58,28 @@ type Manager struct {
 	csrfCookieTemplate    config.CookieTemplate
 
 	csrfSecret []byte
+
+	cache *cache.Cache
+
+	allowHttpScheme bool
 }
 
 func NewManager(
 	cfg *config.SessionManager,
-	oidc trust.OIDCMappingRepository,
-	sessions Repository,
+	trustRepo trust.OIDCMappingRepository,
+	sessionsRepo Repository,
 	auditLogger *otlpaudit.AuditLogger,
 	httpClient *http.Client,
+	opts ...ManagerOption,
 ) (*Manager, error) {
 	callbackURL, err := url.Parse(cfg.CallbackURL)
 	if err != nil {
 		return nil, fmt.Errorf("parsing callback URL: %w", err)
 	}
 
-	return &Manager{
-		trustRepo:             oidc,
-		sessions:              sessions,
+	m := &Manager{
+		trustRepo:             trustRepo,
+		sessions:              sessionsRepo,
 		audit:                 auditLogger,
 		sessionDuration:       cfg.SessionDuration,
 		idleSessionTimeout:    cfg.IdleSessionTimeout,
@@ -80,7 +94,16 @@ func NewManager(
 		clientID:              cfg.ClientAuth.ClientID,
 		secureClient:          httpClient,
 		csrfSecret:            cfg.CSRFSecretParsed,
-	}, nil
+		cache:                 cache.New(2*time.Minute, 10*time.Minute),
+	}
+
+	for _, opt := range opts {
+		if opt != nil {
+			opt(m)
+		}
+	}
+
+	return m, nil
 }
 
 // MakeAuthURI returns an OIDC authentication URI.
@@ -90,7 +113,7 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 		return "", fmt.Errorf("getting trust mapping: %w", err)
 	}
 
-	openidConf, err := openid.GetConfig(ctx, mapping.IssuerURL)
+	openidConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL)
 	if err != nil {
 		return "", fmt.Errorf("getting an openid config: %w", err)
 	}
@@ -120,7 +143,7 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 	return u, nil
 }
 
-func (m *Manager) authURI(openidConf openid.Configuration, state State, pkce pkce.PKCE, properties map[string]string) (string, error) {
+func (m *Manager) authURI(openidConf *oidc.Configuration, state State, pkce pkce.PKCE, properties map[string]string) (string, error) {
 	u, err := url.Parse(openidConf.AuthorizationEndpoint)
 	if err != nil {
 		return "", fmt.Errorf("parsing authorisation endpoint url: %w", err)
@@ -147,7 +170,7 @@ func (m *Manager) authURI(openidConf openid.Configuration, state State, pkce pkc
 	return u.String(), nil
 }
 
-func (m *Manager) getProviderKeySet(ctx context.Context, oidcConf openid.Configuration) (*jose.JSONWebKeySet, error) {
+func (m *Manager) getProviderKeySet(ctx context.Context, oidcConf *oidc.Configuration) (*jose.JSONWebKeySet, error) {
 	var keySet jose.JSONWebKeySet
 	uri := oidcConf.JwksURI
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
@@ -199,7 +222,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("getting trust mapping: %w", err)
 	}
 
-	openidConf, err := openid.GetConfig(ctx, mapping.IssuerURL)
+	openidConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL)
 	if err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get openid configuration")
 		return OIDCSessionData{}, fmt.Errorf("getting openid configuration: %w", err)
@@ -348,7 +371,7 @@ func (m *Manager) Logout(ctx context.Context, sessionID string) (string, error) 
 
 	ctx = slogctx.With(ctx, "issuer_url", mapping.IssuerURL)
 
-	oidcConf, err := openid.GetConfig(ctx, mapping.IssuerURL)
+	oidcConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL)
 	if err != nil {
 		slogctx.Warn(ctx, "failed to get oidc configuration", "error", err)
 		return "", fmt.Errorf("getting oidc configuration: %w", err)
@@ -452,7 +475,7 @@ func (m *Manager) BCLogout(ctx context.Context, logoutJWT string) error {
 		return fmt.Errorf("getting trust mapping: %w", err)
 	}
 
-	oidcConf, err := openid.GetConfig(ctx, mapping.IssuerURL)
+	oidcConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL)
 	if err != nil {
 		return fmt.Errorf("getting oidc config: %w", err)
 	}
@@ -567,7 +590,7 @@ func (m *Manager) verifyAccessToken(accessToken, atHash string, idToken *jwt.JSO
 	return nil
 }
 
-func (m *Manager) exchangeCode(ctx context.Context, openidConf openid.Configuration, code, codeVerifier string, properties map[string]string) (tokenResponse, error) {
+func (m *Manager) exchangeCode(ctx context.Context, openidConf *oidc.Configuration, code, codeVerifier string, properties map[string]string) (tokenResponse, error) {
 	data := url.Values{}
 	data.Set("grant_type", "authorization_code")
 	data.Set("code", code)
