@@ -12,8 +12,8 @@ import (
 	typesv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/types/v1"
 	slogctx "github.com/veqryn/slog-context"
 
-	"github.com/openkcm/session-manager/internal/oidc"
 	"github.com/openkcm/session-manager/internal/session"
+	"github.com/openkcm/session-manager/internal/trust"
 )
 
 type SessionServerOption func(*SessionServer)
@@ -27,9 +27,9 @@ func WithQueryParametersIntrospect(params []string) SessionServerOption {
 type SessionServer struct {
 	sessionv1.UnimplementedServiceServer
 
-	sessionRepo  session.Repository
-	providerRepo oidc.ProviderRepository
-	httpClient   *http.Client
+	sessionRepo session.Repository
+	trustRepo   trust.OIDCMappingRepository
+	httpClient  *http.Client
 
 	queryParametersIntrospect []string
 	idleSessionTimeout        time.Duration
@@ -37,14 +37,14 @@ type SessionServer struct {
 
 func NewSessionServer(
 	sessionRepo session.Repository,
-	providerRepo oidc.ProviderRepository,
+	trustRepo trust.OIDCMappingRepository,
 	httpClient *http.Client,
 	idleSessionTimeout time.Duration,
 	opts ...SessionServerOption,
 ) *SessionServer {
 	s := &SessionServer{
 		sessionRepo:        sessionRepo,
-		providerRepo:       providerRepo,
+		trustRepo:          trustRepo,
 		httpClient:         httpClient,
 		idleSessionTimeout: idleSessionTimeout,
 	}
@@ -77,14 +77,14 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 		return &sessionv1.GetSessionResponse{Valid: false}, nil
 	}
 
-	// Get OIDC provider for the given tenant ID
-	provider, err := s.providerRepo.Get(ctx, req.GetTenantId())
+	// Get trust mapping for the given tenant ID
+	mapping, err := s.trustRepo.Get(ctx, req.GetTenantId())
 	if err != nil {
-		slogctx.Warn(ctx, "Is this an attack? Could not get OIDC provider", "issuer", sess.Issuer, "error", err)
+		slogctx.Warn(ctx, "Is this an attack? Could not get trust mapping", "issuer", sess.Issuer, "error", err)
 		return &sessionv1.GetSessionResponse{Valid: false}, nil
 	}
-	if provider.Blocked {
-		slogctx.Warn(ctx, "OIDC provider is blocked", "issuer", sess.Issuer)
+	if mapping.Blocked {
+		slogctx.Warn(ctx, "Tenant is blocked", "issuer", sess.Issuer)
 		return &sessionv1.GetSessionResponse{Valid: false}, nil
 	}
 
@@ -101,7 +101,7 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 	}
 
 	// Introspect access token
-	cfg, err := openid.GetConfig(ctx, provider.IssuerURL)
+	cfg, err := openid.GetConfig(ctx, mapping.IssuerURL)
 	if err != nil {
 		slogctx.Error(ctx, "Could not get OpenID configuration", "issuer", sess.Issuer, "error", err)
 		return &sessionv1.GetSessionResponse{Valid: false}, err
@@ -119,7 +119,7 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 	}
 
 	if cfg.IntrospectionEndpoint != "" {
-		result, err := cfg.IntrospectToken(ctx, sess.AccessToken, provider.GetIntrospectParameters(s.queryParametersIntrospect))
+		result, err := cfg.IntrospectToken(ctx, sess.AccessToken, mapping.GetIntrospectParameters(s.queryParametersIntrospect))
 		if err != nil {
 			slogctx.Error(ctx, "Could not introspect access token", "error", err)
 			return &sessionv1.GetSessionResponse{Valid: false}, err
@@ -144,7 +144,7 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 }
 
 func (s *SessionServer) GetOIDCProvider(ctx context.Context, req *sessionv1.GetOIDCProviderRequest) (*sessionv1.GetOIDCProviderResponse, error) {
-	provider, err := s.providerRepo.Get(ctx, req.GetTenantId())
+	provider, err := s.trustRepo.Get(ctx, req.GetTenantId())
 	if err != nil {
 		return nil, fmt.Errorf("getting odic provider: %w", err)
 	}

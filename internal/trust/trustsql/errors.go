@@ -1,4 +1,4 @@
-package oidcsql
+package trustsql
 
 import (
 	"errors"

@@ -272,7 +272,7 @@ func TestValkeyClientFromConfig_WithMTLS(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to load valkey mTLS config from secret ref")
 }
 
-func TestOIDCProviderRepoFromConfig_InvalidDatabaseConfig(t *testing.T) {
+func TestTrustRepoFromConfig_InvalidDatabaseConfig(t *testing.T) {
 	cfg := &config.Config{
 		Database: config.Database{
 			Host:     commoncfg.SourceRef{Source: "file", File: commoncfg.CredentialFile{Path: "/nonexistent/file"}},
@@ -283,7 +283,7 @@ func TestOIDCProviderRepoFromConfig_InvalidDatabaseConfig(t *testing.T) {
 		},
 	}
 
-	_, err := oidcProviderRepoFromConfig(t.Context(), cfg)
+	_, err := trustRepoFromConfig(t.Context(), cfg)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to make dsn from config")
 }
@@ -302,7 +302,7 @@ func TestInitSessionManager_InvalidOIDCConfig(t *testing.T) {
 	_, closeFn, err := initSessionManager(t.Context(), cfg)
 	assert.Error(t, err)
 	assert.Nil(t, closeFn)
-	assert.Contains(t, err.Error(), "failed to create OIDC service")
+	assert.Contains(t, err.Error(), "failed to create trust repository")
 }
 
 func TestInitSessionManager_InvalidValkeyConfig(t *testing.T) {
@@ -393,7 +393,7 @@ func TestInternalMain_InvalidOIDCConfig(t *testing.T) {
 
 	err := internalMain(t.Context(), cfg)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to create OIDC service")
+	assert.Contains(t, err.Error(), "failed to create trust service")
 }
 
 func TestInternalMain_InvalidValkeyConfig(t *testing.T) {

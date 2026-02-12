@@ -1,22 +1,22 @@
-package oidcmock
+package trustmock
 
 import (
 	"context"
 
-	"github.com/openkcm/session-manager/internal/oidc"
 	"github.com/openkcm/session-manager/internal/serviceerr"
+	"github.com/openkcm/session-manager/internal/trust"
 )
 
 type RepositoryOption func(*Repository)
 
 type Repository struct {
-	tenantTrust map[string]oidc.Provider
+	tenantTrust map[string]trust.OIDCMapping
 
 	getErr, createErr, deleteErr, updateErr error
 }
 
-func WithTrust(tenantID string, provider oidc.Provider) RepositoryOption {
-	return func(r *Repository) { r.tenantTrust[tenantID] = provider }
+func WithTrust(tenantID string, mapping trust.OIDCMapping) RepositoryOption {
+	return func(r *Repository) { r.tenantTrust[tenantID] = mapping }
 }
 func WithGetError(err error) RepositoryOption {
 	return func(r *Repository) { r.getErr = err }
@@ -31,11 +31,11 @@ func WithUpdateError(err error) RepositoryOption {
 	return func(r *Repository) { r.updateErr = err }
 }
 
-var _ = oidc.ProviderRepository(&Repository{})
+var _ = trust.OIDCMappingRepository(&Repository{})
 
 func NewInMemRepository(opts ...RepositoryOption) *Repository {
 	r := &Repository{
-		tenantTrust: make(map[string]oidc.Provider),
+		tenantTrust: make(map[string]trust.OIDCMapping),
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -46,30 +46,30 @@ func NewInMemRepository(opts ...RepositoryOption) *Repository {
 }
 
 // TAdd is a helper method for tests to add a trust relationship.
-func (r *Repository) TAdd(tenantID string, provider oidc.Provider) {
-	r.tenantTrust[tenantID] = provider
+func (r *Repository) TAdd(tenantID string, mapping trust.OIDCMapping) {
+	r.tenantTrust[tenantID] = mapping
 }
 
 // TGet is a helper method for tests to get a trust relationship.
-func (r *Repository) TGet(tenantID string) oidc.Provider {
+func (r *Repository) TGet(tenantID string) trust.OIDCMapping {
 	return r.tenantTrust[tenantID]
 }
 
-func (r *Repository) Get(_ context.Context, tenantID string) (oidc.Provider, error) {
+func (r *Repository) Get(_ context.Context, tenantID string) (trust.OIDCMapping, error) {
 	if r.getErr != nil {
-		return oidc.Provider{}, r.getErr
+		return trust.OIDCMapping{}, r.getErr
 	}
-	if provider, ok := r.tenantTrust[tenantID]; ok {
-		return provider, nil
+	if mapping, ok := r.tenantTrust[tenantID]; ok {
+		return mapping, nil
 	}
-	return oidc.Provider{}, serviceerr.ErrNotFound
+	return trust.OIDCMapping{}, serviceerr.ErrNotFound
 }
 
-func (r *Repository) Create(_ context.Context, tenantID string, provider oidc.Provider) error {
+func (r *Repository) Create(_ context.Context, tenantID string, mapping trust.OIDCMapping) error {
 	if r.createErr != nil {
 		return r.createErr
 	}
-	r.tenantTrust[tenantID] = provider
+	r.tenantTrust[tenantID] = mapping
 	return nil
 }
 
@@ -84,10 +84,10 @@ func (r *Repository) Delete(_ context.Context, tenantID string) error {
 	return nil
 }
 
-func (r *Repository) Update(_ context.Context, tenantID string, provider oidc.Provider) error {
+func (r *Repository) Update(_ context.Context, tenantID string, mapping trust.OIDCMapping) error {
 	if r.updateErr != nil {
 		return r.updateErr
 	}
-	r.tenantTrust[tenantID] = provider
+	r.tenantTrust[tenantID] = mapping
 	return nil
 }

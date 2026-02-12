@@ -22,8 +22,8 @@ import (
 
 	"github.com/openkcm/session-manager/internal/dbtest/postgrestest"
 	"github.com/openkcm/session-manager/internal/grpc"
-	"github.com/openkcm/session-manager/internal/oidc"
-	oidcsql "github.com/openkcm/session-manager/internal/oidc/sql"
+	"github.com/openkcm/session-manager/internal/trust"
+	"github.com/openkcm/session-manager/internal/trust/trustsql"
 )
 
 func TestGRPCServer(t *testing.T) {
@@ -312,13 +312,13 @@ func createClientConn(t *testing.T, port int) (*stdgrpc.ClientConn, error) {
 	return conn, err
 }
 
-func startServer(t *testing.T, port int) (*stdgrpc.Server, *oidc.Service, func(context.Context), error) {
+func startServer(t *testing.T, port int) (*stdgrpc.Server, *trust.Service, func(context.Context), error) {
 	t.Helper()
 	ctx := t.Context()
 	// start postgres
 	db, _, terminateFn := postgrestest.Start(ctx)
-	oidcProviderRepo := oidcsql.NewRepository(db)
-	service := oidc.NewService(oidcProviderRepo)
+	trustRepo := trustsql.NewRepository(db)
+	service := trust.NewService(trustRepo)
 
 	lstConf := net.ListenConfig{}
 	lis, err := lstConf.Listen(ctx, "tcp", fmt.Sprintf("localhost:%d", port))
@@ -328,7 +328,7 @@ func startServer(t *testing.T, port int) (*stdgrpc.Server, *oidc.Service, func(c
 
 	srv := stdgrpc.NewServer()
 	oidcmappingv1.RegisterServiceServer(srv, grpc.NewOIDCMappingServer(service))
-	sessionv1.RegisterServiceServer(srv, grpc.NewSessionServer(nil, oidcProviderRepo, http.DefaultClient, time.Hour))
+	sessionv1.RegisterServiceServer(srv, grpc.NewSessionServer(nil, trustRepo, http.DefaultClient, time.Hour))
 
 	// start
 	go func() {
