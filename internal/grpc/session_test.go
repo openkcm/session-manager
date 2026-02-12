@@ -18,7 +18,7 @@ import (
 	"github.com/openkcm/session-manager/internal/session"
 	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
 	"github.com/openkcm/session-manager/internal/trust"
-	oidcmock "github.com/openkcm/session-manager/internal/trust/mock"
+	oidcmock "github.com/openkcm/session-manager/internal/trust/trustmock"
 )
 
 func TestNewSessionServer(t *testing.T) {

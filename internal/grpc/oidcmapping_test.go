@@ -14,7 +14,7 @@ import (
 	"github.com/openkcm/session-manager/internal/grpc"
 	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/internal/trust"
-	oidcmock "github.com/openkcm/session-manager/internal/trust/mock"
+	oidcmock "github.com/openkcm/session-manager/internal/trust/trustmock"
 )
 
 func TestNewOIDCMappingServer(t *testing.T) {

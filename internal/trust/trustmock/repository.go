@@ -1,4 +1,4 @@
-package oidcmock
+package trustmock
 
 import (
 	"context"
