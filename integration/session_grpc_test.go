@@ -21,9 +21,9 @@ import (
 	"github.com/openkcm/session-manager/internal/dbtest/postgrestest"
 	"github.com/openkcm/session-manager/internal/dbtest/valkeytest"
 	"github.com/openkcm/session-manager/internal/grpc"
-	oidcsql "github.com/openkcm/session-manager/internal/oidc/sql"
 	"github.com/openkcm/session-manager/internal/session"
 	sessionvalkey "github.com/openkcm/session-manager/internal/session/valkey"
+	"github.com/openkcm/session-manager/internal/trust/trustsql"
 )
 
 func TestSessionGRPC(t *testing.T) {
@@ -190,7 +190,7 @@ func startSessionServer(t *testing.T, port int) (*stdgrpc.Server, session.Reposi
 		valkeyClient.Close()
 	}
 
-	oidcProviderRepo := oidcsql.NewRepository(db)
+	oidcProviderRepo := trustsql.NewRepository(db)
 	sessionRepo := sessionvalkey.NewRepository(valkeyClient, "session")
 
 	lstConf := net.ListenConfig{}

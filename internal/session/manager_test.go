@@ -26,7 +26,7 @@ import (
 	"github.com/openkcm/session-manager/internal/session"
 	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
 	"github.com/openkcm/session-manager/internal/trust"
-	oidcmock "github.com/openkcm/session-manager/internal/trust/trustmock"
+	"github.com/openkcm/session-manager/internal/trust/trustmock"
 )
 
 const (
@@ -60,7 +60,7 @@ func TestManager_Auth(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		oidc        *oidcmock.Repository
+		oidc        *trustmock.Repository
 		sessions    *sessionmock.Repository
 		requestURI  string
 		cfg         *config.SessionManager
@@ -72,7 +72,7 @@ func TestManager_Auth(t *testing.T) {
 	}{
 		{
 			name:       "Success",
-			oidc:       oidcmock.NewInMemRepository(oidcmock.WithTrust(tenantID, oidcProvider)),
+			oidc:       trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, oidcProvider)),
 			sessions:   sessionmock.NewInMemRepository(),
 			requestURI: requestURI,
 			cfg: &config.SessionManager{
@@ -91,9 +91,9 @@ func TestManager_Auth(t *testing.T) {
 		},
 		{
 			name: "Get OIDC error",
-			oidc: oidcmock.NewInMemRepository(
-				oidcmock.WithTrust(tenantID, oidcProvider),
-				oidcmock.WithGetError(errors.New("faield to get oidc provider")),
+			oidc: trustmock.NewInMemRepository(
+				trustmock.WithTrust(tenantID, oidcProvider),
+				trustmock.WithGetError(errors.New("faield to get oidc provider")),
 			),
 			sessions:   sessionmock.NewInMemRepository(),
 			requestURI: requestURI,
@@ -109,7 +109,7 @@ func TestManager_Auth(t *testing.T) {
 		},
 		{
 			name:       "Save state error",
-			oidc:       oidcmock.NewInMemRepository(oidcmock.WithTrust(tenantID, oidcProvider)),
+			oidc:       trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, oidcProvider)),
 			sessions:   sessionmock.NewInMemRepository(sessionmock.WithStoreStateError(errors.New("failed to save state"))),
 			requestURI: requestURI,
 			cfg: &config.SessionManager{
@@ -224,7 +224,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 
 	tests := []struct {
 		name            string
-		oidc            *oidcmock.Repository
+		oidc            *trustmock.Repository
 		sessions        *sessionmock.Repository
 		stateID         string
 		code            string
@@ -238,7 +238,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 	}{
 		{
 			name:        "Success",
-			oidc:        oidcmock.NewInMemRepository(),
+			oidc:        trustmock.NewInMemRepository(),
 			sessions:    sessionmock.NewInMemRepository(sessionmock.WithState(validState)),
 			stateID:     stateID,
 			code:        code,
@@ -257,7 +257,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 		},
 		{
 			name:        "State load error",
-			oidc:        oidcmock.NewInMemRepository(),
+			oidc:        trustmock.NewInMemRepository(),
 			sessions:    sessionmock.NewInMemRepository(sessionmock.WithLoadStateError(errors.New("state not found"))),
 			stateID:     stateID,
 			code:        code,
@@ -273,7 +273,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 		},
 		{
 			name:        "State expired",
-			oidc:        oidcmock.NewInMemRepository(),
+			oidc:        trustmock.NewInMemRepository(),
 			sessions:    sessionmock.NewInMemRepository(sessionmock.WithState(expiredState)),
 			stateID:     stateID,
 			code:        code,
@@ -288,7 +288,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 		},
 		{
 			name:        "Fingerprint mismatch",
-			oidc:        oidcmock.NewInMemRepository(),
+			oidc:        trustmock.NewInMemRepository(),
 			sessions:    sessionmock.NewInMemRepository(sessionmock.WithState(mismatchState)),
 			stateID:     stateID,
 			code:        code,
@@ -303,7 +303,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 		},
 		{
 			name:        "OIDC provider get error",
-			oidc:        oidcmock.NewInMemRepository(oidcmock.WithGetError(errors.New("provider not found"))),
+			oidc:        trustmock.NewInMemRepository(trustmock.WithGetError(errors.New("provider not found"))),
 			sessions:    sessionmock.NewInMemRepository(sessionmock.WithState(validState)),
 			stateID:     stateID,
 			code:        code,
@@ -318,7 +318,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 		},
 		{
 			name:        "Token exchange error",
-			oidc:        oidcmock.NewInMemRepository(),
+			oidc:        trustmock.NewInMemRepository(),
 			sessions:    sessionmock.NewInMemRepository(sessionmock.WithState(validState)),
 			stateID:     stateID,
 			code:        code,
@@ -334,7 +334,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 		},
 		{
 			name:        "Auth context error",
-			oidc:        oidcmock.NewInMemRepository(),
+			oidc:        trustmock.NewInMemRepository(),
 			sessions:    sessionmock.NewInMemRepository(sessionmock.WithState(validState)),
 			stateID:     stateID,
 			code:        code,
@@ -469,7 +469,7 @@ func TestManager_BCLogout(t *testing.T) {
 		name      string
 		cfg       *config.SessionManager
 		jwt       string
-		setupMock func(*oidcmock.Repository, *sessionmock.Repository)
+		setupMock func(*trustmock.Repository, *sessionmock.Repository)
 		errAssert assert.ErrorAssertionFunc
 	}{
 		{
@@ -483,7 +483,7 @@ func TestManager_BCLogout(t *testing.T) {
 				Events:    map[string]struct{}{"http://schemas.openid.net/event/backchannel-logout": {}},
 				SessionID: "sid-1",
 			}),
-			setupMock: func(oidcs *oidcmock.Repository, sessions *sessionmock.Repository) {
+			setupMock: func(oidcs *trustmock.Repository, sessions *sessionmock.Repository) {
 				_ = oidcs.Create(context.Background(), "tid-1", trust.Provider{
 					IssuerURL: jwksSrv.URL,
 				})
@@ -504,7 +504,7 @@ func TestManager_BCLogout(t *testing.T) {
 			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
 			require.NoError(t, err)
 
-			oidcMock := oidcmock.NewInMemRepository()
+			oidcMock := trustmock.NewInMemRepository()
 			sessionMock := sessionmock.NewInMemRepository()
 
 			cli := &http.Client{
@@ -547,13 +547,13 @@ func TestManager_LogoutEdgeCases(t *testing.T) {
 	tests := []struct {
 		name      string
 		sessionID string
-		setupMock func(*oidcmock.Repository, *sessionmock.Repository)
+		setupMock func(*trustmock.Repository, *sessionmock.Repository)
 		errAssert assert.ErrorAssertionFunc
 	}{
 		{
 			name:      "Session not found",
 			sessionID: "non-existent",
-			setupMock: func(oidcs *oidcmock.Repository, sessions *sessionmock.Repository) {
+			setupMock: func(oidcs *trustmock.Repository, sessions *sessionmock.Repository) {
 				_ = sessions.StoreSession(context.Background(), session.Session{
 					ID:       sessionID,
 					TenantID: tenantID,
@@ -564,7 +564,7 @@ func TestManager_LogoutEdgeCases(t *testing.T) {
 		{
 			name:      "OIDC provider not found",
 			sessionID: sessionID,
-			setupMock: func(oidcs *oidcmock.Repository, sessions *sessionmock.Repository) {
+			setupMock: func(oidcs *trustmock.Repository, sessions *sessionmock.Repository) {
 				_ = sessions.StoreSession(context.Background(), session.Session{
 					ID:       sessionID,
 					TenantID: tenantID,
@@ -584,7 +584,7 @@ func TestManager_LogoutEdgeCases(t *testing.T) {
 			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
 			require.NoError(t, err)
 
-			oidcMock := oidcmock.NewInMemRepository()
+			oidcMock := trustmock.NewInMemRepository()
 			sessionMock := sessionmock.NewInMemRepository()
 
 			tt.setupMock(oidcMock, sessionMock)
@@ -644,13 +644,13 @@ func TestManager_BCLogout_ErrorCases(t *testing.T) {
 	tests := []struct {
 		name      string
 		jwt       string
-		setupMock func(*oidcmock.Repository, *sessionmock.Repository)
+		setupMock func(*trustmock.Repository, *sessionmock.Repository)
 		errAssert assert.ErrorAssertionFunc
 	}{
 		{
 			name: "Invalid JWT",
 			jwt:  "invalid.jwt.token",
-			setupMock: func(oidcs *oidcmock.Repository, sessions *sessionmock.Repository) {
+			setupMock: func(oidcs *trustmock.Repository, sessions *sessionmock.Repository) {
 			},
 			errAssert: assert.Error,
 		},
@@ -663,7 +663,7 @@ func TestManager_BCLogout_ErrorCases(t *testing.T) {
 				Events:    map[string]struct{}{"http://invalid-event": {}},
 				SessionID: "sid-1",
 			}),
-			setupMock: func(oidcs *oidcmock.Repository, sessions *sessionmock.Repository) {
+			setupMock: func(oidcs *trustmock.Repository, sessions *sessionmock.Repository) {
 			},
 			errAssert: assert.Error,
 		},
@@ -674,7 +674,7 @@ func TestManager_BCLogout_ErrorCases(t *testing.T) {
 			}{
 				Events: map[string]struct{}{"http://schemas.openid.net/event/backchannel-logout": {}},
 			}),
-			setupMock: func(oidcs *oidcmock.Repository, sessions *sessionmock.Repository) {
+			setupMock: func(oidcs *trustmock.Repository, sessions *sessionmock.Repository) {
 			},
 			errAssert: assert.Error,
 		},
@@ -687,7 +687,7 @@ func TestManager_BCLogout_ErrorCases(t *testing.T) {
 				Events:    map[string]struct{}{"http://schemas.openid.net/event/backchannel-logout": {}},
 				SessionID: "non-existent-session",
 			}),
-			setupMock: func(oidcs *oidcmock.Repository, sessions *sessionmock.Repository) {
+			setupMock: func(oidcs *trustmock.Repository, sessions *sessionmock.Repository) {
 			},
 			errAssert: assert.NoError,
 		},
@@ -703,7 +703,7 @@ func TestManager_BCLogout_ErrorCases(t *testing.T) {
 			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
 			require.NoError(t, err)
 
-			oidcMock := oidcmock.NewInMemRepository()
+			oidcMock := trustmock.NewInMemRepository()
 			sessionMock := sessionmock.NewInMemRepository()
 
 			cli := &http.Client{
@@ -745,7 +745,7 @@ func TestManager_NewManager_Error(t *testing.T) {
 		CSRFSecretParsed: []byte(testCSRFSecret),
 	}
 
-	m, err := session.NewManager(cfg, oidcmock.NewInMemRepository(), sessionmock.NewInMemRepository(), auditLogger, http.DefaultClient)
+	m, err := session.NewManager(cfg, trustmock.NewInMemRepository(), sessionmock.NewInMemRepository(), auditLogger, http.DefaultClient)
 	assert.Error(t, err)
 	assert.Nil(t, m)
 	assert.Contains(t, err.Error(), "parsing callback URL")

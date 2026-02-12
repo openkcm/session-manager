@@ -15,7 +15,7 @@ import (
 	"github.com/openkcm/session-manager/internal/session"
 	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
 	"github.com/openkcm/session-manager/internal/trust"
-	oidcmock "github.com/openkcm/session-manager/internal/trust/trustmock"
+	"github.com/openkcm/session-manager/internal/trust/trustmock"
 )
 
 func TestDeleteIdleSessions(t *testing.T) {
@@ -111,7 +111,7 @@ func TestRefreshAccessToken(t *testing.T) {
 			},
 		}
 
-		oidcRepo := oidcmock.NewInMemRepository(oidcmock.WithTrust(tenantID, provider))
+		oidcRepo := trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, provider))
 
 		sess := session.Session{
 			ID:                sessionID,
@@ -149,7 +149,7 @@ func TestRefreshAccessToken(t *testing.T) {
 	})
 
 	t.Run("Error - OIDC provider not found", func(t *testing.T) {
-		oidcRepo := oidcmock.NewInMemRepository()
+		oidcRepo := trustmock.NewInMemRepository()
 
 		sess := session.Session{
 			ID:                sessionID,
@@ -204,7 +204,7 @@ func TestRefreshAccessToken(t *testing.T) {
 			Properties: map[string]string{},
 		}
 
-		oidcRepo := oidcmock.NewInMemRepository(oidcmock.WithTrust(tenantID, provider))
+		oidcRepo := trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, provider))
 
 		sess := session.Session{
 			ID:                sessionID,
@@ -256,7 +256,7 @@ func TestRefreshAccessToken(t *testing.T) {
 			Properties: map[string]string{}, // Missing required parameter
 		}
 
-		oidcRepo := oidcmock.NewInMemRepository(oidcmock.WithTrust(tenantID, provider))
+		oidcRepo := trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, provider))
 
 		sess := session.Session{
 			ID:                sessionID,

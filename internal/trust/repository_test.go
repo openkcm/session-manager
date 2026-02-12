@@ -13,7 +13,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/openkcm/session-manager/internal/trust"
-	oidcsql "github.com/openkcm/session-manager/internal/trust/trustsql"
+	"github.com/openkcm/session-manager/internal/trust/trustsql"
 	migrations "github.com/openkcm/session-manager/sql"
 )
 
@@ -111,7 +111,7 @@ func createRepo(ctx context.Context) (trust.ProviderRepository, error) {
 		return nil, err
 	}
 
-	return oidcsql.NewRepository(dbPool), nil
+	return trustsql.NewRepository(dbPool), nil
 }
 
 func migrateDB(ctx context.Context, connStr string) error {

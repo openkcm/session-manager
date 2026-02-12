@@ -20,7 +20,7 @@ import (
 	"github.com/openkcm/session-manager/internal/session"
 	sessionvalkey "github.com/openkcm/session-manager/internal/session/valkey"
 	"github.com/openkcm/session-manager/internal/trust"
-	oidcsql "github.com/openkcm/session-manager/internal/trust/trustsql"
+	"github.com/openkcm/session-manager/internal/trust/trustsql"
 )
 
 // Main starts both API servers
@@ -150,7 +150,7 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Man
 	return sessManager, valkeyClient.Close, nil
 }
 
-func oidcProviderRepoFromConfig(ctx context.Context, cfg *config.Config) (*oidcsql.Repository, error) {
+func oidcProviderRepoFromConfig(ctx context.Context, cfg *config.Config) (*trustsql.Repository, error) {
 	connStr, err := config.MakeConnStr(cfg.Database)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make dsn from config: %w", err)
@@ -161,7 +161,7 @@ func oidcProviderRepoFromConfig(ctx context.Context, cfg *config.Config) (*oidcs
 		return nil, fmt.Errorf("failed to initialise pgxpool connection: %w", err)
 	}
 
-	return oidcsql.NewRepository(db), nil
+	return trustsql.NewRepository(db), nil
 }
 
 func valkeyClientFromConfig(cfg *config.Config) (valkey.Client, error) {

@@ -14,12 +14,12 @@ import (
 	"github.com/openkcm/session-manager/internal/grpc"
 	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/internal/trust"
-	oidcmock "github.com/openkcm/session-manager/internal/trust/trustmock"
+	"github.com/openkcm/session-manager/internal/trust/trustmock"
 )
 
 func TestNewOIDCMappingServer(t *testing.T) {
 	t.Run("creates server successfully", func(t *testing.T) {
-		repo := oidcmock.NewInMemRepository()
+		repo := trustmock.NewInMemRepository()
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)
 
@@ -31,7 +31,7 @@ func TestApplyOIDCMapping(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("success - creates new mapping", func(t *testing.T) {
-		repo := oidcmock.NewInMemRepository()
+		repo := trustmock.NewInMemRepository()
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)
 
@@ -61,8 +61,8 @@ func TestApplyOIDCMapping(t *testing.T) {
 			JWKSURI:   "https://old-issuer.example.com/jwks.json",
 			Audiences: []string{"old-audience"},
 		}
-		repo := oidcmock.NewInMemRepository(
-			oidcmock.WithTrust("tenant-123", existingProvider),
+		repo := trustmock.NewInMemRepository(
+			trustmock.WithTrust("tenant-123", existingProvider),
 		)
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)
@@ -83,8 +83,8 @@ func TestApplyOIDCMapping(t *testing.T) {
 	})
 
 	t.Run("not found error - returns response with message", func(t *testing.T) {
-		repo := oidcmock.NewInMemRepository(
-			oidcmock.WithCreateError(serviceerr.ErrNotFound),
+		repo := trustmock.NewInMemRepository(
+			trustmock.WithCreateError(serviceerr.ErrNotFound),
 		)
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)
@@ -107,8 +107,8 @@ func TestApplyOIDCMapping(t *testing.T) {
 
 	t.Run("internal error - returns grpc error", func(t *testing.T) {
 		internalErr := errors.New("database connection failed")
-		repo := oidcmock.NewInMemRepository(
-			oidcmock.WithCreateError(internalErr),
+		repo := trustmock.NewInMemRepository(
+			trustmock.WithCreateError(internalErr),
 		)
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)
@@ -136,9 +136,9 @@ func TestApplyOIDCMapping(t *testing.T) {
 			IssuerURL: "https://issuer.example.com",
 		}
 		updateErr := errors.New("update failed")
-		repo := oidcmock.NewInMemRepository(
-			oidcmock.WithTrust("tenant-123", existingProvider),
-			oidcmock.WithUpdateError(updateErr),
+		repo := trustmock.NewInMemRepository(
+			trustmock.WithTrust("tenant-123", existingProvider),
+			trustmock.WithUpdateError(updateErr),
 		)
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)
@@ -169,8 +169,8 @@ func TestBlockOIDCMapping(t *testing.T) {
 			IssuerURL: "https://issuer.example.com",
 			Blocked:   false,
 		}
-		repo := oidcmock.NewInMemRepository(
-			oidcmock.WithTrust("tenant-123", existingProvider),
+		repo := trustmock.NewInMemRepository(
+			trustmock.WithTrust("tenant-123", existingProvider),
 		)
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)
@@ -192,8 +192,8 @@ func TestBlockOIDCMapping(t *testing.T) {
 			IssuerURL: "https://issuer.example.com",
 			Blocked:   true,
 		}
-		repo := oidcmock.NewInMemRepository(
-			oidcmock.WithTrust("tenant-123", existingProvider),
+		repo := trustmock.NewInMemRepository(
+			trustmock.WithTrust("tenant-123", existingProvider),
 		)
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)
@@ -210,8 +210,8 @@ func TestBlockOIDCMapping(t *testing.T) {
 	})
 
 	t.Run("not found - returns success", func(t *testing.T) {
-		repo := oidcmock.NewInMemRepository(
-			oidcmock.WithGetError(serviceerr.ErrNotFound),
+		repo := trustmock.NewInMemRepository(
+			trustmock.WithGetError(serviceerr.ErrNotFound),
 		)
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)
@@ -229,8 +229,8 @@ func TestBlockOIDCMapping(t *testing.T) {
 
 	t.Run("error - returns grpc error with message", func(t *testing.T) {
 		internalErr := errors.New("database error")
-		repo := oidcmock.NewInMemRepository(
-			oidcmock.WithGetError(internalErr),
+		repo := trustmock.NewInMemRepository(
+			trustmock.WithGetError(internalErr),
 		)
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)
@@ -260,8 +260,8 @@ func TestRemoveOIDCMapping(t *testing.T) {
 		existingProvider := trust.Provider{
 			IssuerURL: "https://issuer.example.com",
 		}
-		repo := oidcmock.NewInMemRepository(
-			oidcmock.WithTrust("tenant-123", existingProvider),
+		repo := trustmock.NewInMemRepository(
+			trustmock.WithTrust("tenant-123", existingProvider),
 		)
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)
@@ -280,8 +280,8 @@ func TestRemoveOIDCMapping(t *testing.T) {
 
 	t.Run("error - returns grpc error with message", func(t *testing.T) {
 		deleteErr := errors.New("delete failed")
-		repo := oidcmock.NewInMemRepository(
-			oidcmock.WithDeleteError(deleteErr),
+		repo := trustmock.NewInMemRepository(
+			trustmock.WithDeleteError(deleteErr),
 		)
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)
@@ -304,8 +304,8 @@ func TestRemoveOIDCMapping(t *testing.T) {
 	})
 
 	t.Run("error - delete is indempotent", func(t *testing.T) {
-		repo := oidcmock.NewInMemRepository(
-			oidcmock.WithDeleteError(serviceerr.ErrNotFound),
+		repo := trustmock.NewInMemRepository(
+			trustmock.WithDeleteError(serviceerr.ErrNotFound),
 		)
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)
@@ -331,8 +331,8 @@ func TestUnblockOIDCMapping(t *testing.T) {
 			IssuerURL: "https://issuer.example.com",
 			Blocked:   true,
 		}
-		repo := oidcmock.NewInMemRepository(
-			oidcmock.WithTrust("tenant-123", existingProvider),
+		repo := trustmock.NewInMemRepository(
+			trustmock.WithTrust("tenant-123", existingProvider),
 		)
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)
@@ -354,8 +354,8 @@ func TestUnblockOIDCMapping(t *testing.T) {
 			IssuerURL: "https://issuer.example.com",
 			Blocked:   false,
 		}
-		repo := oidcmock.NewInMemRepository(
-			oidcmock.WithTrust("tenant-123", existingProvider),
+		repo := trustmock.NewInMemRepository(
+			trustmock.WithTrust("tenant-123", existingProvider),
 		)
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)
@@ -372,8 +372,8 @@ func TestUnblockOIDCMapping(t *testing.T) {
 	})
 
 	t.Run("not found - returns success", func(t *testing.T) {
-		repo := oidcmock.NewInMemRepository(
-			oidcmock.WithGetError(serviceerr.ErrNotFound),
+		repo := trustmock.NewInMemRepository(
+			trustmock.WithGetError(serviceerr.ErrNotFound),
 		)
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)
@@ -395,9 +395,9 @@ func TestUnblockOIDCMapping(t *testing.T) {
 			IssuerURL: "https://issuer.example.com",
 			Blocked:   true,
 		}
-		repo := oidcmock.NewInMemRepository(
-			oidcmock.WithTrust("tenant-123", existingProvider),
-			oidcmock.WithUpdateError(internalErr),
+		repo := trustmock.NewInMemRepository(
+			trustmock.WithTrust("tenant-123", existingProvider),
+			trustmock.WithUpdateError(internalErr),
 		)
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)

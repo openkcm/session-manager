@@ -15,7 +15,7 @@ import (
 	"github.com/openkcm/session-manager/internal/dbtest/postgrestest"
 	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/internal/trust"
-	oidcsql "github.com/openkcm/session-manager/internal/trust/trustsql"
+	"github.com/openkcm/session-manager/internal/trust/trustsql"
 )
 
 var dbPool *pgxpool.Pool
@@ -59,7 +59,7 @@ func TestRepository_Get(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := oidcsql.NewRepository(dbPool)
+			r := trustsql.NewRepository(dbPool)
 
 			gotProvider, err := r.Get(t.Context(), tt.tenantID)
 			if !tt.assertErr(t, err, fmt.Sprintf("Repository.Get() error %v", err)) || err != nil {
@@ -142,7 +142,7 @@ func TestRepository_Create(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Given
-			r := oidcsql.NewRepository(dbPool)
+			r := trustsql.NewRepository(dbPool)
 
 			// When
 			err := r.Create(t.Context(), tt.tenantID, tt.provider)
@@ -171,7 +171,7 @@ func TestRepository_Delete(t *testing.T) {
 		Audiences: []string{"cmk.example.com"},
 	}
 
-	r := oidcsql.NewRepository(dbPool)
+	r := trustsql.NewRepository(dbPool)
 	err := r.Create(t.Context(), tenantID, provider)
 	require.NoError(t, err, "Inserting test data")
 
@@ -220,7 +220,7 @@ func TestRepository_Update(t *testing.T) {
 		Audiences: []string{"cmk.example.com"},
 	}
 
-	r := oidcsql.NewRepository(dbPool)
+	r := trustsql.NewRepository(dbPool)
 	err := r.Create(t.Context(), tenantID, provider)
 	require.NoError(t, err, "Inserting test data")
 

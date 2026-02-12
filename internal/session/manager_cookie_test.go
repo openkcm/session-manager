@@ -11,7 +11,7 @@ import (
 	"github.com/openkcm/session-manager/internal/session"
 	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
 	"github.com/openkcm/session-manager/internal/trust"
-	oidcmock "github.com/openkcm/session-manager/internal/trust/trustmock"
+	"github.com/openkcm/session-manager/internal/trust/trustmock"
 )
 
 func TestManager_MakeSessionCookie(t *testing.T) {
@@ -400,7 +400,7 @@ func TestManager_Logout(t *testing.T) {
 	tests := []struct {
 		name           string
 		cfg            *config.SessionManager
-		setupOIDCRepo  func(t *testing.T) *oidcmock.Repository
+		setupOIDCRepo  func(t *testing.T) *trustmock.Repository
 		setupSession   func(*sessionmock.Repository)
 		wantErr        bool
 		wantErrMessage string
@@ -415,7 +415,7 @@ func TestManager_Logout(t *testing.T) {
 					ClientID: testClientID,
 				},
 			},
-			setupOIDCRepo: func(t *testing.T) *oidcmock.Repository {
+			setupOIDCRepo: func(t *testing.T) *trustmock.Repository {
 				t.Helper()
 				// StartOIDCServer doesn't include end_session_endpoint, so it will fall back to postLogoutURL
 				oidcServer := StartOIDCServer(t, false)
@@ -427,7 +427,7 @@ func TestManager_Logout(t *testing.T) {
 					Audiences:  []string{"test"},
 					Properties: map[string]string{},
 				}
-				return oidcmock.NewInMemRepository(oidcmock.WithTrust(tenantID, provider))
+				return trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, provider))
 			},
 			setupSession: func(repo *sessionmock.Repository) {
 				//nolint:errcheck
@@ -448,9 +448,9 @@ func TestManager_Logout(t *testing.T) {
 					ClientID: testClientID,
 				},
 			},
-			setupOIDCRepo: func(t *testing.T) *oidcmock.Repository {
+			setupOIDCRepo: func(t *testing.T) *trustmock.Repository {
 				t.Helper()
-				return oidcmock.NewInMemRepository()
+				return trustmock.NewInMemRepository()
 			},
 			setupSession: func(repo *sessionmock.Repository) {
 				// Don't store session - will cause error

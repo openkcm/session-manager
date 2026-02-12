@@ -18,13 +18,13 @@ import (
 	"github.com/openkcm/session-manager/internal/session"
 	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
 	"github.com/openkcm/session-manager/internal/trust"
-	oidcmock "github.com/openkcm/session-manager/internal/trust/trustmock"
+	"github.com/openkcm/session-manager/internal/trust/trustmock"
 )
 
 func TestNewSessionServer(t *testing.T) {
 	t.Run("creates server successfully", func(t *testing.T) {
 		sessionRepo := sessionmock.NewInMemRepository()
-		providerRepo := oidcmock.NewInMemRepository()
+		providerRepo := trustmock.NewInMemRepository()
 		httpClient := &http.Client{}
 		idleSessionTimeout := 90 * time.Minute
 
@@ -35,7 +35,7 @@ func TestNewSessionServer(t *testing.T) {
 
 	t.Run("creates server with options", func(t *testing.T) {
 		sessionRepo := sessionmock.NewInMemRepository()
-		providerRepo := oidcmock.NewInMemRepository()
+		providerRepo := trustmock.NewInMemRepository()
 		httpClient := &http.Client{}
 		idleSessionTimeout := 90 * time.Minute
 
@@ -52,7 +52,7 @@ func TestNewSessionServer(t *testing.T) {
 
 	t.Run("handles nil option gracefully", func(t *testing.T) {
 		sessionRepo := sessionmock.NewInMemRepository()
-		providerRepo := oidcmock.NewInMemRepository()
+		providerRepo := trustmock.NewInMemRepository()
 		httpClient := &http.Client{}
 		idleSessionTimeout := 90 * time.Minute
 
@@ -118,8 +118,8 @@ func TestGetSession(t *testing.T) {
 		// Mark session as active
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
-		providerRepo := oidcmock.NewInMemRepository(
-			oidcmock.WithTrust(sess.TenantID, provider),
+		providerRepo := trustmock.NewInMemRepository(
+			trustmock.WithTrust(sess.TenantID, provider),
 		)
 
 		httpClient := &http.Client{}
@@ -188,8 +188,8 @@ func TestGetSession(t *testing.T) {
 		)
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
-		providerRepo := oidcmock.NewInMemRepository(
-			oidcmock.WithTrust(sess.TenantID, provider),
+		providerRepo := trustmock.NewInMemRepository(
+			trustmock.WithTrust(sess.TenantID, provider),
 		)
 
 		httpClient := &http.Client{}
@@ -243,8 +243,8 @@ func TestGetSession(t *testing.T) {
 		)
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
-		providerRepo := oidcmock.NewInMemRepository(
-			oidcmock.WithTrust(sess.TenantID, provider),
+		providerRepo := trustmock.NewInMemRepository(
+			trustmock.WithTrust(sess.TenantID, provider),
 		)
 
 		httpClient := &http.Client{}
@@ -268,7 +268,7 @@ func TestGetSession(t *testing.T) {
 		sessionRepo := sessionmock.NewInMemRepository(
 			sessionmock.WithIsActiveError(isActiveErr),
 		)
-		providerRepo := oidcmock.NewInMemRepository()
+		providerRepo := trustmock.NewInMemRepository()
 
 		httpClient := &http.Client{}
 		server := grpc.NewSessionServer(sessionRepo, providerRepo, httpClient, 90*time.Minute)
@@ -298,7 +298,7 @@ func TestGetSession(t *testing.T) {
 		)
 		// Don't bump active - session is not active
 
-		providerRepo := oidcmock.NewInMemRepository()
+		providerRepo := trustmock.NewInMemRepository()
 
 		httpClient := &http.Client{}
 		server := grpc.NewSessionServer(sessionRepo, providerRepo, httpClient, 90*time.Minute)
@@ -326,7 +326,7 @@ func TestGetSession(t *testing.T) {
 		assert.NoError(t, err)
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
-		providerRepo := oidcmock.NewInMemRepository()
+		providerRepo := trustmock.NewInMemRepository()
 
 		httpClient := &http.Client{}
 		server := grpc.NewSessionServer(sessionRepo, providerRepo, httpClient, 90*time.Minute)
@@ -358,7 +358,7 @@ func TestGetSession(t *testing.T) {
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
 		// No provider added to repo
-		providerRepo := oidcmock.NewInMemRepository()
+		providerRepo := trustmock.NewInMemRepository()
 
 		httpClient := &http.Client{}
 		server := grpc.NewSessionServer(sessionRepo, providerRepo, httpClient, 90*time.Minute)
@@ -393,8 +393,8 @@ func TestGetSession(t *testing.T) {
 			IssuerURL: "https://issuer.example.com",
 			Blocked:   true, // Provider is blocked
 		}
-		providerRepo := oidcmock.NewInMemRepository(
-			oidcmock.WithTrust(sess.TenantID, provider),
+		providerRepo := trustmock.NewInMemRepository(
+			trustmock.WithTrust(sess.TenantID, provider),
 		)
 
 		httpClient := &http.Client{}
@@ -430,8 +430,8 @@ func TestGetSession(t *testing.T) {
 			IssuerURL: "https://issuer.example.com",
 			Blocked:   false,
 		}
-		providerRepo := oidcmock.NewInMemRepository(
-			oidcmock.WithTrust(sess.TenantID, provider),
+		providerRepo := trustmock.NewInMemRepository(
+			trustmock.WithTrust(sess.TenantID, provider),
 		)
 
 		httpClient := &http.Client{}
@@ -467,8 +467,8 @@ func TestGetSession(t *testing.T) {
 			IssuerURL: "https://issuer.example.com",
 			Blocked:   false,
 		}
-		providerRepo := oidcmock.NewInMemRepository(
-			oidcmock.WithTrust("wrong-tenant", provider),
+		providerRepo := trustmock.NewInMemRepository(
+			trustmock.WithTrust("wrong-tenant", provider),
 		)
 
 		httpClient := &http.Client{}
@@ -504,8 +504,8 @@ func TestGetSession(t *testing.T) {
 			IssuerURL: "https://invalid-issuer-no-server.example.com",
 			Blocked:   false,
 		}
-		providerRepo := oidcmock.NewInMemRepository(
-			oidcmock.WithTrust(sess.TenantID, provider),
+		providerRepo := trustmock.NewInMemRepository(
+			trustmock.WithTrust(sess.TenantID, provider),
 		)
 
 		httpClient := &http.Client{}
@@ -557,8 +557,8 @@ func TestGetSession(t *testing.T) {
 			IssuerURL: testServer.URL,
 			Blocked:   false,
 		}
-		providerRepo := oidcmock.NewInMemRepository(
-			oidcmock.WithTrust(sess.TenantID, provider),
+		providerRepo := trustmock.NewInMemRepository(
+			trustmock.WithTrust(sess.TenantID, provider),
 		)
 
 		httpClient := &http.Client{}
@@ -612,8 +612,8 @@ func TestGetSession(t *testing.T) {
 			IssuerURL: testServer.URL,
 			Blocked:   false,
 		}
-		providerRepo := oidcmock.NewInMemRepository(
-			oidcmock.WithTrust(sess.TenantID, provider),
+		providerRepo := trustmock.NewInMemRepository(
+			trustmock.WithTrust(sess.TenantID, provider),
 		)
 
 		httpClient := &http.Client{}
@@ -660,8 +660,8 @@ func TestGetSession(t *testing.T) {
 			IssuerURL: testServer.URL,
 			Blocked:   false,
 		}
-		providerRepo := oidcmock.NewInMemRepository(
-			oidcmock.WithTrust(sess.TenantID, provider),
+		providerRepo := trustmock.NewInMemRepository(
+			trustmock.WithTrust(sess.TenantID, provider),
 		)
 
 		httpClient := &http.Client{}
@@ -690,7 +690,7 @@ func TestWithQueryParametersIntrospect(t *testing.T) {
 
 		// Test that the option actually sets the parameters
 		sessionRepo := sessionmock.NewInMemRepository()
-		providerRepo := oidcmock.NewInMemRepository()
+		providerRepo := trustmock.NewInMemRepository()
 		httpClient := &http.Client{}
 
 		server := grpc.NewSessionServer(
@@ -716,8 +716,8 @@ func TestGetOIDCProvider(t *testing.T) {
 		}
 
 		sessionRepo := sessionmock.NewInMemRepository()
-		providerRepo := oidcmock.NewInMemRepository(
-			oidcmock.WithTrust("tenant-123", provider),
+		providerRepo := trustmock.NewInMemRepository(
+			trustmock.WithTrust("tenant-123", provider),
 		)
 
 		httpClient := &http.Client{}
@@ -739,7 +739,7 @@ func TestGetOIDCProvider(t *testing.T) {
 
 	t.Run("error - provider not found", func(t *testing.T) {
 		sessionRepo := sessionmock.NewInMemRepository()
-		providerRepo := oidcmock.NewInMemRepository()
+		providerRepo := trustmock.NewInMemRepository()
 
 		httpClient := &http.Client{}
 		server := grpc.NewSessionServer(sessionRepo, providerRepo, httpClient, 90*time.Minute)
@@ -757,8 +757,8 @@ func TestGetOIDCProvider(t *testing.T) {
 
 	t.Run("error - repository returns error", func(t *testing.T) {
 		sessionRepo := sessionmock.NewInMemRepository()
-		providerRepo := oidcmock.NewInMemRepository(
-			oidcmock.WithGetError(errors.New("database connection error")),
+		providerRepo := trustmock.NewInMemRepository(
+			trustmock.WithGetError(errors.New("database connection error")),
 		)
 
 		httpClient := &http.Client{}
