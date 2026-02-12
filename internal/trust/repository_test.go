@@ -13,7 +13,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/openkcm/session-manager/internal/trust"
-	oidcsql "github.com/openkcm/session-manager/internal/trust/sql"
+	oidcsql "github.com/openkcm/session-manager/internal/trust/trustsql"
 	migrations "github.com/openkcm/session-manager/sql"
 )
 

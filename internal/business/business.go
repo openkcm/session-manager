@@ -20,7 +20,7 @@ import (
 	"github.com/openkcm/session-manager/internal/session"
 	sessionvalkey "github.com/openkcm/session-manager/internal/session/valkey"
 	"github.com/openkcm/session-manager/internal/trust"
-	oidcsql "github.com/openkcm/session-manager/internal/trust/sql"
+	oidcsql "github.com/openkcm/session-manager/internal/trust/trustsql"
 )
 
 // Main starts both API servers

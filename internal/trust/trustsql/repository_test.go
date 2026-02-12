@@ -1,4 +1,4 @@
-package oidcsql_test
+package trustsql_test
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"github.com/openkcm/session-manager/internal/dbtest/postgrestest"
 	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/internal/trust"
-	oidcsql "github.com/openkcm/session-manager/internal/trust/sql"
+	oidcsql "github.com/openkcm/session-manager/internal/trust/trustsql"
 )
 
 var dbPool *pgxpool.Pool
