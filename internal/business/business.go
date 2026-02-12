@@ -17,10 +17,10 @@ import (
 	"github.com/openkcm/session-manager/internal/business/server"
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/grpc"
-	"github.com/openkcm/session-manager/internal/oidc"
-	oidcsql "github.com/openkcm/session-manager/internal/oidc/sql"
 	"github.com/openkcm/session-manager/internal/session"
 	sessionvalkey "github.com/openkcm/session-manager/internal/session/valkey"
+	"github.com/openkcm/session-manager/internal/trust"
+	oidcsql "github.com/openkcm/session-manager/internal/trust/sql"
 )
 
 // Main starts both API servers
@@ -86,7 +86,7 @@ func internalMain(ctx context.Context, cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to create OIDC service: %w", err)
 	}
-	oidcService := oidc.NewService(oidcProviderRepo)
+	oidcService := trust.NewService(oidcProviderRepo)
 
 	// Create session repository
 	valkeyClient, err := valkeyClientFromConfig(cfg)

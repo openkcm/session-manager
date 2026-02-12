@@ -11,11 +11,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/openkcm/session-manager/internal/config"
-	"github.com/openkcm/session-manager/internal/oidc"
-	oidcmock "github.com/openkcm/session-manager/internal/oidc/mock"
 	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/internal/session"
 	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
+	"github.com/openkcm/session-manager/internal/trust"
+	oidcmock "github.com/openkcm/session-manager/internal/trust/mock"
 )
 
 func TestDeleteIdleSessions(t *testing.T) {
@@ -104,7 +104,7 @@ func TestRefreshAccessToken(t *testing.T) {
 		defer tokenServer.Close()
 		tokenServerURL = tokenServer.URL + "/token"
 
-		provider := oidc.Provider{
+		provider := trust.Provider{
 			IssuerURL: discoveryServerURL,
 			Properties: map[string]string{
 				"test-param": "param-value",
@@ -199,7 +199,7 @@ func TestRefreshAccessToken(t *testing.T) {
 		defer tokenServer.Close()
 		tokenServerURL = tokenServer.URL + "/token"
 
-		provider := oidc.Provider{
+		provider := trust.Provider{
 			IssuerURL:  discoveryServerURL,
 			Properties: map[string]string{},
 		}
@@ -251,7 +251,7 @@ func TestRefreshAccessToken(t *testing.T) {
 		defer discoveryServer.Close()
 		discoveryServerURL = discoveryServer.URL
 
-		provider := oidc.Provider{
+		provider := trust.Provider{
 			IssuerURL:  discoveryServer.URL,
 			Properties: map[string]string{}, // Missing required parameter
 		}

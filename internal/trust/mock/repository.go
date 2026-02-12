@@ -3,19 +3,19 @@ package oidcmock
 import (
 	"context"
 
-	"github.com/openkcm/session-manager/internal/oidc"
 	"github.com/openkcm/session-manager/internal/serviceerr"
+	"github.com/openkcm/session-manager/internal/trust"
 )
 
 type RepositoryOption func(*Repository)
 
 type Repository struct {
-	tenantTrust map[string]oidc.Provider
+	tenantTrust map[string]trust.Provider
 
 	getErr, createErr, deleteErr, updateErr error
 }
 
-func WithTrust(tenantID string, provider oidc.Provider) RepositoryOption {
+func WithTrust(tenantID string, provider trust.Provider) RepositoryOption {
 	return func(r *Repository) { r.tenantTrust[tenantID] = provider }
 }
 func WithGetError(err error) RepositoryOption {
@@ -31,11 +31,11 @@ func WithUpdateError(err error) RepositoryOption {
 	return func(r *Repository) { r.updateErr = err }
 }
 
-var _ = oidc.ProviderRepository(&Repository{})
+var _ = trust.ProviderRepository(&Repository{})
 
 func NewInMemRepository(opts ...RepositoryOption) *Repository {
 	r := &Repository{
-		tenantTrust: make(map[string]oidc.Provider),
+		tenantTrust: make(map[string]trust.Provider),
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -46,26 +46,26 @@ func NewInMemRepository(opts ...RepositoryOption) *Repository {
 }
 
 // TAdd is a helper method for tests to add a trust relationship.
-func (r *Repository) TAdd(tenantID string, provider oidc.Provider) {
+func (r *Repository) TAdd(tenantID string, provider trust.Provider) {
 	r.tenantTrust[tenantID] = provider
 }
 
 // TGet is a helper method for tests to get a trust relationship.
-func (r *Repository) TGet(tenantID string) oidc.Provider {
+func (r *Repository) TGet(tenantID string) trust.Provider {
 	return r.tenantTrust[tenantID]
 }
 
-func (r *Repository) Get(_ context.Context, tenantID string) (oidc.Provider, error) {
+func (r *Repository) Get(_ context.Context, tenantID string) (trust.Provider, error) {
 	if r.getErr != nil {
-		return oidc.Provider{}, r.getErr
+		return trust.Provider{}, r.getErr
 	}
 	if provider, ok := r.tenantTrust[tenantID]; ok {
 		return provider, nil
 	}
-	return oidc.Provider{}, serviceerr.ErrNotFound
+	return trust.Provider{}, serviceerr.ErrNotFound
 }
 
-func (r *Repository) Create(_ context.Context, tenantID string, provider oidc.Provider) error {
+func (r *Repository) Create(_ context.Context, tenantID string, provider trust.Provider) error {
 	if r.createErr != nil {
 		return r.createErr
 	}
@@ -84,7 +84,7 @@ func (r *Repository) Delete(_ context.Context, tenantID string) error {
 	return nil
 }
 
-func (r *Repository) Update(_ context.Context, tenantID string, provider oidc.Provider) error {
+func (r *Repository) Update(_ context.Context, tenantID string, provider trust.Provider) error {
 	if r.updateErr != nil {
 		return r.updateErr
 	}

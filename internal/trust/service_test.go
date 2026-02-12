@@ -1,4 +1,4 @@
-package oidc_test
+package trust_test
 
 import (
 	"context"
@@ -11,10 +11,10 @@ import (
 
 	slogctx "github.com/veqryn/slog-context"
 
-	"github.com/openkcm/session-manager/internal/oidc"
+	"github.com/openkcm/session-manager/internal/trust"
 )
 
-var repo oidc.ProviderRepository
+var repo trust.ProviderRepository
 
 const (
 	requestURI = "http://cmk.example.com/ui"
@@ -40,14 +40,14 @@ func TestService_ApplyMapping(t *testing.T) {
 	t.Run("success if", func(t *testing.T) {
 		t.Run("the mapping does not exist", func(t *testing.T) {
 			expTenantID := uuid.NewString()
-			expProvider := oidc.Provider{
+			expProvider := trust.Provider{
 				IssuerURL: uuid.NewString(),
 				JWKSURI:   jwksURI,
 				Audiences: []string{requestURI},
 			}
 
 			wrapper := &RepoWrapper{Repo: repo}
-			subj := oidc.NewService(wrapper)
+			subj := trust.NewService(wrapper)
 
 			err := subj.ApplyMapping(ctx, expTenantID, expProvider)
 			assert.NoError(t, err)
@@ -59,19 +59,19 @@ func TestService_ApplyMapping(t *testing.T) {
 
 		t.Run("the mapping exists", func(t *testing.T) {
 			expTenantID := uuid.NewString()
-			expProvider := oidc.Provider{
+			expProvider := trust.Provider{
 				IssuerURL: uuid.NewString(),
 				JWKSURI:   jwksURI,
 				Audiences: []string{requestURI},
 			}
 
 			wrapper := &RepoWrapper{Repo: repo}
-			subj := oidc.NewService(wrapper)
+			subj := trust.NewService(wrapper)
 
 			err := subj.ApplyMapping(ctx, expTenantID, expProvider)
 			assert.NoError(t, err)
 
-			expUpdatedProvider := oidc.Provider{
+			expUpdatedProvider := trust.Provider{
 				IssuerURL: expProvider.IssuerURL,
 				JWKSURI:   "http://updated-jwks.example.com",
 				Audiences: []string{requestURI, "http://new-aud.example.com"},
@@ -89,7 +89,7 @@ func TestService_ApplyMapping(t *testing.T) {
 	t.Run("should return error if", func(t *testing.T) {
 		t.Run("Create returns an error", func(t *testing.T) {
 			expTenantID := uuid.NewString()
-			expProvider := oidc.Provider{
+			expProvider := trust.Provider{
 				IssuerURL: uuid.NewString(),
 				JWKSURI:   jwksURI,
 				Audiences: []string{requestURI},
@@ -97,14 +97,14 @@ func TestService_ApplyMapping(t *testing.T) {
 
 			wrapper := &RepoWrapper{Repo: repo}
 			noOfCalls := 0
-			wrapper.MockCreate = func(ctx context.Context, tenantID string, provider oidc.Provider) error {
+			wrapper.MockCreate = func(ctx context.Context, tenantID string, provider trust.Provider) error {
 				assert.Equal(t, expTenantID, tenantID)
 				assert.Equal(t, expProvider, provider)
 				noOfCalls++
 				return assert.AnError
 			}
 
-			subj := oidc.NewService(wrapper)
+			subj := trust.NewService(wrapper)
 			err := subj.ApplyMapping(ctx, expTenantID, expProvider)
 
 			assert.ErrorIs(t, err, assert.AnError)
@@ -113,7 +113,7 @@ func TestService_ApplyMapping(t *testing.T) {
 
 		t.Run("Update returns an error", func(t *testing.T) {
 			expTenantID := uuid.NewString()
-			expProvider := oidc.Provider{
+			expProvider := trust.Provider{
 				IssuerURL: uuid.NewString(),
 				JWKSURI:   jwksURI,
 				Audiences: []string{requestURI},
@@ -121,13 +121,13 @@ func TestService_ApplyMapping(t *testing.T) {
 
 			wrapper := &RepoWrapper{Repo: repo}
 			noOfCalls := 0
-			wrapper.MockUpdate = func(ctx context.Context, tenantID string, provider oidc.Provider) error {
+			wrapper.MockUpdate = func(ctx context.Context, tenantID string, provider trust.Provider) error {
 				assert.Equal(t, expTenantID, tenantID)
 				assert.Equal(t, expProvider, provider)
 				noOfCalls++
 				return assert.AnError
 			}
-			subj := oidc.NewService(wrapper)
+			subj := trust.NewService(wrapper)
 
 			err := subj.ApplyMapping(ctx, expTenantID, expProvider)
 			assert.NoError(t, err)
@@ -146,7 +146,7 @@ func TestService_BlockMapping(t *testing.T) {
 		t.Run("the provider is unblocked", func(t *testing.T) {
 			// given
 			expTenantID := uuid.NewString()
-			expUnblockedProvider := oidc.Provider{
+			expUnblockedProvider := trust.Provider{
 				IssuerURL: uuid.NewString(),
 				Blocked:   false,
 				JWKSURI:   jwksURI,
@@ -156,7 +156,7 @@ func TestService_BlockMapping(t *testing.T) {
 			wrapper := &RepoWrapper{Repo: repo}
 			err := wrapper.Repo.Create(ctx, expTenantID, expUnblockedProvider)
 			require.NoError(t, err)
-			subj := oidc.NewService(wrapper)
+			subj := trust.NewService(wrapper)
 
 			// when
 			err = subj.BlockMapping(ctx, expTenantID)
@@ -175,7 +175,7 @@ func TestService_BlockMapping(t *testing.T) {
 		t.Run("the provider is blocked then it should not call Update", func(t *testing.T) {
 			// given
 			expTenantID := uuid.NewString()
-			expBlockedProvider := oidc.Provider{
+			expBlockedProvider := trust.Provider{
 				IssuerURL: uuid.NewString(),
 				Blocked:   true,
 				JWKSURI:   jwksURI,
@@ -186,11 +186,11 @@ func TestService_BlockMapping(t *testing.T) {
 			require.NoError(t, err)
 
 			noOfUpdateCalls := 0
-			repoWrapper.MockUpdate = func(ctx context.Context, tenantID string, provider oidc.Provider) error {
+			repoWrapper.MockUpdate = func(ctx context.Context, tenantID string, provider trust.Provider) error {
 				noOfUpdateCalls++
 				return assert.AnError
 			}
-			subj := oidc.NewService(repoWrapper)
+			subj := trust.NewService(repoWrapper)
 
 			// when
 			err = subj.BlockMapping(t.Context(), expTenantID)
@@ -206,7 +206,7 @@ func TestService_BlockMapping(t *testing.T) {
 		t.Run("the provider is not found during the Update", func(t *testing.T) {
 			// given
 			expTenantID := uuid.NewString()
-			expBlockedProvider := oidc.Provider{
+			expBlockedProvider := trust.Provider{
 				IssuerURL: uuid.NewString(),
 				Blocked:   false,
 				JWKSURI:   jwksURI,
@@ -217,14 +217,14 @@ func TestService_BlockMapping(t *testing.T) {
 			require.NoError(t, err)
 
 			noOfUpdateCalls := 0
-			repoWrapper.MockUpdate = func(ctx context.Context, tenantID string, provider oidc.Provider) error {
+			repoWrapper.MockUpdate = func(ctx context.Context, tenantID string, provider trust.Provider) error {
 				noOfUpdateCalls++
 				// delete the provider before updating to return an error
 				err := repoWrapper.Repo.Delete(ctx, expTenantID)
 				assert.NoError(t, err)
 				return nil
 			}
-			subj := oidc.NewService(repoWrapper)
+			subj := trust.NewService(repoWrapper)
 
 			// when
 			err = subj.BlockMapping(t.Context(), expTenantID)
@@ -238,7 +238,7 @@ func TestService_BlockMapping(t *testing.T) {
 			expTenantID := uuid.NewString()
 			repoWrapper := &RepoWrapper{Repo: repo}
 
-			subj := oidc.NewService(repoWrapper)
+			subj := trust.NewService(repoWrapper)
 
 			// when
 			err := subj.BlockMapping(t.Context(), expTenantID)
@@ -255,12 +255,12 @@ func TestService_BlockMapping(t *testing.T) {
 			repoWrapper := &RepoWrapper{Repo: repo}
 
 			noOfGetCalls := 0
-			repoWrapper.MockGet = func(ctx context.Context, tenantID string) (oidc.Provider, error) {
+			repoWrapper.MockGet = func(ctx context.Context, tenantID string) (trust.Provider, error) {
 				assert.Equal(t, expTenantID, tenantID)
 				noOfGetCalls++
-				return oidc.Provider{}, assert.AnError
+				return trust.Provider{}, assert.AnError
 			}
-			subj := oidc.NewService(repoWrapper)
+			subj := trust.NewService(repoWrapper)
 
 			// when
 			err := subj.BlockMapping(t.Context(), expTenantID)
@@ -273,7 +273,7 @@ func TestService_BlockMapping(t *testing.T) {
 		t.Run("if Update returns an error", func(t *testing.T) {
 			// given
 			expTenantID := uuid.NewString()
-			expProvider := oidc.Provider{
+			expProvider := trust.Provider{
 				IssuerURL: uuid.NewString(),
 				Blocked:   false,
 				JWKSURI:   jwksURI,
@@ -284,12 +284,12 @@ func TestService_BlockMapping(t *testing.T) {
 			require.NoError(t, err)
 
 			noOfUpdateCalls := 0
-			repoWrapper.MockUpdate = func(ctx context.Context, tenantID string, provider oidc.Provider) error {
+			repoWrapper.MockUpdate = func(ctx context.Context, tenantID string, provider trust.Provider) error {
 				assert.Equal(t, expTenantID, tenantID)
 				noOfUpdateCalls++
 				return assert.AnError
 			}
-			subj := oidc.NewService(repoWrapper)
+			subj := trust.NewService(repoWrapper)
 
 			// when
 			err = subj.BlockMapping(t.Context(), expTenantID)
@@ -312,7 +312,7 @@ func TestService_UnblockMapping(t *testing.T) {
 		t.Run("the provider is blocked", func(t *testing.T) {
 			// given
 			expTenantID := uuid.NewString()
-			expBlockedProvider := oidc.Provider{
+			expBlockedProvider := trust.Provider{
 				IssuerURL: uuid.NewString(),
 				Blocked:   true,
 				JWKSURI:   jwksURI,
@@ -322,7 +322,7 @@ func TestService_UnblockMapping(t *testing.T) {
 			wrapper := &RepoWrapper{Repo: repo}
 			err := wrapper.Repo.Create(ctx, expTenantID, expBlockedProvider)
 			require.NoError(t, err)
-			subj := oidc.NewService(wrapper)
+			subj := trust.NewService(wrapper)
 
 			// when
 			err = subj.UnblockMapping(t.Context(), expTenantID)
@@ -341,7 +341,7 @@ func TestService_UnblockMapping(t *testing.T) {
 		t.Run("the provider is unblocked then it should not call Update", func(t *testing.T) {
 			// given
 			expTenantID := uuid.NewString()
-			expUnblockedProvider := oidc.Provider{
+			expUnblockedProvider := trust.Provider{
 				IssuerURL: uuid.NewString(),
 				Blocked:   false,
 				JWKSURI:   jwksURI,
@@ -352,11 +352,11 @@ func TestService_UnblockMapping(t *testing.T) {
 			require.NoError(t, err)
 
 			noOfUpdateCalls := 0
-			repoWrapper.MockUpdate = func(ctx context.Context, tenantID string, provider oidc.Provider) error {
+			repoWrapper.MockUpdate = func(ctx context.Context, tenantID string, provider trust.Provider) error {
 				noOfUpdateCalls++
 				return assert.AnError
 			}
-			subj := oidc.NewService(repoWrapper)
+			subj := trust.NewService(repoWrapper)
 
 			// when
 			err = subj.UnblockMapping(t.Context(), expTenantID)
@@ -372,7 +372,7 @@ func TestService_UnblockMapping(t *testing.T) {
 		t.Run("the provider is not found during the Update", func(t *testing.T) {
 			// given
 			expTenantID := uuid.NewString()
-			expUnblockedProvider := oidc.Provider{
+			expUnblockedProvider := trust.Provider{
 				IssuerURL: uuid.NewString(),
 				Blocked:   true,
 				JWKSURI:   jwksURI,
@@ -383,14 +383,14 @@ func TestService_UnblockMapping(t *testing.T) {
 			require.NoError(t, err)
 
 			noOfUpdateCalls := 0
-			repoWrapper.MockUpdate = func(ctx context.Context, tenantID string, provider oidc.Provider) error {
+			repoWrapper.MockUpdate = func(ctx context.Context, tenantID string, provider trust.Provider) error {
 				noOfUpdateCalls++
 				// delete the provider before updating to return an error
 				err := repoWrapper.Repo.Delete(ctx, expTenantID)
 				assert.NoError(t, err)
 				return nil
 			}
-			subj := oidc.NewService(repoWrapper)
+			subj := trust.NewService(repoWrapper)
 
 			// when
 			err = subj.UnblockMapping(t.Context(), expTenantID)
@@ -404,7 +404,7 @@ func TestService_UnblockMapping(t *testing.T) {
 			expTenantID := uuid.NewString()
 			repoWrapper := &RepoWrapper{Repo: repo}
 
-			subj := oidc.NewService(repoWrapper)
+			subj := trust.NewService(repoWrapper)
 
 			// when
 			err := subj.UnblockMapping(t.Context(), expTenantID)
@@ -420,12 +420,12 @@ func TestService_UnblockMapping(t *testing.T) {
 			mockRepo := &RepoWrapper{Repo: repo}
 
 			noOfGetTenantCalls := 0
-			mockRepo.MockGet = func(ctx context.Context, tenantID string) (oidc.Provider, error) {
+			mockRepo.MockGet = func(ctx context.Context, tenantID string) (trust.Provider, error) {
 				assert.Equal(t, expTenantID, tenantID)
 				noOfGetTenantCalls++
-				return oidc.Provider{}, assert.AnError
+				return trust.Provider{}, assert.AnError
 			}
-			subj := oidc.NewService(mockRepo)
+			subj := trust.NewService(mockRepo)
 
 			// when
 			err := subj.UnblockMapping(t.Context(), expTenantID)
@@ -438,7 +438,7 @@ func TestService_UnblockMapping(t *testing.T) {
 		t.Run("if Update returns an error", func(t *testing.T) {
 			// given
 			expTenantIDtoUpdate := uuid.NewString()
-			expBlockedProvider := oidc.Provider{
+			expBlockedProvider := trust.Provider{
 				IssuerURL: uuid.NewString(),
 				Blocked:   true,
 				JWKSURI:   jwksURI,
@@ -449,12 +449,12 @@ func TestService_UnblockMapping(t *testing.T) {
 			require.NoError(t, err)
 
 			noOfUpdateCalls := 0
-			repoWrapper.MockUpdate = func(ctx context.Context, tenantID string, provider oidc.Provider) error {
+			repoWrapper.MockUpdate = func(ctx context.Context, tenantID string, provider trust.Provider) error {
 				assert.Equal(t, expTenantIDtoUpdate, tenantID)
 				noOfUpdateCalls++
 				return assert.AnError
 			}
-			subj := oidc.NewService(repoWrapper)
+			subj := trust.NewService(repoWrapper)
 
 			// when
 			err = subj.UnblockMapping(t.Context(), expTenantIDtoUpdate)
@@ -477,7 +477,7 @@ func TestService_RemoveMapping(t *testing.T) {
 		t.Run("the mapping exists", func(t *testing.T) {
 			// given
 			expTenantID := uuid.NewString()
-			expProvider := oidc.Provider{
+			expProvider := trust.Provider{
 				IssuerURL: uuid.NewString(),
 				JWKSURI:   jwksURI,
 				Audiences: []string{requestURI},
@@ -487,7 +487,7 @@ func TestService_RemoveMapping(t *testing.T) {
 			err := wrapper.Repo.Create(ctx, expTenantID, expProvider)
 			require.NoError(t, err)
 
-			subj := oidc.NewService(wrapper)
+			subj := trust.NewService(wrapper)
 
 			// when
 			err = subj.RemoveMapping(ctx, expTenantID)
@@ -506,7 +506,7 @@ func TestService_RemoveMapping(t *testing.T) {
 			// given
 			expTenantID := uuid.NewString()
 			wrapper := &RepoWrapper{Repo: repo}
-			subj := oidc.NewService(wrapper)
+			subj := trust.NewService(wrapper)
 
 			// when
 			err := subj.RemoveMapping(ctx, expTenantID)
@@ -527,7 +527,7 @@ func TestService_RemoveMapping(t *testing.T) {
 				return assert.AnError
 			}
 
-			subj := oidc.NewService(wrapper)
+			subj := trust.NewService(wrapper)
 
 			// when
 			err := subj.RemoveMapping(ctx, expTenantID)

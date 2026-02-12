@@ -12,8 +12,8 @@ import (
 	typesv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/types/v1"
 	slogctx "github.com/veqryn/slog-context"
 
-	"github.com/openkcm/session-manager/internal/oidc"
 	"github.com/openkcm/session-manager/internal/session"
+	"github.com/openkcm/session-manager/internal/trust"
 )
 
 type SessionServerOption func(*SessionServer)
@@ -28,7 +28,7 @@ type SessionServer struct {
 	sessionv1.UnimplementedServiceServer
 
 	sessionRepo  session.Repository
-	providerRepo oidc.ProviderRepository
+	providerRepo trust.ProviderRepository
 	httpClient   *http.Client
 
 	queryParametersIntrospect []string
@@ -37,7 +37,7 @@ type SessionServer struct {
 
 func NewSessionServer(
 	sessionRepo session.Repository,
-	providerRepo oidc.ProviderRepository,
+	providerRepo trust.ProviderRepository,
 	httpClient *http.Client,
 	idleSessionTimeout time.Duration,
 	opts ...SessionServerOption,

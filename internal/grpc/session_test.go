@@ -15,10 +15,10 @@ import (
 	sessionv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/session/v1"
 
 	"github.com/openkcm/session-manager/internal/grpc"
-	"github.com/openkcm/session-manager/internal/oidc"
-	oidcmock "github.com/openkcm/session-manager/internal/oidc/mock"
 	"github.com/openkcm/session-manager/internal/session"
 	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
+	"github.com/openkcm/session-manager/internal/trust"
+	oidcmock "github.com/openkcm/session-manager/internal/trust/mock"
 )
 
 func TestNewSessionServer(t *testing.T) {
@@ -107,7 +107,7 @@ func TestGetSession(t *testing.T) {
 			AuthContext: map[string]string{"key": "value"},
 		}
 
-		provider := oidc.Provider{
+		provider := trust.Provider{
 			IssuerURL: testServer.URL,
 			Blocked:   false,
 		}
@@ -178,7 +178,7 @@ func TestGetSession(t *testing.T) {
 			},
 		}
 
-		provider := oidc.Provider{
+		provider := trust.Provider{
 			IssuerURL: testServer.URL,
 			Blocked:   false,
 		}
@@ -233,7 +233,7 @@ func TestGetSession(t *testing.T) {
 			},
 		}
 
-		provider := oidc.Provider{
+		provider := trust.Provider{
 			IssuerURL: testServer.URL,
 			Blocked:   false,
 		}
@@ -389,7 +389,7 @@ func TestGetSession(t *testing.T) {
 		)
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
-		provider := oidc.Provider{
+		provider := trust.Provider{
 			IssuerURL: "https://issuer.example.com",
 			Blocked:   true, // Provider is blocked
 		}
@@ -426,7 +426,7 @@ func TestGetSession(t *testing.T) {
 		)
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
-		provider := oidc.Provider{
+		provider := trust.Provider{
 			IssuerURL: "https://issuer.example.com",
 			Blocked:   false,
 		}
@@ -463,7 +463,7 @@ func TestGetSession(t *testing.T) {
 		)
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
-		provider := oidc.Provider{
+		provider := trust.Provider{
 			IssuerURL: "https://issuer.example.com",
 			Blocked:   false,
 		}
@@ -500,7 +500,7 @@ func TestGetSession(t *testing.T) {
 		)
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
-		provider := oidc.Provider{
+		provider := trust.Provider{
 			IssuerURL: "https://invalid-issuer-no-server.example.com",
 			Blocked:   false,
 		}
@@ -553,7 +553,7 @@ func TestGetSession(t *testing.T) {
 		)
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
-		provider := oidc.Provider{
+		provider := trust.Provider{
 			IssuerURL: testServer.URL,
 			Blocked:   false,
 		}
@@ -608,7 +608,7 @@ func TestGetSession(t *testing.T) {
 		)
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
-		provider := oidc.Provider{
+		provider := trust.Provider{
 			IssuerURL: testServer.URL,
 			Blocked:   false,
 		}
@@ -656,7 +656,7 @@ func TestGetSession(t *testing.T) {
 		)
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
-		provider := oidc.Provider{
+		provider := trust.Provider{
 			IssuerURL: testServer.URL,
 			Blocked:   false,
 		}
@@ -709,7 +709,7 @@ func TestGetOIDCProvider(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("success - returns OIDC provider", func(t *testing.T) {
-		provider := oidc.Provider{
+		provider := trust.Provider{
 			IssuerURL: "https://issuer.example.com",
 			JWKSURI:   "https://issuer.example.com/.well-known/jwks.json",
 			Audiences: []string{"audience1", "audience2"},

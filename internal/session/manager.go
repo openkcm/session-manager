@@ -23,13 +23,13 @@ import (
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/session-manager/internal/config"
-	"github.com/openkcm/session-manager/internal/oidc"
 	"github.com/openkcm/session-manager/internal/pkce"
 	"github.com/openkcm/session-manager/internal/serviceerr"
+	"github.com/openkcm/session-manager/internal/trust"
 )
 
 type Manager struct {
-	oidc         oidc.ProviderRepository
+	oidc         trust.ProviderRepository
 	sessions     Repository
 	pkce         pkce.Source
 	audit        *otlpaudit.AuditLogger
@@ -53,7 +53,7 @@ type Manager struct {
 
 func NewManager(
 	cfg *config.SessionManager,
-	oidc oidc.ProviderRepository,
+	oidc trust.ProviderRepository,
 	sessions Repository,
 	auditLogger *otlpaudit.AuditLogger,
 	httpClient *http.Client,

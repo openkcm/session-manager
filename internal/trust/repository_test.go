@@ -1,4 +1,4 @@
-package oidc_test
+package trust_test
 
 import (
 	"context"
@@ -12,8 +12,8 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
-	"github.com/openkcm/session-manager/internal/oidc"
-	oidcsql "github.com/openkcm/session-manager/internal/oidc/sql"
+	"github.com/openkcm/session-manager/internal/trust"
+	oidcsql "github.com/openkcm/session-manager/internal/trust/sql"
 	migrations "github.com/openkcm/session-manager/sql"
 )
 
@@ -26,17 +26,17 @@ const (
 )
 
 type RepoWrapper struct {
-	Repo       oidc.ProviderRepository
-	MockGet    func(ctx context.Context, tenantID string) (oidc.Provider, error)
-	MockCreate func(ctx context.Context, tenantID string, provider oidc.Provider) error
-	MockUpdate func(ctx context.Context, tenantID string, provider oidc.Provider) error
+	Repo       trust.ProviderRepository
+	MockGet    func(ctx context.Context, tenantID string) (trust.Provider, error)
+	MockCreate func(ctx context.Context, tenantID string, provider trust.Provider) error
+	MockUpdate func(ctx context.Context, tenantID string, provider trust.Provider) error
 	MockDelete func(ctx context.Context, tenantID string) error
 }
 
-var _ oidc.ProviderRepository = &RepoWrapper{}
+var _ trust.ProviderRepository = &RepoWrapper{}
 
 // Create implements oidc.ProviderRepository.
-func (m *RepoWrapper) Create(ctx context.Context, tenantID string, provider oidc.Provider) error {
+func (m *RepoWrapper) Create(ctx context.Context, tenantID string, provider trust.Provider) error {
 	if m.MockCreate != nil {
 		err := m.MockCreate(ctx, tenantID, provider)
 		if err != nil {
@@ -60,18 +60,18 @@ func (m *RepoWrapper) Delete(ctx context.Context, tenantID string) error {
 }
 
 // Get implements oidc.ProviderRepository.
-func (m *RepoWrapper) Get(ctx context.Context, tenantID string) (oidc.Provider, error) {
+func (m *RepoWrapper) Get(ctx context.Context, tenantID string) (trust.Provider, error) {
 	if m.MockGet != nil {
 		_, err := m.MockGet(ctx, tenantID)
 		if err != nil {
-			return oidc.Provider{}, err
+			return trust.Provider{}, err
 		}
 	}
 	return m.Repo.Get(ctx, tenantID)
 }
 
 // Update implements oidc.ProviderRepository.
-func (m *RepoWrapper) Update(ctx context.Context, tenantID string, provider oidc.Provider) error {
+func (m *RepoWrapper) Update(ctx context.Context, tenantID string, provider trust.Provider) error {
 	if m.MockUpdate != nil {
 		err := m.MockUpdate(ctx, tenantID, provider)
 		if err != nil {
@@ -81,7 +81,7 @@ func (m *RepoWrapper) Update(ctx context.Context, tenantID string, provider oidc
 	return m.Repo.Update(ctx, tenantID, provider)
 }
 
-func createRepo(ctx context.Context) (oidc.ProviderRepository, error) {
+func createRepo(ctx context.Context) (trust.ProviderRepository, error) {
 	pgContainer, err := postgres.Run(
 		ctx,
 		"postgres:17-alpine",

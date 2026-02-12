@@ -10,17 +10,17 @@ import (
 	oidcmappingv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/oidcmapping/v1"
 	slogctx "github.com/veqryn/slog-context"
 
-	"github.com/openkcm/session-manager/internal/oidc"
 	"github.com/openkcm/session-manager/internal/serviceerr"
+	"github.com/openkcm/session-manager/internal/trust"
 )
 
 type OIDCMappingServer struct {
 	oidcmappingv1.UnimplementedServiceServer
 
-	oidc *oidc.Service
+	oidc *trust.Service
 }
 
-func NewOIDCMappingServer(oidc *oidc.Service) *OIDCMappingServer {
+func NewOIDCMappingServer(oidc *trust.Service) *OIDCMappingServer {
 	srv := &OIDCMappingServer{
 		oidc: oidc,
 	}
@@ -40,7 +40,7 @@ func (srv *OIDCMappingServer) ApplyOIDCMapping(ctx context.Context, req *oidcmap
 
 	response := &oidcmappingv1.ApplyOIDCMappingResponse{}
 
-	provider := oidc.Provider{
+	provider := trust.Provider{
 		IssuerURL:  req.GetIssuer(),
 		Blocked:    false,
 		JWKSURI:    req.GetJwksUri(),

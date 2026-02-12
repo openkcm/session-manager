@@ -23,10 +23,10 @@ import (
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 
 	"github.com/openkcm/session-manager/internal/config"
-	"github.com/openkcm/session-manager/internal/oidc"
-	oidcmock "github.com/openkcm/session-manager/internal/oidc/mock"
 	"github.com/openkcm/session-manager/internal/session"
 	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
+	"github.com/openkcm/session-manager/internal/trust"
+	oidcmock "github.com/openkcm/session-manager/internal/trust/mock"
 )
 
 const (
@@ -47,7 +47,7 @@ func TestManager_Auth(t *testing.T) {
 	auditServer := StartAuditServer(t)
 	defer auditServer.Close()
 
-	oidcProvider := oidc.Provider{
+	oidcProvider := trust.Provider{
 		IssuerURL: oidcServer.URL,
 		Blocked:   false,
 		JWKSURI:   "http://jwks.example.com",
@@ -68,7 +68,7 @@ func TestManager_Auth(t *testing.T) {
 		fingerprint string
 		wantURL     string
 		errAssert   assert.ErrorAssertionFunc
-		provider    oidc.Provider
+		provider    trust.Provider
 	}{
 		{
 			name:       "Success",
@@ -368,7 +368,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			jwksURI, err := url.JoinPath(oidcServer.URL, "/.well-known/jwks.json")
 			require.NoError(t, err)
 
-			localOIDCProvider := oidc.Provider{
+			localOIDCProvider := trust.Provider{
 				IssuerURL: oidcServer.URL,
 				Blocked:   false,
 				JWKSURI:   jwksURI,
@@ -484,7 +484,7 @@ func TestManager_BCLogout(t *testing.T) {
 				SessionID: "sid-1",
 			}),
 			setupMock: func(oidcs *oidcmock.Repository, sessions *sessionmock.Repository) {
-				_ = oidcs.Create(context.Background(), "tid-1", oidc.Provider{
+				_ = oidcs.Create(context.Background(), "tid-1", trust.Provider{
 					IssuerURL: jwksSrv.URL,
 				})
 				_ = sessions.StoreSession(context.Background(), session.Session{ID: "sid-1", TenantID: "tid-1"})

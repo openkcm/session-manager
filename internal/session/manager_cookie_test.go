@@ -8,10 +8,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/openkcm/session-manager/internal/config"
-	"github.com/openkcm/session-manager/internal/oidc"
-	oidcmock "github.com/openkcm/session-manager/internal/oidc/mock"
 	"github.com/openkcm/session-manager/internal/session"
 	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
+	"github.com/openkcm/session-manager/internal/trust"
+	oidcmock "github.com/openkcm/session-manager/internal/trust/mock"
 )
 
 func TestManager_MakeSessionCookie(t *testing.T) {
@@ -421,7 +421,7 @@ func TestManager_Logout(t *testing.T) {
 				oidcServer := StartOIDCServer(t, false)
 				t.Cleanup(oidcServer.Close)
 
-				provider := oidc.Provider{
+				provider := trust.Provider{
 					IssuerURL:  oidcServer.URL,
 					JWKSURI:    oidcServer.URL + "/jwks",
 					Audiences:  []string{"test"},
