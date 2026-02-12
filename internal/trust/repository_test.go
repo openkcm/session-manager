@@ -28,26 +28,26 @@ const (
 type RepoWrapper struct {
 	Repo       trust.OIDCMappingRepository
 	MockGet    func(ctx context.Context, tenantID string) (trust.OIDCMapping, error)
-	MockCreate func(ctx context.Context, tenantID string, provider trust.OIDCMapping) error
-	MockUpdate func(ctx context.Context, tenantID string, provider trust.OIDCMapping) error
+	MockCreate func(ctx context.Context, tenantID string, mapping trust.OIDCMapping) error
+	MockUpdate func(ctx context.Context, tenantID string, mapping trust.OIDCMapping) error
 	MockDelete func(ctx context.Context, tenantID string) error
 }
 
 var _ trust.OIDCMappingRepository = &RepoWrapper{}
 
-// Create implements oidc.ProviderRepository.
-func (m *RepoWrapper) Create(ctx context.Context, tenantID string, provider trust.OIDCMapping) error {
+// Create implements oidc.OIDCMappingRepository.
+func (m *RepoWrapper) Create(ctx context.Context, tenantID string, mapping trust.OIDCMapping) error {
 	if m.MockCreate != nil {
-		err := m.MockCreate(ctx, tenantID, provider)
+		err := m.MockCreate(ctx, tenantID, mapping)
 		if err != nil {
 			return err
 		}
 	}
 
-	return m.Repo.Create(ctx, tenantID, provider)
+	return m.Repo.Create(ctx, tenantID, mapping)
 }
 
-// Delete implements oidc.ProviderRepository.
+// Delete implements oidc.OIDCMappingRepository.
 func (m *RepoWrapper) Delete(ctx context.Context, tenantID string) error {
 	if m.MockDelete != nil {
 		err := m.MockDelete(ctx, tenantID)
@@ -59,7 +59,7 @@ func (m *RepoWrapper) Delete(ctx context.Context, tenantID string) error {
 	return m.Repo.Delete(ctx, tenantID)
 }
 
-// Get implements oidc.ProviderRepository.
+// Get implements oidc.OIDCMappingRepository.
 func (m *RepoWrapper) Get(ctx context.Context, tenantID string) (trust.OIDCMapping, error) {
 	if m.MockGet != nil {
 		_, err := m.MockGet(ctx, tenantID)
@@ -70,15 +70,15 @@ func (m *RepoWrapper) Get(ctx context.Context, tenantID string) (trust.OIDCMappi
 	return m.Repo.Get(ctx, tenantID)
 }
 
-// Update implements oidc.ProviderRepository.
-func (m *RepoWrapper) Update(ctx context.Context, tenantID string, provider trust.OIDCMapping) error {
+// Update implements oidc.OIDCMappingRepository.
+func (m *RepoWrapper) Update(ctx context.Context, tenantID string, mapping trust.OIDCMapping) error {
 	if m.MockUpdate != nil {
-		err := m.MockUpdate(ctx, tenantID, provider)
+		err := m.MockUpdate(ctx, tenantID, mapping)
 		if err != nil {
 			return err
 		}
 	}
-	return m.Repo.Update(ctx, tenantID, provider)
+	return m.Repo.Update(ctx, tenantID, mapping)
 }
 
 func createRepo(ctx context.Context) (trust.OIDCMappingRepository, error) {

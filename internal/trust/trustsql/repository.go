@@ -36,9 +36,9 @@ func (r *Repository) Get(ctx context.Context, tenantID string) (trust.OIDCMappin
 
 func (r *Repository) get(ctx context.Context, tx pgx.Tx, row pgx.Row) (trust.OIDCMapping, error) {
 	var propsBytes []byte
-	var provider trust.OIDCMapping
+	var mapping trust.OIDCMapping
 
-	err := row.Scan(&provider.IssuerURL, &provider.Blocked, &provider.JWKSURI, &provider.Audiences, &propsBytes)
+	err := row.Scan(&mapping.IssuerURL, &mapping.Blocked, &mapping.JWKSURI, &mapping.Audiences, &propsBytes)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return trust.OIDCMapping{}, serviceerr.ErrNotFound
@@ -53,18 +53,18 @@ func (r *Repository) get(ctx context.Context, tx pgx.Tx, row pgx.Row) (trust.OID
 	}
 
 	if len(propsBytes) > 0 {
-		err := json.Unmarshal(propsBytes, &provider.Properties)
+		err := json.Unmarshal(propsBytes, &mapping.Properties)
 		if err != nil {
 			return trust.OIDCMapping{}, fmt.Errorf("unmarshalling properties: %w", err)
 		}
 	} else {
-		provider.Properties = make(map[string]string)
+		mapping.Properties = make(map[string]string)
 	}
 
-	return provider, nil
+	return mapping, nil
 }
 
-func (r *Repository) Create(ctx context.Context, tenantID string, provider trust.OIDCMapping) error {
+func (r *Repository) Create(ctx context.Context, tenantID string, mapping trust.OIDCMapping) error {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return fmt.Errorf("starting transaction: %w", err)
@@ -72,7 +72,7 @@ func (r *Repository) Create(ctx context.Context, tenantID string, provider trust
 
 	defer tx.Rollback(ctx)
 
-	propsBytes, err := r.marshalProperties(provider)
+	propsBytes, err := r.marshalProperties(mapping)
 	if err != nil {
 		return fmt.Errorf("marshaling properties: %w", err)
 	}
@@ -81,7 +81,7 @@ func (r *Repository) Create(ctx context.Context, tenantID string, provider trust
 	_, err = tx.Exec(ctx,
 		`INSERT INTO trust (tenant_id, blocked, issuer, jwks_uri, audiences, properties)
 			 VALUES ($1, $2, $3, $4, COALESCE($5, '{}'::text[]), $6);`,
-		tenantID, provider.Blocked, provider.IssuerURL, provider.JWKSURI, provider.Audiences, propsBytes,
+		tenantID, mapping.Blocked, mapping.IssuerURL, mapping.JWKSURI, mapping.Audiences, propsBytes,
 	)
 	if err != nil {
 		if err, ok := handlePgError(err); ok {
@@ -123,14 +123,14 @@ func (r *Repository) Delete(ctx context.Context, tenantID string) error {
 	return nil
 }
 
-func (r *Repository) Update(ctx context.Context, tenantID string, provider trust.OIDCMapping) error {
+func (r *Repository) Update(ctx context.Context, tenantID string, mapping trust.OIDCMapping) error {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return fmt.Errorf("starting transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
-	propsBytes, err := r.marshalProperties(provider)
+	propsBytes, err := r.marshalProperties(mapping)
 	if err != nil {
 		return err
 	}
@@ -140,7 +140,7 @@ func (r *Repository) Update(ctx context.Context, tenantID string, provider trust
 		`UPDATE trust
 			 SET blocked = $1, issuer = $2, jwks_uri = $3, audiences = COALESCE($4, '{}'::text[]), properties = $5
 			 WHERE tenant_id = $6;`,
-		provider.Blocked, provider.IssuerURL, provider.JWKSURI, provider.Audiences, propsBytes, tenantID)
+		mapping.Blocked, mapping.IssuerURL, mapping.JWKSURI, mapping.Audiences, propsBytes, tenantID)
 	if err != nil {
 		return fmt.Errorf("updating trust: %w", err)
 	}
@@ -157,8 +157,8 @@ func (r *Repository) Update(ctx context.Context, tenantID string, provider trust
 	return nil
 }
 
-func (r *Repository) marshalProperties(provider trust.OIDCMapping) ([]byte, error) {
-	propsBytes, err := json.Marshal(provider.Properties)
+func (r *Repository) marshalProperties(mapping trust.OIDCMapping) ([]byte, error) {
+	propsBytes, err := json.Marshal(mapping.Properties)
 	if err != nil {
 		return nil, fmt.Errorf("marshaling json: %w", err)
 	}

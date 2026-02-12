@@ -47,7 +47,7 @@ func TestManager_Auth(t *testing.T) {
 	auditServer := StartAuditServer(t)
 	defer auditServer.Close()
 
-	oidcProvider := trust.OIDCMapping{
+	oidcMapping := trust.OIDCMapping{
 		IssuerURL: oidcServer.URL,
 		Blocked:   false,
 		JWKSURI:   "http://jwks.example.com",
@@ -68,11 +68,11 @@ func TestManager_Auth(t *testing.T) {
 		fingerprint string
 		wantURL     string
 		errAssert   assert.ErrorAssertionFunc
-		provider    trust.OIDCMapping
+		mapping     trust.OIDCMapping
 	}{
 		{
 			name:       "Success",
-			oidc:       trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, oidcProvider)),
+			oidc:       trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, oidcMapping)),
 			sessions:   sessionmock.NewInMemRepository(),
 			requestURI: requestURI,
 			cfg: &config.SessionManager{
@@ -90,10 +90,10 @@ func TestManager_Auth(t *testing.T) {
 			errAssert:   assert.NoError,
 		},
 		{
-			name: "Get OIDC error",
+			name: "Get trust mapping error",
 			oidc: trustmock.NewInMemRepository(
-				trustmock.WithTrust(tenantID, oidcProvider),
-				trustmock.WithGetError(errors.New("faield to get oidc provider")),
+				trustmock.WithTrust(tenantID, oidcMapping),
+				trustmock.WithGetError(errors.New("failed to get trust mapping")),
 			),
 			sessions:   sessionmock.NewInMemRepository(),
 			requestURI: requestURI,
@@ -109,7 +109,7 @@ func TestManager_Auth(t *testing.T) {
 		},
 		{
 			name:       "Save state error",
-			oidc:       trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, oidcProvider)),
+			oidc:       trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, oidcMapping)),
 			sessions:   sessionmock.NewInMemRepository(sessionmock.WithStoreStateError(errors.New("failed to save state"))),
 			requestURI: requestURI,
 			cfg: &config.SessionManager{
@@ -148,7 +148,7 @@ func TestManager_Auth(t *testing.T) {
 			}
 
 			// Validate that the data has been inserted into the repository
-			assert.Equal(t, oidcProvider, tt.oidc.TGet(tt.tenantID), "OIDC Provider has not been inserted")
+			assert.Equal(t, oidcMapping, tt.oidc.TGet(tt.tenantID), "Trust mapping has not been inserted")
 
 			// Check the returned URL
 			u, err := url.Parse(got)
@@ -302,8 +302,8 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			errAssert:       assert.Error,
 		},
 		{
-			name:        "OIDC provider get error",
-			oidc:        trustmock.NewInMemRepository(trustmock.WithGetError(errors.New("provider not found"))),
+			name:        "Trust mapping get error",
+			oidc:        trustmock.NewInMemRepository(trustmock.WithGetError(errors.New("trust mapping not found"))),
 			sessions:    sessionmock.NewInMemRepository(sessionmock.WithState(validState)),
 			stateID:     stateID,
 			code:        code,
@@ -368,7 +368,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			jwksURI, err := url.JoinPath(oidcServer.URL, "/.well-known/jwks.json")
 			require.NoError(t, err)
 
-			localOIDCProvider := trust.OIDCMapping{
+			localOIDCMapping := trust.OIDCMapping{
 				IssuerURL: oidcServer.URL,
 				Blocked:   false,
 				JWKSURI:   jwksURI,
@@ -379,7 +379,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 				},
 			}
 
-			tt.oidc.TAdd(tenantID, localOIDCProvider)
+			tt.oidc.TAdd(tenantID, localOIDCMapping)
 
 			m, err := session.NewManager(tt.cfg, tt.oidc, tt.sessions, auditLogger, http.DefaultClient)
 			require.NoError(t, err)
@@ -562,7 +562,7 @@ func TestManager_LogoutEdgeCases(t *testing.T) {
 			errAssert: assert.Error,
 		},
 		{
-			name:      "OIDC provider not found",
+			name:      "Trust mapping not found",
 			sessionID: sessionID,
 			setupMock: func(oidcs *trustmock.Repository, sessions *sessionmock.Repository) {
 				_ = sessions.StoreSession(context.Background(), session.Session{

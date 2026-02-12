@@ -40,14 +40,14 @@ func (srv *OIDCMappingServer) ApplyOIDCMapping(ctx context.Context, req *oidcmap
 
 	response := &oidcmappingv1.ApplyOIDCMappingResponse{}
 
-	provider := trust.OIDCMapping{
+	mapping := trust.OIDCMapping{
 		IssuerURL:  req.GetIssuer(),
 		Blocked:    false,
 		JWKSURI:    req.GetJwksUri(),
 		Audiences:  req.GetAudiences(),
 		Properties: req.GetProperties(),
 	}
-	err := srv.oidc.ApplyMapping(ctx, req.GetTenantId(), provider)
+	err := srv.oidc.ApplyMapping(ctx, req.GetTenantId(), mapping)
 	if err != nil {
 		slogctx.Error(ctx, "Could not apply OIDC mapping", "error", err)
 		if errors.Is(err, serviceerr.ErrNotFound) {

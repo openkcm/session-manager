@@ -6,16 +6,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestProvider_GetIntrospectParameters(t *testing.T) {
+func TestOIDCMappingr_GetIntrospectParameters(t *testing.T) {
 	tests := []struct {
-		name       string
-		provider   OIDCMapping
-		keys       []string
-		wantParams map[string]string
+		name        string
+		oidcMapping OIDCMapping
+		keys        []string
+		wantParams  map[string]string
 	}{
 		{
 			name: "returns matching parameters",
-			provider: OIDCMapping{
+			oidcMapping: OIDCMapping{
 				Properties: map[string]string{
 					"client_id":     "my-client-id",
 					"client_secret": "my-secret",
@@ -30,7 +30,7 @@ func TestProvider_GetIntrospectParameters(t *testing.T) {
 		},
 		{
 			name: "skips missing parameters",
-			provider: OIDCMapping{
+			oidcMapping: OIDCMapping{
 				Properties: map[string]string{
 					"client_id": "my-client-id",
 				},
@@ -42,7 +42,7 @@ func TestProvider_GetIntrospectParameters(t *testing.T) {
 		},
 		{
 			name: "returns empty map when no keys provided",
-			provider: OIDCMapping{
+			oidcMapping: OIDCMapping{
 				Properties: map[string]string{
 					"client_id": "my-client-id",
 				},
@@ -52,7 +52,7 @@ func TestProvider_GetIntrospectParameters(t *testing.T) {
 		},
 		{
 			name: "returns empty map when properties is nil",
-			provider: OIDCMapping{
+			oidcMapping: OIDCMapping{
 				Properties: nil,
 			},
 			keys:       []string{"client_id"},
@@ -60,7 +60,7 @@ func TestProvider_GetIntrospectParameters(t *testing.T) {
 		},
 		{
 			name: "returns empty map when no keys match",
-			provider: OIDCMapping{
+			oidcMapping: OIDCMapping{
 				Properties: map[string]string{
 					"client_id": "my-client-id",
 				},
@@ -70,7 +70,7 @@ func TestProvider_GetIntrospectParameters(t *testing.T) {
 		},
 		{
 			name: "handles all keys matching",
-			provider: OIDCMapping{
+			oidcMapping: OIDCMapping{
 				Properties: map[string]string{
 					"key1": "value1",
 					"key2": "value2",
@@ -88,7 +88,7 @@ func TestProvider_GetIntrospectParameters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tt.provider.GetIntrospectParameters(tt.keys)
+			got := tt.oidcMapping.GetIntrospectParameters(tt.keys)
 			assert.Equal(t, tt.wantParams, got)
 		})
 	}

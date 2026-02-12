@@ -421,13 +421,13 @@ func TestManager_Logout(t *testing.T) {
 				oidcServer := StartOIDCServer(t, false)
 				t.Cleanup(oidcServer.Close)
 
-				provider := trust.OIDCMapping{
+				mapping := trust.OIDCMapping{
 					IssuerURL:  oidcServer.URL,
 					JWKSURI:    oidcServer.URL + "/jwks",
 					Audiences:  []string{"test"},
 					Properties: map[string]string{},
 				}
-				return trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, provider))
+				return trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, mapping))
 			},
 			setupSession: func(repo *sessionmock.Repository) {
 				//nolint:errcheck

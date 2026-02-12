@@ -104,14 +104,14 @@ func TestRefreshAccessToken(t *testing.T) {
 		defer tokenServer.Close()
 		tokenServerURL = tokenServer.URL + "/token"
 
-		provider := trust.OIDCMapping{
+		mapping := trust.OIDCMapping{
 			IssuerURL: discoveryServerURL,
 			Properties: map[string]string{
 				"test-param": "param-value",
 			},
 		}
 
-		oidcRepo := trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, provider))
+		oidcRepo := trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, mapping))
 
 		sess := session.Session{
 			ID:                sessionID,
@@ -148,7 +148,7 @@ func TestRefreshAccessToken(t *testing.T) {
 		assert.Equal(t, "new-refresh-token", updatedSess.RefreshToken)
 	})
 
-	t.Run("Error - OIDC provider not found", func(t *testing.T) {
+	t.Run("Error - trust mapping not found", func(t *testing.T) {
 		oidcRepo := trustmock.NewInMemRepository()
 
 		sess := session.Session{
@@ -199,12 +199,12 @@ func TestRefreshAccessToken(t *testing.T) {
 		defer tokenServer.Close()
 		tokenServerURL = tokenServer.URL + "/token"
 
-		provider := trust.OIDCMapping{
+		mapping := trust.OIDCMapping{
 			IssuerURL:  discoveryServerURL,
 			Properties: map[string]string{},
 		}
 
-		oidcRepo := trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, provider))
+		oidcRepo := trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, mapping))
 
 		sess := session.Session{
 			ID:                sessionID,
@@ -251,12 +251,12 @@ func TestRefreshAccessToken(t *testing.T) {
 		defer discoveryServer.Close()
 		discoveryServerURL = discoveryServer.URL
 
-		provider := trust.OIDCMapping{
+		mapping := trust.OIDCMapping{
 			IssuerURL:  discoveryServer.URL,
 			Properties: map[string]string{}, // Missing required parameter
 		}
 
-		oidcRepo := trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, provider))
+		oidcRepo := trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, mapping))
 
 		sess := session.Session{
 			ID:                sessionID,

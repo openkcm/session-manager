@@ -107,7 +107,7 @@ func TestSessionGRPC(t *testing.T) {
 		err = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 		require.NoError(t, err)
 
-		// Note: This test will fail validation because there's no OIDC provider configured
+		// Note: This test will fail validation because there's no trust mapping configured
 		// but it tests the session retrieval path
 		resp, err := sessionClient.GetSession(ctx, &sessionv1.GetSessionRequest{
 			SessionId:   sess.ID,
@@ -116,7 +116,7 @@ func TestSessionGRPC(t *testing.T) {
 		})
 		assert.NoError(t, err)
 		assert.NotNil(t, resp)
-		// Will be false because provider is not configured, but tests the flow
+		// Will be false because trust mapping is not configured, but tests the flow
 		assert.False(t, resp.GetValid())
 	})
 
@@ -190,7 +190,7 @@ func startSessionServer(t *testing.T, port int) (*stdgrpc.Server, session.Reposi
 		valkeyClient.Close()
 	}
 
-	oidcProviderRepo := trustsql.NewRepository(db)
+	trustRepo := trustsql.NewRepository(db)
 	sessionRepo := sessionvalkey.NewRepository(valkeyClient, "session")
 
 	lstConf := net.ListenConfig{}
@@ -200,7 +200,7 @@ func startSessionServer(t *testing.T, port int) (*stdgrpc.Server, session.Reposi
 	}
 
 	srv := stdgrpc.NewServer()
-	sessionv1.RegisterServiceServer(srv, grpc.NewSessionServer(sessionRepo, oidcProviderRepo, http.DefaultClient, 90*time.Minute))
+	sessionv1.RegisterServiceServer(srv, grpc.NewSessionServer(sessionRepo, trustRepo, http.DefaultClient, 90*time.Minute))
 
 	// start
 	go func() {

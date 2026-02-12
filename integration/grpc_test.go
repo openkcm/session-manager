@@ -317,8 +317,8 @@ func startServer(t *testing.T, port int) (*stdgrpc.Server, *trust.Service, func(
 	ctx := t.Context()
 	// start postgres
 	db, _, terminateFn := postgrestest.Start(ctx)
-	oidcProviderRepo := trustsql.NewRepository(db)
-	service := trust.NewService(oidcProviderRepo)
+	trustRepo := trustsql.NewRepository(db)
+	service := trust.NewService(trustRepo)
 
 	lstConf := net.ListenConfig{}
 	lis, err := lstConf.Listen(ctx, "tcp", fmt.Sprintf("localhost:%d", port))
@@ -328,7 +328,7 @@ func startServer(t *testing.T, port int) (*stdgrpc.Server, *trust.Service, func(
 
 	srv := stdgrpc.NewServer()
 	oidcmappingv1.RegisterServiceServer(srv, grpc.NewOIDCMappingServer(service))
-	sessionv1.RegisterServiceServer(srv, grpc.NewSessionServer(nil, oidcProviderRepo, http.DefaultClient, time.Hour))
+	sessionv1.RegisterServiceServer(srv, grpc.NewSessionServer(nil, trustRepo, http.DefaultClient, time.Hour))
 
 	// start
 	go func() {

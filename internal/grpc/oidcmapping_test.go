@@ -56,13 +56,13 @@ func TestApplyOIDCMapping(t *testing.T) {
 	})
 
 	t.Run("success - updates existing mapping", func(t *testing.T) {
-		existingProvider := trust.OIDCMapping{
+		existingMapping := trust.OIDCMapping{
 			IssuerURL: "https://old-issuer.example.com",
 			JWKSURI:   "https://old-issuer.example.com/jwks.json",
 			Audiences: []string{"old-audience"},
 		}
 		repo := trustmock.NewInMemRepository(
-			trustmock.WithTrust("tenant-123", existingProvider),
+			trustmock.WithTrust("tenant-123", existingMapping),
 		)
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)
@@ -132,12 +132,12 @@ func TestApplyOIDCMapping(t *testing.T) {
 	})
 
 	t.Run("update error - returns grpc error", func(t *testing.T) {
-		existingProvider := trust.OIDCMapping{
+		existingMapping := trust.OIDCMapping{
 			IssuerURL: "https://issuer.example.com",
 		}
 		updateErr := errors.New("update failed")
 		repo := trustmock.NewInMemRepository(
-			trustmock.WithTrust("tenant-123", existingProvider),
+			trustmock.WithTrust("tenant-123", existingMapping),
 			trustmock.WithUpdateError(updateErr),
 		)
 		svc := trust.NewService(repo)
@@ -165,12 +165,12 @@ func TestBlockOIDCMapping(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("success - blocks existing mapping", func(t *testing.T) {
-		existingProvider := trust.OIDCMapping{
+		existingMapping := trust.OIDCMapping{
 			IssuerURL: "https://issuer.example.com",
 			Blocked:   false,
 		}
 		repo := trustmock.NewInMemRepository(
-			trustmock.WithTrust("tenant-123", existingProvider),
+			trustmock.WithTrust("tenant-123", existingMapping),
 		)
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)
@@ -188,12 +188,12 @@ func TestBlockOIDCMapping(t *testing.T) {
 	})
 
 	t.Run("success - already blocked", func(t *testing.T) {
-		existingProvider := trust.OIDCMapping{
+		existingMapping := trust.OIDCMapping{
 			IssuerURL: "https://issuer.example.com",
 			Blocked:   true,
 		}
 		repo := trustmock.NewInMemRepository(
-			trustmock.WithTrust("tenant-123", existingProvider),
+			trustmock.WithTrust("tenant-123", existingMapping),
 		)
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)
@@ -257,11 +257,11 @@ func TestRemoveOIDCMapping(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("success - removes existing mapping", func(t *testing.T) {
-		existingProvider := trust.OIDCMapping{
+		existingMapping := trust.OIDCMapping{
 			IssuerURL: "https://issuer.example.com",
 		}
 		repo := trustmock.NewInMemRepository(
-			trustmock.WithTrust("tenant-123", existingProvider),
+			trustmock.WithTrust("tenant-123", existingMapping),
 		)
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)
@@ -327,12 +327,12 @@ func TestUnblockOIDCMapping(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("success - unblocks blocked mapping", func(t *testing.T) {
-		existingProvider := trust.OIDCMapping{
+		existingMapping := trust.OIDCMapping{
 			IssuerURL: "https://issuer.example.com",
 			Blocked:   true,
 		}
 		repo := trustmock.NewInMemRepository(
-			trustmock.WithTrust("tenant-123", existingProvider),
+			trustmock.WithTrust("tenant-123", existingMapping),
 		)
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)
@@ -350,12 +350,12 @@ func TestUnblockOIDCMapping(t *testing.T) {
 	})
 
 	t.Run("success - already unblocked", func(t *testing.T) {
-		existingProvider := trust.OIDCMapping{
+		existingMapping := trust.OIDCMapping{
 			IssuerURL: "https://issuer.example.com",
 			Blocked:   false,
 		}
 		repo := trustmock.NewInMemRepository(
-			trustmock.WithTrust("tenant-123", existingProvider),
+			trustmock.WithTrust("tenant-123", existingMapping),
 		)
 		svc := trust.NewService(repo)
 		server := grpc.NewOIDCMappingServer(svc)
@@ -391,12 +391,12 @@ func TestUnblockOIDCMapping(t *testing.T) {
 
 	t.Run("error - returns grpc error with message", func(t *testing.T) {
 		internalErr := errors.New("update failed")
-		existingProvider := trust.OIDCMapping{
+		existingMapping := trust.OIDCMapping{
 			IssuerURL: "https://issuer.example.com",
 			Blocked:   true,
 		}
 		repo := trustmock.NewInMemRepository(
-			trustmock.WithTrust("tenant-123", existingProvider),
+			trustmock.WithTrust("tenant-123", existingMapping),
 			trustmock.WithUpdateError(internalErr),
 		)
 		svc := trust.NewService(repo)

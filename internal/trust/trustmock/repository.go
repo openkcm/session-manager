@@ -15,8 +15,8 @@ type Repository struct {
 	getErr, createErr, deleteErr, updateErr error
 }
 
-func WithTrust(tenantID string, provider trust.OIDCMapping) RepositoryOption {
-	return func(r *Repository) { r.tenantTrust[tenantID] = provider }
+func WithTrust(tenantID string, mapping trust.OIDCMapping) RepositoryOption {
+	return func(r *Repository) { r.tenantTrust[tenantID] = mapping }
 }
 func WithGetError(err error) RepositoryOption {
 	return func(r *Repository) { r.getErr = err }
@@ -46,8 +46,8 @@ func NewInMemRepository(opts ...RepositoryOption) *Repository {
 }
 
 // TAdd is a helper method for tests to add a trust relationship.
-func (r *Repository) TAdd(tenantID string, provider trust.OIDCMapping) {
-	r.tenantTrust[tenantID] = provider
+func (r *Repository) TAdd(tenantID string, mapping trust.OIDCMapping) {
+	r.tenantTrust[tenantID] = mapping
 }
 
 // TGet is a helper method for tests to get a trust relationship.
@@ -59,17 +59,17 @@ func (r *Repository) Get(_ context.Context, tenantID string) (trust.OIDCMapping,
 	if r.getErr != nil {
 		return trust.OIDCMapping{}, r.getErr
 	}
-	if provider, ok := r.tenantTrust[tenantID]; ok {
-		return provider, nil
+	if mapping, ok := r.tenantTrust[tenantID]; ok {
+		return mapping, nil
 	}
 	return trust.OIDCMapping{}, serviceerr.ErrNotFound
 }
 
-func (r *Repository) Create(_ context.Context, tenantID string, provider trust.OIDCMapping) error {
+func (r *Repository) Create(_ context.Context, tenantID string, mapping trust.OIDCMapping) error {
 	if r.createErr != nil {
 		return r.createErr
 	}
-	r.tenantTrust[tenantID] = provider
+	r.tenantTrust[tenantID] = mapping
 	return nil
 }
 
@@ -84,10 +84,10 @@ func (r *Repository) Delete(_ context.Context, tenantID string) error {
 	return nil
 }
 
-func (r *Repository) Update(_ context.Context, tenantID string, provider trust.OIDCMapping) error {
+func (r *Repository) Update(_ context.Context, tenantID string, mapping trust.OIDCMapping) error {
 	if r.updateErr != nil {
 		return r.updateErr
 	}
-	r.tenantTrust[tenantID] = provider
+	r.tenantTrust[tenantID] = mapping
 	return nil
 }

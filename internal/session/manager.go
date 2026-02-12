@@ -29,7 +29,7 @@ import (
 )
 
 type Manager struct {
-	oidc         trust.OIDCMappingRepository
+	trustRepo    trust.OIDCMappingRepository
 	sessions     Repository
 	pkce         pkce.Source
 	audit        *otlpaudit.AuditLogger
@@ -64,7 +64,7 @@ func NewManager(
 	}
 
 	return &Manager{
-		oidc:                  oidc,
+		trustRepo:             oidc,
 		sessions:              sessions,
 		audit:                 auditLogger,
 		sessionDuration:       cfg.SessionDuration,
@@ -85,12 +85,12 @@ func NewManager(
 
 // MakeAuthURI returns an OIDC authentication URI.
 func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, requestURI string) (string, error) {
-	provider, err := m.oidc.Get(ctx, tenantID)
+	mapping, err := m.trustRepo.Get(ctx, tenantID)
 	if err != nil {
-		return "", fmt.Errorf("getting oidc provider: %w", err)
+		return "", fmt.Errorf("getting trust mapping: %w", err)
 	}
 
-	openidConf, err := openid.GetConfig(ctx, provider.IssuerURL)
+	openidConf, err := openid.GetConfig(ctx, mapping.IssuerURL)
 	if err != nil {
 		return "", fmt.Errorf("getting an openid config: %w", err)
 	}
@@ -112,7 +112,7 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 		return "", fmt.Errorf("storing session: %w", err)
 	}
 
-	u, err := m.authURI(openidConf, state, pkce, provider.Properties)
+	u, err := m.authURI(openidConf, state, pkce, mapping.Properties)
 	if err != nil {
 		return "", fmt.Errorf("generating auth uri: %w", err)
 	}
@@ -193,19 +193,19 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, serviceerr.ErrFingerprintMismatch
 	}
 
-	provider, err := m.oidc.Get(ctx, state.TenantID)
+	mapping, err := m.trustRepo.Get(ctx, state.TenantID)
 	if err != nil {
-		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get oidc provider")
-		return OIDCSessionData{}, fmt.Errorf("getting oidc provider: %w", err)
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get trust mapping")
+		return OIDCSessionData{}, fmt.Errorf("getting trust mapping: %w", err)
 	}
 
-	openidConf, err := openid.GetConfig(ctx, provider.IssuerURL)
+	openidConf, err := openid.GetConfig(ctx, mapping.IssuerURL)
 	if err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get openid configuration")
 		return OIDCSessionData{}, fmt.Errorf("getting openid configuration: %w", err)
 	}
 
-	tokens, err := m.exchangeCode(ctx, openidConf, code, state.PKCEVerifier, provider.Properties)
+	tokens, err := m.exchangeCode(ctx, openidConf, code, state.PKCEVerifier, mapping.Properties)
 	if err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to exchange code for tokens")
 		return OIDCSessionData{}, fmt.Errorf("exchanging code for tokens: %w", err)
@@ -262,11 +262,11 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 
 	// prepare the auth context used by ExtAuthZ
 	authContext := map[string]string{
-		"issuer":    provider.IssuerURL,
+		"issuer":    mapping.IssuerURL,
 		"client_id": m.clientID,
 	}
 	for _, parameter := range m.authContextKeys {
-		value, ok := provider.Properties[parameter]
+		value, ok := mapping.Properties[parameter]
 		if !ok {
 			return OIDCSessionData{}, fmt.Errorf("missing auth context parameter: %s", parameter)
 		}
@@ -279,7 +279,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		ProviderID:  customClaims.SID,
 		Fingerprint: fingerprint,
 		CSRFToken:   csrfToken,
-		Issuer:      provider.IssuerURL,
+		Issuer:      mapping.IssuerURL,
 		Claims: Claims{
 			Subject:    standardClaims.Subject,
 			UserUUID:   customClaims.UserUUID,
@@ -340,15 +340,15 @@ func (m *Manager) Logout(ctx context.Context, sessionID string) (string, error) 
 
 	ctx = slogctx.With(ctx, "tenant_id", session.TenantID)
 
-	oidcProvider, err := m.oidc.Get(ctx, session.TenantID)
+	mapping, err := m.trustRepo.Get(ctx, session.TenantID)
 	if err != nil {
-		slogctx.Error(ctx, "failed to get oidc provider for a tenant", "error", err)
-		return "", fmt.Errorf("getting oidc provider: %w", err)
+		slogctx.Error(ctx, "failed to get trust mapping for a tenant", "error", err)
+		return "", fmt.Errorf("getting trust mapping: %w", err)
 	}
 
-	ctx = slogctx.With(ctx, "issuer_url", oidcProvider.IssuerURL)
+	ctx = slogctx.With(ctx, "issuer_url", mapping.IssuerURL)
 
-	oidcConf, err := openid.GetConfig(ctx, oidcProvider.IssuerURL)
+	oidcConf, err := openid.GetConfig(ctx, mapping.IssuerURL)
 	if err != nil {
 		slogctx.Warn(ctx, "failed to get oidc configuration", "error", err)
 		return "", fmt.Errorf("getting oidc configuration: %w", err)
@@ -383,7 +383,7 @@ func (m *Manager) Logout(ctx context.Context, sessionID string) (string, error) 
 	}
 
 	for _, p := range m.queryParametersLogout {
-		v, ok := oidcProvider.Properties[p]
+		v, ok := mapping.Properties[p]
 		if !ok {
 			return "", fmt.Errorf("missing auth parameter: %s", p)
 		}
@@ -447,12 +447,12 @@ func (m *Manager) BCLogout(ctx context.Context, logoutJWT string) error {
 		return nil
 	}
 
-	provider, err := m.oidc.Get(ctx, session.TenantID)
+	mapping, err := m.trustRepo.Get(ctx, session.TenantID)
 	if err != nil {
-		return fmt.Errorf("getting oidc provider: %w", err)
+		return fmt.Errorf("getting trust mapping: %w", err)
 	}
 
-	oidcConf, err := openid.GetConfig(ctx, provider.IssuerURL)
+	oidcConf, err := openid.GetConfig(ctx, mapping.IssuerURL)
 	if err != nil {
 		return fmt.Errorf("getting oidc config: %w", err)
 	}

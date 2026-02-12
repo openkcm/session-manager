@@ -18,44 +18,44 @@ func NewService(repo OIDCMappingRepository) *Service {
 	}
 }
 
-func (s *Service) ApplyMapping(ctx context.Context, tenantID string, provider OIDCMapping) error {
+func (s *Service) ApplyMapping(ctx context.Context, tenantID string, mapping OIDCMapping) error {
 	_, err := s.repository.Get(ctx, tenantID)
 	if err != nil {
-		err = s.repository.Create(ctx, tenantID, provider)
+		err = s.repository.Create(ctx, tenantID, mapping)
 		if err != nil {
-			return fmt.Errorf("creating provider for tenant: %w", err)
+			return fmt.Errorf("creating mapping for tenant: %w", err)
 		}
 	} else {
-		err = s.repository.Update(ctx, tenantID, provider)
+		err = s.repository.Update(ctx, tenantID, mapping)
 		if err != nil {
-			return fmt.Errorf("updating provider for tenant: %w", err)
+			return fmt.Errorf("updating mapping for tenant: %w", err)
 		}
 	}
 
 	return nil
 }
 
-// BlockMapping sets the Blocked flag to true for the OIDC provider associated with the given tenantID.
-// If the provider is already blocked, it does nothing.
-// Returns an error if the provider cannot be retrieved or updated.
+// BlockMapping sets the Blocked flag to true for the OIDC mapping associated with the given tenantID.
+// If the mapping is already blocked, it does nothing.
+// Returns an error if the mapping cannot be retrieved or updated.
 func (s *Service) BlockMapping(ctx context.Context, tenantID string) error {
-	provider, err := s.repository.Get(ctx, tenantID)
+	mapping, err := s.repository.Get(ctx, tenantID)
 	if err != nil {
 		if errors.Is(err, serviceerr.ErrNotFound) {
 			return nil
 		}
-		return fmt.Errorf("getting provider for tenant: %w", err)
+		return fmt.Errorf("getting mapping for tenant: %w", err)
 	}
-	if provider.Blocked {
+	if mapping.Blocked {
 		return nil
 	}
-	provider.Blocked = true
-	err = s.repository.Update(ctx, tenantID, provider)
+	mapping.Blocked = true
+	err = s.repository.Update(ctx, tenantID, mapping)
 	if err != nil {
 		if errors.Is(err, serviceerr.ErrNotFound) {
 			return nil
 		}
-		return fmt.Errorf("updating provider for blocking tenant: %w", err)
+		return fmt.Errorf("updating mapping for blocking tenant: %w", err)
 	}
 	return nil
 }
@@ -63,33 +63,33 @@ func (s *Service) BlockMapping(ctx context.Context, tenantID string) error {
 func (s *Service) RemoveMapping(ctx context.Context, tenantID string) error {
 	err := s.repository.Delete(ctx, tenantID)
 	if err != nil {
-		return fmt.Errorf("deleting provider for tenant: %w", err)
+		return fmt.Errorf("deleting mapping for tenant: %w", err)
 	}
 
 	return nil
 }
 
-// UnblockMapping sets the Blocked flag to false for the OIDC provider associated with the given tenantID.
-// If the provider is not blocked, it does nothing.
-// Returns an error if the provider cannot be retrieved or updated.
+// UnblockMapping sets the Blocked flag to false for the OIDC mapping associated with the given tenantID.
+// If the mapping is not blocked, it does nothing.
+// Returns an error if the mapping cannot be retrieved or updated.
 func (s *Service) UnblockMapping(ctx context.Context, tenantID string) error {
-	provider, err := s.repository.Get(ctx, tenantID)
+	mapping, err := s.repository.Get(ctx, tenantID)
 	if err != nil {
 		if errors.Is(err, serviceerr.ErrNotFound) {
 			return nil
 		}
-		return fmt.Errorf("getting provider for tenant: %w", err)
+		return fmt.Errorf("getting mapping for tenant: %w", err)
 	}
-	if !provider.Blocked {
+	if !mapping.Blocked {
 		return nil
 	}
-	provider.Blocked = false
-	err = s.repository.Update(ctx, tenantID, provider)
+	mapping.Blocked = false
+	err = s.repository.Update(ctx, tenantID, mapping)
 	if err != nil {
 		if errors.Is(err, serviceerr.ErrNotFound) {
 			return nil
 		}
-		return fmt.Errorf("updating provider for blocking tenant: %w", err)
+		return fmt.Errorf("updating mapping for unblocking tenant: %w", err)
 	}
 	return nil
 }
