@@ -31,7 +31,7 @@ func WithUpdateError(err error) RepositoryOption {
 	return func(r *Repository) { r.updateErr = err }
 }
 
-var _ = trust.ProviderRepository(&Repository{})
+var _ = trust.OIDCMappingRepository(&Repository{})
 
 func NewInMemRepository(opts ...RepositoryOption) *Repository {
 	r := &Repository{

@@ -9,10 +9,10 @@ import (
 )
 
 type Service struct {
-	repository ProviderRepository
+	repository OIDCMappingRepository
 }
 
-func NewService(repo ProviderRepository) *Service {
+func NewService(repo OIDCMappingRepository) *Service {
 	return &Service{
 		repository: repo,
 	}

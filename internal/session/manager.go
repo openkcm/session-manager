@@ -29,7 +29,7 @@ import (
 )
 
 type Manager struct {
-	oidc         trust.ProviderRepository
+	oidc         trust.OIDCMappingRepository
 	sessions     Repository
 	pkce         pkce.Source
 	audit        *otlpaudit.AuditLogger
@@ -53,7 +53,7 @@ type Manager struct {
 
 func NewManager(
 	cfg *config.SessionManager,
-	oidc trust.ProviderRepository,
+	oidc trust.OIDCMappingRepository,
 	sessions Repository,
 	auditLogger *otlpaudit.AuditLogger,
 	httpClient *http.Client,

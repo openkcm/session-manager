@@ -26,14 +26,14 @@ const (
 )
 
 type RepoWrapper struct {
-	Repo       trust.ProviderRepository
+	Repo       trust.OIDCMappingRepository
 	MockGet    func(ctx context.Context, tenantID string) (trust.OIDCMapping, error)
 	MockCreate func(ctx context.Context, tenantID string, provider trust.OIDCMapping) error
 	MockUpdate func(ctx context.Context, tenantID string, provider trust.OIDCMapping) error
 	MockDelete func(ctx context.Context, tenantID string) error
 }
 
-var _ trust.ProviderRepository = &RepoWrapper{}
+var _ trust.OIDCMappingRepository = &RepoWrapper{}
 
 // Create implements oidc.ProviderRepository.
 func (m *RepoWrapper) Create(ctx context.Context, tenantID string, provider trust.OIDCMapping) error {
@@ -81,7 +81,7 @@ func (m *RepoWrapper) Update(ctx context.Context, tenantID string, provider trus
 	return m.Repo.Update(ctx, tenantID, provider)
 }
 
-func createRepo(ctx context.Context) (trust.ProviderRepository, error) {
+func createRepo(ctx context.Context) (trust.OIDCMappingRepository, error) {
 	pgContainer, err := postgres.Run(
 		ctx,
 		"postgres:17-alpine",

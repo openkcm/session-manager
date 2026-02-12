@@ -28,7 +28,7 @@ type SessionServer struct {
 	sessionv1.UnimplementedServiceServer
 
 	sessionRepo  session.Repository
-	providerRepo trust.ProviderRepository
+	providerRepo trust.OIDCMappingRepository
 	httpClient   *http.Client
 
 	queryParametersIntrospect []string
@@ -37,7 +37,7 @@ type SessionServer struct {
 
 func NewSessionServer(
 	sessionRepo session.Repository,
-	providerRepo trust.ProviderRepository,
+	providerRepo trust.OIDCMappingRepository,
 	httpClient *http.Client,
 	idleSessionTimeout time.Duration,
 	opts ...SessionServerOption,

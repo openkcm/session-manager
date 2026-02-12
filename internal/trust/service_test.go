@@ -14,7 +14,7 @@ import (
 	"github.com/openkcm/session-manager/internal/trust"
 )
 
-var repo trust.ProviderRepository
+var repo trust.OIDCMappingRepository
 
 const (
 	requestURI = "http://cmk.example.com/ui"
