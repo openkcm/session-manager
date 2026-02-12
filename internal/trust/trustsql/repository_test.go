@@ -36,13 +36,13 @@ func TestRepository_Get(t *testing.T) {
 	tests := []struct {
 		name         string
 		tenantID     string
-		wantProvider trust.Provider
+		wantProvider trust.OIDCMapping
 		assertErr    assert.ErrorAssertionFunc
 	}{
 		{
 			name:     "Success",
 			tenantID: "tenant1-id",
-			wantProvider: trust.Provider{
+			wantProvider: trust.OIDCMapping{
 				IssuerURL:  "url-one",
 				Blocked:    false,
 				JWKSURI:    "",
@@ -76,13 +76,13 @@ func TestRepository_Create(t *testing.T) {
 	tests := []struct {
 		name      string
 		tenantID  string
-		provider  trust.Provider
+		provider  trust.OIDCMapping
 		assertErr assert.ErrorAssertionFunc
 	}{
 		{
 			name:     "Create succeeds",
 			tenantID: "tenant-id-create-success",
-			provider: trust.Provider{
+			provider: trust.OIDCMapping{
 				IssuerURL: "http://oidc-success.example.com",
 				Blocked:   false,
 				JWKSURI:   "jwks.example.com",
@@ -96,7 +96,7 @@ func TestRepository_Create(t *testing.T) {
 		{
 			name:     "Duplicate",
 			tenantID: "tenant1-id",
-			provider: trust.Provider{
+			provider: trust.OIDCMapping{
 				IssuerURL: "url-one",
 				Blocked:   false,
 				JWKSURI:   "jwks.example.com",
@@ -110,7 +110,7 @@ func TestRepository_Create(t *testing.T) {
 		{
 			name:     "Create without JWKSURI and Audiences succeeds",
 			tenantID: "tenant-id-create-without-jwks-aud-success",
-			provider: trust.Provider{
+			provider: trust.OIDCMapping{
 				IssuerURL: "http://oidc-success-2.example.com",
 				Blocked:   false,
 				Audiences: []string{},
@@ -120,7 +120,7 @@ func TestRepository_Create(t *testing.T) {
 		{
 			name:     "Create without JWKSURI succeeds",
 			tenantID: "tenant-id-create-without-jwks-success",
-			provider: trust.Provider{
+			provider: trust.OIDCMapping{
 				IssuerURL: "http://oidc-success-3.example.com",
 				Blocked:   false,
 				Audiences: []string{"cmk.example.com"},
@@ -130,7 +130,7 @@ func TestRepository_Create(t *testing.T) {
 		{
 			name:     "Create without Audiences succeeds",
 			tenantID: "tenant-id-create-without-aud-success",
-			provider: trust.Provider{
+			provider: trust.OIDCMapping{
 				IssuerURL: "http://oidc-success-4.example.com",
 				Blocked:   false,
 				JWKSURI:   "jwks.example.com",
@@ -164,7 +164,7 @@ func TestRepository_Create(t *testing.T) {
 func TestRepository_Delete(t *testing.T) {
 	const tenantID = "tenant-id-delete-success"
 
-	provider := trust.Provider{
+	provider := trust.OIDCMapping{
 		IssuerURL: "http://oidc-to-delete.example.com",
 		Blocked:   false,
 		JWKSURI:   "jwks.example.com",
@@ -178,7 +178,7 @@ func TestRepository_Delete(t *testing.T) {
 	tests := []struct {
 		name      string
 		tenantID  string
-		provider  trust.Provider
+		provider  trust.OIDCMapping
 		assertErr assert.ErrorAssertionFunc
 	}{
 		{
@@ -190,7 +190,7 @@ func TestRepository_Delete(t *testing.T) {
 		{
 			name:      "Error does not exist",
 			tenantID:  "does-not-exist",
-			provider:  trust.Provider{IssuerURL: "does-not-exist"},
+			provider:  trust.OIDCMapping{IssuerURL: "does-not-exist"},
 			assertErr: assert.Error,
 		},
 	}
@@ -213,7 +213,7 @@ func TestRepository_Delete(t *testing.T) {
 func TestRepository_Update(t *testing.T) {
 	const tenantID = "tenant-id-update-success"
 
-	provider := trust.Provider{
+	provider := trust.OIDCMapping{
 		IssuerURL: "http://oidc-to-update.example.com",
 		Blocked:   false,
 		JWKSURI:   "jwks.example.com",
@@ -227,13 +227,13 @@ func TestRepository_Update(t *testing.T) {
 	tests := []struct {
 		name      string
 		tenantID  string
-		provider  trust.Provider
+		provider  trust.OIDCMapping
 		assertErr assert.ErrorAssertionFunc
 	}{
 		{
 			name:     "Update succeeds",
 			tenantID: tenantID,
-			provider: trust.Provider{
+			provider: trust.OIDCMapping{
 				IssuerURL: provider.IssuerURL,
 				Blocked:   true,
 				JWKSURI:   "jwks-updated.example.com",
@@ -244,7 +244,7 @@ func TestRepository_Update(t *testing.T) {
 		{
 			name:     "Does not exist",
 			tenantID: "does-not-exist",
-			provider: trust.Provider{
+			provider: trust.OIDCMapping{
 				IssuerURL: "does-not-exist",
 				Blocked:   true,
 				JWKSURI:   "jwks-updated.example.com",
@@ -255,7 +255,7 @@ func TestRepository_Update(t *testing.T) {
 		{
 			name:     "Update without JWKSURI and Audiences succeeds",
 			tenantID: tenantID,
-			provider: trust.Provider{
+			provider: trust.OIDCMapping{
 				IssuerURL: provider.IssuerURL,
 				Blocked:   true,
 				Audiences: []string{},
@@ -265,7 +265,7 @@ func TestRepository_Update(t *testing.T) {
 		{
 			name:     "Update without JWKSURI succeeds",
 			tenantID: tenantID,
-			provider: trust.Provider{
+			provider: trust.OIDCMapping{
 				IssuerURL: provider.IssuerURL,
 				Blocked:   true,
 				Audiences: append(provider.Audiences, "new-audience.example.com"),
@@ -275,7 +275,7 @@ func TestRepository_Update(t *testing.T) {
 		{
 			name:     "Update without Audiences succeeds",
 			tenantID: tenantID,
-			provider: trust.Provider{
+			provider: trust.OIDCMapping{
 				IssuerURL: provider.IssuerURL,
 				Blocked:   true,
 				JWKSURI:   "jwks-updated.example.com",

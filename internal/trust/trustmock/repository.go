@@ -10,12 +10,12 @@ import (
 type RepositoryOption func(*Repository)
 
 type Repository struct {
-	tenantTrust map[string]trust.Provider
+	tenantTrust map[string]trust.OIDCMapping
 
 	getErr, createErr, deleteErr, updateErr error
 }
 
-func WithTrust(tenantID string, provider trust.Provider) RepositoryOption {
+func WithTrust(tenantID string, provider trust.OIDCMapping) RepositoryOption {
 	return func(r *Repository) { r.tenantTrust[tenantID] = provider }
 }
 func WithGetError(err error) RepositoryOption {
@@ -35,7 +35,7 @@ var _ = trust.ProviderRepository(&Repository{})
 
 func NewInMemRepository(opts ...RepositoryOption) *Repository {
 	r := &Repository{
-		tenantTrust: make(map[string]trust.Provider),
+		tenantTrust: make(map[string]trust.OIDCMapping),
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -46,26 +46,26 @@ func NewInMemRepository(opts ...RepositoryOption) *Repository {
 }
 
 // TAdd is a helper method for tests to add a trust relationship.
-func (r *Repository) TAdd(tenantID string, provider trust.Provider) {
+func (r *Repository) TAdd(tenantID string, provider trust.OIDCMapping) {
 	r.tenantTrust[tenantID] = provider
 }
 
 // TGet is a helper method for tests to get a trust relationship.
-func (r *Repository) TGet(tenantID string) trust.Provider {
+func (r *Repository) TGet(tenantID string) trust.OIDCMapping {
 	return r.tenantTrust[tenantID]
 }
 
-func (r *Repository) Get(_ context.Context, tenantID string) (trust.Provider, error) {
+func (r *Repository) Get(_ context.Context, tenantID string) (trust.OIDCMapping, error) {
 	if r.getErr != nil {
-		return trust.Provider{}, r.getErr
+		return trust.OIDCMapping{}, r.getErr
 	}
 	if provider, ok := r.tenantTrust[tenantID]; ok {
 		return provider, nil
 	}
-	return trust.Provider{}, serviceerr.ErrNotFound
+	return trust.OIDCMapping{}, serviceerr.ErrNotFound
 }
 
-func (r *Repository) Create(_ context.Context, tenantID string, provider trust.Provider) error {
+func (r *Repository) Create(_ context.Context, tenantID string, provider trust.OIDCMapping) error {
 	if r.createErr != nil {
 		return r.createErr
 	}
@@ -84,7 +84,7 @@ func (r *Repository) Delete(_ context.Context, tenantID string) error {
 	return nil
 }
 
-func (r *Repository) Update(_ context.Context, tenantID string, provider trust.Provider) error {
+func (r *Repository) Update(_ context.Context, tenantID string, provider trust.OIDCMapping) error {
 	if r.updateErr != nil {
 		return r.updateErr
 	}

@@ -56,7 +56,7 @@ func TestApplyOIDCMapping(t *testing.T) {
 	})
 
 	t.Run("success - updates existing mapping", func(t *testing.T) {
-		existingProvider := trust.Provider{
+		existingProvider := trust.OIDCMapping{
 			IssuerURL: "https://old-issuer.example.com",
 			JWKSURI:   "https://old-issuer.example.com/jwks.json",
 			Audiences: []string{"old-audience"},
@@ -132,7 +132,7 @@ func TestApplyOIDCMapping(t *testing.T) {
 	})
 
 	t.Run("update error - returns grpc error", func(t *testing.T) {
-		existingProvider := trust.Provider{
+		existingProvider := trust.OIDCMapping{
 			IssuerURL: "https://issuer.example.com",
 		}
 		updateErr := errors.New("update failed")
@@ -165,7 +165,7 @@ func TestBlockOIDCMapping(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("success - blocks existing mapping", func(t *testing.T) {
-		existingProvider := trust.Provider{
+		existingProvider := trust.OIDCMapping{
 			IssuerURL: "https://issuer.example.com",
 			Blocked:   false,
 		}
@@ -188,7 +188,7 @@ func TestBlockOIDCMapping(t *testing.T) {
 	})
 
 	t.Run("success - already blocked", func(t *testing.T) {
-		existingProvider := trust.Provider{
+		existingProvider := trust.OIDCMapping{
 			IssuerURL: "https://issuer.example.com",
 			Blocked:   true,
 		}
@@ -257,7 +257,7 @@ func TestRemoveOIDCMapping(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("success - removes existing mapping", func(t *testing.T) {
-		existingProvider := trust.Provider{
+		existingProvider := trust.OIDCMapping{
 			IssuerURL: "https://issuer.example.com",
 		}
 		repo := trustmock.NewInMemRepository(
@@ -327,7 +327,7 @@ func TestUnblockOIDCMapping(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("success - unblocks blocked mapping", func(t *testing.T) {
-		existingProvider := trust.Provider{
+		existingProvider := trust.OIDCMapping{
 			IssuerURL: "https://issuer.example.com",
 			Blocked:   true,
 		}
@@ -350,7 +350,7 @@ func TestUnblockOIDCMapping(t *testing.T) {
 	})
 
 	t.Run("success - already unblocked", func(t *testing.T) {
-		existingProvider := trust.Provider{
+		existingProvider := trust.OIDCMapping{
 			IssuerURL: "https://issuer.example.com",
 			Blocked:   false,
 		}
@@ -391,7 +391,7 @@ func TestUnblockOIDCMapping(t *testing.T) {
 
 	t.Run("error - returns grpc error with message", func(t *testing.T) {
 		internalErr := errors.New("update failed")
-		existingProvider := trust.Provider{
+		existingProvider := trust.OIDCMapping{
 			IssuerURL: "https://issuer.example.com",
 			Blocked:   true,
 		}

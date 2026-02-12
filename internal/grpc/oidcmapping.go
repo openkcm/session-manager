@@ -40,7 +40,7 @@ func (srv *OIDCMappingServer) ApplyOIDCMapping(ctx context.Context, req *oidcmap
 
 	response := &oidcmappingv1.ApplyOIDCMappingResponse{}
 
-	provider := trust.Provider{
+	provider := trust.OIDCMapping{
 		IssuerURL:  req.GetIssuer(),
 		Blocked:    false,
 		JWKSURI:    req.GetJwksUri(),

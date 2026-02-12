@@ -421,7 +421,7 @@ func TestManager_Logout(t *testing.T) {
 				oidcServer := StartOIDCServer(t, false)
 				t.Cleanup(oidcServer.Close)
 
-				provider := trust.Provider{
+				provider := trust.OIDCMapping{
 					IssuerURL:  oidcServer.URL,
 					JWKSURI:    oidcServer.URL + "/jwks",
 					Audiences:  []string{"test"},

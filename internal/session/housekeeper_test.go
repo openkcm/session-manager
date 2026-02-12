@@ -104,7 +104,7 @@ func TestRefreshAccessToken(t *testing.T) {
 		defer tokenServer.Close()
 		tokenServerURL = tokenServer.URL + "/token"
 
-		provider := trust.Provider{
+		provider := trust.OIDCMapping{
 			IssuerURL: discoveryServerURL,
 			Properties: map[string]string{
 				"test-param": "param-value",
@@ -199,7 +199,7 @@ func TestRefreshAccessToken(t *testing.T) {
 		defer tokenServer.Close()
 		tokenServerURL = tokenServer.URL + "/token"
 
-		provider := trust.Provider{
+		provider := trust.OIDCMapping{
 			IssuerURL:  discoveryServerURL,
 			Properties: map[string]string{},
 		}
@@ -251,7 +251,7 @@ func TestRefreshAccessToken(t *testing.T) {
 		defer discoveryServer.Close()
 		discoveryServerURL = discoveryServer.URL
 
-		provider := trust.Provider{
+		provider := trust.OIDCMapping{
 			IssuerURL:  discoveryServer.URL,
 			Properties: map[string]string{}, // Missing required parameter
 		}

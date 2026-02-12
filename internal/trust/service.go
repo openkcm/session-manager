@@ -18,7 +18,7 @@ func NewService(repo ProviderRepository) *Service {
 	}
 }
 
-func (s *Service) ApplyMapping(ctx context.Context, tenantID string, provider Provider) error {
+func (s *Service) ApplyMapping(ctx context.Context, tenantID string, provider OIDCMapping) error {
 	_, err := s.repository.Get(ctx, tenantID)
 	if err != nil {
 		err = s.repository.Create(ctx, tenantID, provider)

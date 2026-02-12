@@ -9,13 +9,13 @@ import (
 func TestProvider_GetIntrospectParameters(t *testing.T) {
 	tests := []struct {
 		name       string
-		provider   Provider
+		provider   OIDCMapping
 		keys       []string
 		wantParams map[string]string
 	}{
 		{
 			name: "returns matching parameters",
-			provider: Provider{
+			provider: OIDCMapping{
 				Properties: map[string]string{
 					"client_id":     "my-client-id",
 					"client_secret": "my-secret",
@@ -30,7 +30,7 @@ func TestProvider_GetIntrospectParameters(t *testing.T) {
 		},
 		{
 			name: "skips missing parameters",
-			provider: Provider{
+			provider: OIDCMapping{
 				Properties: map[string]string{
 					"client_id": "my-client-id",
 				},
@@ -42,7 +42,7 @@ func TestProvider_GetIntrospectParameters(t *testing.T) {
 		},
 		{
 			name: "returns empty map when no keys provided",
-			provider: Provider{
+			provider: OIDCMapping{
 				Properties: map[string]string{
 					"client_id": "my-client-id",
 				},
@@ -52,7 +52,7 @@ func TestProvider_GetIntrospectParameters(t *testing.T) {
 		},
 		{
 			name: "returns empty map when properties is nil",
-			provider: Provider{
+			provider: OIDCMapping{
 				Properties: nil,
 			},
 			keys:       []string{"client_id"},
@@ -60,7 +60,7 @@ func TestProvider_GetIntrospectParameters(t *testing.T) {
 		},
 		{
 			name: "returns empty map when no keys match",
-			provider: Provider{
+			provider: OIDCMapping{
 				Properties: map[string]string{
 					"client_id": "my-client-id",
 				},
@@ -70,7 +70,7 @@ func TestProvider_GetIntrospectParameters(t *testing.T) {
 		},
 		{
 			name: "handles all keys matching",
-			provider: Provider{
+			provider: OIDCMapping{
 				Properties: map[string]string{
 					"key1": "value1",
 					"key2": "value2",

@@ -47,7 +47,7 @@ func TestManager_Auth(t *testing.T) {
 	auditServer := StartAuditServer(t)
 	defer auditServer.Close()
 
-	oidcProvider := trust.Provider{
+	oidcProvider := trust.OIDCMapping{
 		IssuerURL: oidcServer.URL,
 		Blocked:   false,
 		JWKSURI:   "http://jwks.example.com",
@@ -68,7 +68,7 @@ func TestManager_Auth(t *testing.T) {
 		fingerprint string
 		wantURL     string
 		errAssert   assert.ErrorAssertionFunc
-		provider    trust.Provider
+		provider    trust.OIDCMapping
 	}{
 		{
 			name:       "Success",
@@ -368,7 +368,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			jwksURI, err := url.JoinPath(oidcServer.URL, "/.well-known/jwks.json")
 			require.NoError(t, err)
 
-			localOIDCProvider := trust.Provider{
+			localOIDCProvider := trust.OIDCMapping{
 				IssuerURL: oidcServer.URL,
 				Blocked:   false,
 				JWKSURI:   jwksURI,
@@ -484,7 +484,7 @@ func TestManager_BCLogout(t *testing.T) {
 				SessionID: "sid-1",
 			}),
 			setupMock: func(oidcs *trustmock.Repository, sessions *sessionmock.Repository) {
-				_ = oidcs.Create(context.Background(), "tid-1", trust.Provider{
+				_ = oidcs.Create(context.Background(), "tid-1", trust.OIDCMapping{
 					IssuerURL: jwksSrv.URL,
 				})
 				_ = sessions.StoreSession(context.Background(), session.Session{ID: "sid-1", TenantID: "tid-1"})

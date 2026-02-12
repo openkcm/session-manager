@@ -27,16 +27,16 @@ const (
 
 type RepoWrapper struct {
 	Repo       trust.ProviderRepository
-	MockGet    func(ctx context.Context, tenantID string) (trust.Provider, error)
-	MockCreate func(ctx context.Context, tenantID string, provider trust.Provider) error
-	MockUpdate func(ctx context.Context, tenantID string, provider trust.Provider) error
+	MockGet    func(ctx context.Context, tenantID string) (trust.OIDCMapping, error)
+	MockCreate func(ctx context.Context, tenantID string, provider trust.OIDCMapping) error
+	MockUpdate func(ctx context.Context, tenantID string, provider trust.OIDCMapping) error
 	MockDelete func(ctx context.Context, tenantID string) error
 }
 
 var _ trust.ProviderRepository = &RepoWrapper{}
 
 // Create implements oidc.ProviderRepository.
-func (m *RepoWrapper) Create(ctx context.Context, tenantID string, provider trust.Provider) error {
+func (m *RepoWrapper) Create(ctx context.Context, tenantID string, provider trust.OIDCMapping) error {
 	if m.MockCreate != nil {
 		err := m.MockCreate(ctx, tenantID, provider)
 		if err != nil {
@@ -60,18 +60,18 @@ func (m *RepoWrapper) Delete(ctx context.Context, tenantID string) error {
 }
 
 // Get implements oidc.ProviderRepository.
-func (m *RepoWrapper) Get(ctx context.Context, tenantID string) (trust.Provider, error) {
+func (m *RepoWrapper) Get(ctx context.Context, tenantID string) (trust.OIDCMapping, error) {
 	if m.MockGet != nil {
 		_, err := m.MockGet(ctx, tenantID)
 		if err != nil {
-			return trust.Provider{}, err
+			return trust.OIDCMapping{}, err
 		}
 	}
 	return m.Repo.Get(ctx, tenantID)
 }
 
 // Update implements oidc.ProviderRepository.
-func (m *RepoWrapper) Update(ctx context.Context, tenantID string, provider trust.Provider) error {
+func (m *RepoWrapper) Update(ctx context.Context, tenantID string, provider trust.OIDCMapping) error {
 	if m.MockUpdate != nil {
 		err := m.MockUpdate(ctx, tenantID, provider)
 		if err != nil {
