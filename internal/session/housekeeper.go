@@ -98,12 +98,12 @@ func (m *Manager) housekeepSession(ctx context.Context, s Session, refreshTrigge
 
 // refreshAccessToken refreshes the access token for the given session using its refresh token.
 func (m *Manager) refreshAccessToken(ctx context.Context, s Session) error {
-	provider, err := m.oidc.Get(ctx, s.TenantID)
+	mapping, err := m.trustRepo.Get(ctx, s.TenantID)
 	if err != nil {
-		return fmt.Errorf("could not get OIDC provider: %w", err)
+		return fmt.Errorf("could not get trust mapping: %w", err)
 	}
 
-	openidConf, err := openid.GetConfig(ctx, provider.IssuerURL)
+	openidConf, err := openid.GetConfig(ctx, mapping.IssuerURL)
 	if err != nil {
 		return fmt.Errorf("could not get OpenID configuration: %w", err)
 	}
@@ -113,7 +113,7 @@ func (m *Manager) refreshAccessToken(ctx context.Context, s Session) error {
 	data.Set("refresh_token", s.RefreshToken)
 	data.Set("client_id", m.clientID)
 	for _, parameter := range m.queryParametersToken {
-		value, ok := provider.Properties[parameter]
+		value, ok := mapping.Properties[parameter]
 		if !ok {
 			return fmt.Errorf("missing token parameter: %s", parameter)
 		}

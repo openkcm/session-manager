@@ -1,4 +1,4 @@
-package oidc_test
+package trust_test
 
 import (
 	"context"
@@ -12,8 +12,8 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
-	"github.com/openkcm/session-manager/internal/oidc"
-	oidcsql "github.com/openkcm/session-manager/internal/oidc/sql"
+	"github.com/openkcm/session-manager/internal/trust"
+	"github.com/openkcm/session-manager/internal/trust/trustsql"
 	migrations "github.com/openkcm/session-manager/sql"
 )
 
@@ -26,28 +26,28 @@ const (
 )
 
 type RepoWrapper struct {
-	Repo       oidc.ProviderRepository
-	MockGet    func(ctx context.Context, tenantID string) (oidc.Provider, error)
-	MockCreate func(ctx context.Context, tenantID string, provider oidc.Provider) error
-	MockUpdate func(ctx context.Context, tenantID string, provider oidc.Provider) error
+	Repo       trust.OIDCMappingRepository
+	MockGet    func(ctx context.Context, tenantID string) (trust.OIDCMapping, error)
+	MockCreate func(ctx context.Context, tenantID string, mapping trust.OIDCMapping) error
+	MockUpdate func(ctx context.Context, tenantID string, mapping trust.OIDCMapping) error
 	MockDelete func(ctx context.Context, tenantID string) error
 }
 
-var _ oidc.ProviderRepository = &RepoWrapper{}
+var _ trust.OIDCMappingRepository = &RepoWrapper{}
 
-// Create implements oidc.ProviderRepository.
-func (m *RepoWrapper) Create(ctx context.Context, tenantID string, provider oidc.Provider) error {
+// Create implements oidc.OIDCMappingRepository.
+func (m *RepoWrapper) Create(ctx context.Context, tenantID string, mapping trust.OIDCMapping) error {
 	if m.MockCreate != nil {
-		err := m.MockCreate(ctx, tenantID, provider)
+		err := m.MockCreate(ctx, tenantID, mapping)
 		if err != nil {
 			return err
 		}
 	}
 
-	return m.Repo.Create(ctx, tenantID, provider)
+	return m.Repo.Create(ctx, tenantID, mapping)
 }
 
-// Delete implements oidc.ProviderRepository.
+// Delete implements oidc.OIDCMappingRepository.
 func (m *RepoWrapper) Delete(ctx context.Context, tenantID string) error {
 	if m.MockDelete != nil {
 		err := m.MockDelete(ctx, tenantID)
@@ -59,29 +59,29 @@ func (m *RepoWrapper) Delete(ctx context.Context, tenantID string) error {
 	return m.Repo.Delete(ctx, tenantID)
 }
 
-// Get implements oidc.ProviderRepository.
-func (m *RepoWrapper) Get(ctx context.Context, tenantID string) (oidc.Provider, error) {
+// Get implements oidc.OIDCMappingRepository.
+func (m *RepoWrapper) Get(ctx context.Context, tenantID string) (trust.OIDCMapping, error) {
 	if m.MockGet != nil {
 		_, err := m.MockGet(ctx, tenantID)
 		if err != nil {
-			return oidc.Provider{}, err
+			return trust.OIDCMapping{}, err
 		}
 	}
 	return m.Repo.Get(ctx, tenantID)
 }
 
-// Update implements oidc.ProviderRepository.
-func (m *RepoWrapper) Update(ctx context.Context, tenantID string, provider oidc.Provider) error {
+// Update implements oidc.OIDCMappingRepository.
+func (m *RepoWrapper) Update(ctx context.Context, tenantID string, mapping trust.OIDCMapping) error {
 	if m.MockUpdate != nil {
-		err := m.MockUpdate(ctx, tenantID, provider)
+		err := m.MockUpdate(ctx, tenantID, mapping)
 		if err != nil {
 			return err
 		}
 	}
-	return m.Repo.Update(ctx, tenantID, provider)
+	return m.Repo.Update(ctx, tenantID, mapping)
 }
 
-func createRepo(ctx context.Context) (oidc.ProviderRepository, error) {
+func createRepo(ctx context.Context) (trust.OIDCMappingRepository, error) {
 	pgContainer, err := postgres.Run(
 		ctx,
 		"postgres:17-alpine",
@@ -111,7 +111,7 @@ func createRepo(ctx context.Context) (oidc.ProviderRepository, error) {
 		return nil, err
 	}
 
-	return oidcsql.NewRepository(dbPool), nil
+	return trustsql.NewRepository(dbPool), nil
 }
 
 func migrateDB(ctx context.Context, connStr string) error {

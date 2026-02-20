@@ -17,10 +17,10 @@ import (
 	"github.com/openkcm/session-manager/internal/business/server"
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/grpc"
-	"github.com/openkcm/session-manager/internal/oidc"
-	oidcsql "github.com/openkcm/session-manager/internal/oidc/sql"
 	"github.com/openkcm/session-manager/internal/session"
 	sessionvalkey "github.com/openkcm/session-manager/internal/session/valkey"
+	"github.com/openkcm/session-manager/internal/trust"
+	"github.com/openkcm/session-manager/internal/trust/trustsql"
 )
 
 // Main starts both API servers
@@ -81,12 +81,12 @@ func publicMain(ctx context.Context, cfg *config.Config) error {
 
 // internalMain starts the gRPC private API server.
 func internalMain(ctx context.Context, cfg *config.Config) error {
-	// Create OIDC service
-	oidcProviderRepo, err := oidcProviderRepoFromConfig(ctx, cfg)
+	// Create trust service
+	trustRepo, err := trustRepoFromConfig(ctx, cfg)
 	if err != nil {
-		return fmt.Errorf("failed to create OIDC service: %w", err)
+		return fmt.Errorf("failed to create trust service: %w", err)
 	}
-	oidcService := oidc.NewService(oidcProviderRepo)
+	trustService := trust.NewService(trustRepo)
 
 	// Create session repository
 	valkeyClient, err := valkeyClientFromConfig(cfg)
@@ -103,19 +103,19 @@ func internalMain(ctx context.Context, cfg *config.Config) error {
 	}
 
 	// Initialize the gRPC servers.
-	oidcmappingsrv := grpc.NewOIDCMappingServer(oidcService)
+	oidcmappingsrv := grpc.NewOIDCMappingServer(trustService)
 	opts := []grpc.SessionServerOption{
 		grpc.WithQueryParametersIntrospect(cfg.SessionManager.AdditionalQueryParametersIntrospect),
 	}
-	sessionsrv := grpc.NewSessionServer(sessionRepo, oidcProviderRepo, httpClient, cfg.SessionManager.IdleSessionTimeout, opts...)
+	sessionsrv := grpc.NewSessionServer(sessionRepo, trustRepo, httpClient, cfg.SessionManager.IdleSessionTimeout, opts...)
 	return server.StartGRPCServer(ctx, cfg, oidcmappingsrv, sessionsrv)
 }
 
 func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Manager, closeFn func(), _ error) {
-	// Create OIDC provider repository
-	oidcProviderRepo, err := oidcProviderRepoFromConfig(ctx, cfg)
+	// Create trust repository
+	trustRepo, err := trustRepoFromConfig(ctx, cfg)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create OIDC service: %w", err)
+		return nil, nil, fmt.Errorf("failed to create trust repository: %w", err)
 	}
 
 	// Create session repository
@@ -138,7 +138,7 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Man
 
 	sessManager, err := session.NewManager(
 		&cfg.SessionManager,
-		oidcProviderRepo,
+		trustRepo,
 		sessionRepo,
 		auditLogger,
 		httpClient,
@@ -150,7 +150,7 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Man
 	return sessManager, valkeyClient.Close, nil
 }
 
-func oidcProviderRepoFromConfig(ctx context.Context, cfg *config.Config) (*oidcsql.Repository, error) {
+func trustRepoFromConfig(ctx context.Context, cfg *config.Config) (*trustsql.Repository, error) {
 	connStr, err := config.MakeConnStr(cfg.Database)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make dsn from config: %w", err)
@@ -161,7 +161,7 @@ func oidcProviderRepoFromConfig(ctx context.Context, cfg *config.Config) (*oidcs
 		return nil, fmt.Errorf("failed to initialise pgxpool connection: %w", err)
 	}
 
-	return oidcsql.NewRepository(db), nil
+	return trustsql.NewRepository(db), nil
 }
 
 func valkeyClientFromConfig(cfg *config.Config) (valkey.Client, error) {

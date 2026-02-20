@@ -1,4 +1,4 @@
-package oidc
+package trust
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	slogctx "github.com/veqryn/slog-context"
 )
 
-type Provider struct {
+type OIDCMapping struct {
 	IssuerURL  string
 	Blocked    bool
 	JWKSURI    string
@@ -16,7 +16,7 @@ type Provider struct {
 	QueryParametersIntrospect []string
 }
 
-func (p *Provider) GetIntrospectParameters(keys []string) map[string]string {
+func (p *OIDCMapping) GetIntrospectParameters(keys []string) map[string]string {
 	params := make(map[string]string, len(keys))
 	for _, parameter := range keys {
 		value, ok := p.Properties[parameter]
