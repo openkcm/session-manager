@@ -61,6 +61,7 @@ func rootCmd() *cobra.Command {
 
 	return cmd
 }
+
 func execute() error {
 	ctx, cancelOnSignal := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
 	defer cancelOnSignal()
