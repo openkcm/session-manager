@@ -157,6 +157,10 @@ nodeSelector: {}
 
 tolerations: []
 
+# This is for setting up pod topology spread constraints by hostname more information can be found here:
+# https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/
+topologySpreadConstraints: []
+
 ports:
   - name: http-status
     containerPort: 8888
