@@ -1,11 +1,13 @@
 module github.com/openkcm/session-manager
 
-go 1.25.1
+go 1.25.6
 
 tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
 
 require (
+	github.com/XSAM/otelsql v0.41.0
 	github.com/docker/go-connections v0.6.0
+	github.com/exaring/otelpgx v0.10.0
 	github.com/go-jose/go-jose/v4 v4.1.3
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/google/go-cmp v0.7.0
@@ -13,7 +15,7 @@ require (
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/oapi-codegen/runtime v1.1.2
 	github.com/openkcm/api-sdk v0.15.0
-	github.com/openkcm/common-sdk v1.12.0
+	github.com/openkcm/common-sdk v1.13.0
 	github.com/pressly/goose/v3 v3.26.0
 	github.com/samber/oops v1.21.0
 	github.com/spf13/cobra v1.10.2
@@ -63,6 +65,7 @@ require (
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.7 // indirect
 	github.com/hashicorp/go-version v1.8.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect

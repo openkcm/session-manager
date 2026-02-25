@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/valkey-io/valkey-go"
@@ -156,9 +157,20 @@ func trustRepoFromConfig(ctx context.Context, cfg *config.Config) (*trustsql.Rep
 		return nil, fmt.Errorf("failed to make dsn from config: %w", err)
 	}
 
-	db, err := pgxpool.New(ctx, connStr)
+	pgxpoolCfg, err := pgxpool.ParseConfig(connStr)
+	if err != nil {
+		return nil, fmt.Errorf("parsing pgxpool config: %w", err)
+	}
+
+	pgxpoolCfg.ConnConfig.Tracer = otelpgx.NewTracer()
+
+	db, err := pgxpool.NewWithConfig(ctx, pgxpoolCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialise pgxpool connection: %w", err)
+	}
+
+	if err := otelpgx.RecordStats(db); err != nil {
+		return nil, fmt.Errorf("recording database stat: %w", err)
 	}
 
 	return trustsql.NewRepository(db), nil
