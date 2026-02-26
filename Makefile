@@ -135,6 +135,25 @@ test: clean install-gotestsum
 
 	@echo "On a Mac, you can use the following command to open the coverage report in the browser\ngo tool cover -html=cover.out -o cover.html && open cover.html"
 
+.PHONY: test-helm-unit
+test-helm-unit:
+	@echo "Running Helm unit tests"
+	cd helm-tests/unit && go test -v ./...
+
+.PHONY: test-helm-integration
+test-helm-integration:
+	@echo "Running Helm integration tests"
+	@echo "Note: This requires a running Kubernetes cluster"
+	cd helm-tests/integration && go test -v ./...
+
+.PHONY: test-helm
+test-helm: test-helm-unit
+	@echo "Helm tests completed"
+
+.PHONY: test-all
+test-all: test test-helm
+	@echo "All tests completed"
+
 .PHONY: install-gotestsum
 install-gotestsum:
 	(cd /tmp && go install gotest.tools/gotestsum@latest)
