@@ -1,6 +1,6 @@
 # Helm Tests for Session Manager
 
-This directory contains automated tests for the session-manager Helm chart.
+This directory contains comprehensive automated tests for the session-manager Helm chart.
 
 ## Directory Structure
 
@@ -12,7 +12,7 @@ helm-tests/
 ├── integration/        # Integration tests
 │   ├── helm-install_test.go
 │   └── main_test.go
-└── unit/              # Unit tests
+└── unit/              # Unit tests (125 test cases)
     ├── chart_test.go
     ├── configmap_test.go
     ├── deployment_test.go
@@ -33,21 +33,26 @@ Unit tests validate individual Helm templates and their rendering with various v
 - Validate that expected Kubernetes resources are rendered
 - Check for correct labels, annotations, and configurations
 - Test various deployment scenarios (replicas, images, custom values)
+- **125 test cases covering 100% of templates**
 
 **Coverage:**
 - Deployments (session-manager and housekeeper)
 - Services
-- ConfigMaps
-- ServiceAccounts
+- ConfigMaps (all 11 configuration sections)
+- ServiceAccounts (including Role and RoleBinding)
 - HorizontalPodAutoscaler (HPA)
-- Jobs (migration)
+- Jobs (migration with hooks)
 - PodDisruptionBudget (PDB)
 - Labels and annotations
 - Chart validation
 
 ### Integration Tests (`integration/`)
-Integration tests verify the chart as a whole. These tests:
-- Run `helm template` on the entire chart
+Integration tests verify the chart deployment in a real Kubernetes cluster. These tests:
+- Deploy dependencies (PostgreSQL, Valkey)
+- Install the session-manager chart
+- Wait for pods to become available
+- Verify services are created correctly
+- Test full deployment lifecycle
 - Verify that all expected resources are present
 - Can be extended to test actual installations in test clusters
 
@@ -139,15 +144,43 @@ func TestNewResource(t *testing.T) {
 
 ## Continuous Integration
 
-These tests can be integrated into CI/CD pipelines:
+### GitHub Actions
+
+Helm unit tests are **automatically run** on every pull request and push to the main branch via GitHub Actions.
+
+The workflow is defined in `.github/workflows/ci.yaml`:
+- **Job: `helm-tests`** - Runs all unit tests using `make test-helm-unit`
+- **Triggers:** On push to main, on pull requests, on version tags
+- **Requirements:** Go 1.26+, Helm CLI
+
+### Running Locally
+
+You can run the same tests that CI runs:
+
+```bash
+# From repository root - same as CI
+make test-helm-unit
+
+# Or run all tests including integration
+make test-helm
+
+# Or run everything (Go tests + Helm tests)
+make test-all
+```
+
+### Integration with CI/CD Pipelines
+
+For other CI systems, you can use:
 
 ```yaml
-# Example GitHub Actions workflow
-- name: Run Helm Tests
+# Example for other CI systems
+- name: Run Helm Unit Tests
   run: |
-    cd helm-tests
+    cd helm-tests/unit
     go test -v ./...
 ```
+
+**Note:** Integration tests require a Kubernetes cluster and are typically not run in standard CI pipelines. They're intended for manual testing or dedicated test environments.
 
 ## Best Practices
 
