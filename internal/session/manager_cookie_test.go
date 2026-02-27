@@ -475,6 +475,7 @@ func TestManager_Logout(t *testing.T) {
 				http.DefaultClient,
 			)
 			require.NoError(t, err)
+			m.SetAllowHttpScheme(true)
 
 			logoutURL, err := m.Logout(t.Context(), sessionID)
 

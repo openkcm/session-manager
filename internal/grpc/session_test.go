@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openkcm/common-sdk/pkg/openid"
+	"github.com/openkcm/common-sdk/pkg/oidc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -77,12 +77,12 @@ func TestGetSession(t *testing.T) {
 		testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
 			case "/.well-known/openid-configuration":
-				_ = json.NewEncoder(w).Encode(openid.Configuration{
+				_ = json.NewEncoder(w).Encode(oidc.Configuration{
 					Issuer:                testServer.URL,
 					IntrospectionEndpoint: testServer.URL + "/introspect",
 				})
 			case "/introspect":
-				_ = json.NewEncoder(w).Encode(openid.IntrospectResponse{
+				_ = json.NewEncoder(w).Encode(oidc.Introspection{
 					Active: true,
 				})
 			default:
@@ -123,7 +123,7 @@ func TestGetSession(t *testing.T) {
 		)
 
 		httpClient := &http.Client{}
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, httpClient, 90*time.Minute)
+		server := grpc.NewSessionServer(sessionRepo, trustRepo, httpClient, 90*time.Minute, grpc.WithAllowHttpScheme(true))
 
 		req := &sessionv1.GetSessionRequest{
 			SessionId:   "session-123",
@@ -151,12 +151,12 @@ func TestGetSession(t *testing.T) {
 		testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
 			case "/.well-known/openid-configuration":
-				_ = json.NewEncoder(w).Encode(openid.Configuration{
+				_ = json.NewEncoder(w).Encode(oidc.Configuration{
 					Issuer:                testServer.URL,
 					IntrospectionEndpoint: testServer.URL + "/introspect",
 				})
 			case "/introspect":
-				_ = json.NewEncoder(w).Encode(openid.IntrospectResponse{
+				_ = json.NewEncoder(w).Encode(oidc.Introspection{
 					Active: true,
 					Groups: []string{"introspect-group1", "introspect-group2"},
 				})
@@ -193,7 +193,7 @@ func TestGetSession(t *testing.T) {
 		)
 
 		httpClient := &http.Client{}
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, httpClient, 90*time.Minute)
+		server := grpc.NewSessionServer(sessionRepo, trustRepo, httpClient, 90*time.Minute, grpc.WithAllowHttpScheme(true))
 
 		req := &sessionv1.GetSessionRequest{
 			SessionId:   "session-groups",
@@ -215,7 +215,7 @@ func TestGetSession(t *testing.T) {
 		var testServer *httptest.Server
 		testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/.well-known/openid-configuration" {
-				_ = json.NewEncoder(w).Encode(openid.Configuration{
+				_ = json.NewEncoder(w).Encode(oidc.Configuration{
 					Issuer: testServer.URL,
 					// No IntrospectionEndpoint
 				})
@@ -248,7 +248,7 @@ func TestGetSession(t *testing.T) {
 		)
 
 		httpClient := &http.Client{}
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, httpClient, 90*time.Minute)
+		server := grpc.NewSessionServer(sessionRepo, trustRepo, httpClient, 90*time.Minute, grpc.WithAllowHttpScheme(true))
 
 		req := &sessionv1.GetSessionRequest{
 			SessionId:   "session-456",
@@ -530,7 +530,7 @@ func TestGetSession(t *testing.T) {
 		testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
 			case "/.well-known/openid-configuration":
-				_ = json.NewEncoder(w).Encode(openid.Configuration{
+				_ = json.NewEncoder(w).Encode(oidc.Configuration{
 					Issuer:                testServer.URL,
 					IntrospectionEndpoint: testServer.URL + "/introspect",
 				})
@@ -562,7 +562,7 @@ func TestGetSession(t *testing.T) {
 		)
 
 		httpClient := &http.Client{}
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, httpClient, 90*time.Minute)
+		server := grpc.NewSessionServer(sessionRepo, trustRepo, httpClient, 90*time.Minute, grpc.WithAllowHttpScheme(true))
 
 		req := &sessionv1.GetSessionRequest{
 			SessionId:   "session-introspect-fail",
@@ -583,12 +583,12 @@ func TestGetSession(t *testing.T) {
 		testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
 			case "/.well-known/openid-configuration":
-				_ = json.NewEncoder(w).Encode(openid.Configuration{
+				_ = json.NewEncoder(w).Encode(oidc.Configuration{
 					Issuer:                testServer.URL,
 					IntrospectionEndpoint: testServer.URL + "/introspect",
 				})
 			case "/introspect":
-				_ = json.NewEncoder(w).Encode(openid.IntrospectResponse{
+				_ = json.NewEncoder(w).Encode(oidc.Introspection{
 					Active: false, // Token is not active
 				})
 			}
@@ -617,7 +617,7 @@ func TestGetSession(t *testing.T) {
 		)
 
 		httpClient := &http.Client{}
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, httpClient, 90*time.Minute)
+		server := grpc.NewSessionServer(sessionRepo, trustRepo, httpClient, 90*time.Minute, grpc.WithAllowHttpScheme(true))
 
 		req := &sessionv1.GetSessionRequest{
 			SessionId:   "session-inactive-token",
@@ -636,7 +636,7 @@ func TestGetSession(t *testing.T) {
 		var testServer *httptest.Server
 		testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/.well-known/openid-configuration" {
-				_ = json.NewEncoder(w).Encode(openid.Configuration{
+				_ = json.NewEncoder(w).Encode(oidc.Configuration{
 					Issuer: testServer.URL,
 				})
 			}
@@ -665,7 +665,7 @@ func TestGetSession(t *testing.T) {
 		)
 
 		httpClient := &http.Client{}
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, httpClient, 90*time.Minute)
+		server := grpc.NewSessionServer(sessionRepo, trustRepo, httpClient, 90*time.Minute, grpc.WithAllowHttpScheme(true))
 
 		req := &sessionv1.GetSessionRequest{
 			SessionId:   "session-bump-fail",

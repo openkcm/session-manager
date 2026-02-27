@@ -2,11 +2,13 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
-	"github.com/openkcm/common-sdk/pkg/openid"
+	"github.com/openkcm/common-sdk/pkg/oidc"
+	"github.com/patrickmn/go-cache"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 
@@ -26,6 +28,12 @@ func WithQueryParametersIntrospect(params []string) SessionServerOption {
 	}
 }
 
+func WithAllowHttpScheme(allow bool) SessionServerOption {
+	return func(s *SessionServer) {
+		s.allowHttpScheme = allow
+	}
+}
+
 type SessionServer struct {
 	sessionv1.UnimplementedServiceServer
 
@@ -35,6 +43,9 @@ type SessionServer struct {
 
 	queryParametersIntrospect []string
 	idleSessionTimeout        time.Duration
+	allowHttpScheme           bool
+
+	cache *cache.Cache
 }
 
 func NewSessionServer(
@@ -49,6 +60,7 @@ func NewSessionServer(
 		trustRepo:          trustRepo,
 		httpClient:         httpClient,
 		idleSessionTimeout: idleSessionTimeout,
+		cache:              cache.New(2*time.Minute, 10*time.Minute),
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -116,15 +128,6 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 		return &sessionv1.GetSessionResponse{Valid: false}, nil
 	}
 
-	// Introspect access token
-	cfg, err := openid.GetConfig(ctx, mapping.IssuerURL)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to get an openid config")
-		slogctx.Error(ctx, "Could not get OpenID configuration", "issuer", sess.Issuer, "error", err)
-		return &sessionv1.GetSessionResponse{Valid: false}, err
-	}
-
 	response := &sessionv1.GetSessionResponse{
 		Valid:       true,
 		Issuer:      sess.Issuer,
@@ -136,25 +139,25 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 		AuthContext: sess.AuthContext,
 	}
 
-	if cfg.IntrospectionEndpoint != "" {
-		result, err := cfg.IntrospectToken(ctx, sess.AccessToken, mapping.GetIntrospectParameters(s.queryParametersIntrospect))
-		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "failed to introspect an access token")
-			slogctx.Error(ctx, "Could not introspect access token", "error", err)
-			return &sessionv1.GetSessionResponse{Valid: false}, err
-		}
-		if !result.Active {
-			slogctx.Warn(ctx, "Access token is not active", "result", result)
-			span.SetStatus(codes.Ok, "access token is not active")
-			return &sessionv1.GetSessionResponse{Valid: false}, nil
-		}
-
-		if result.Groups != nil {
-			response.Groups = result.Groups
-		}
+	// Introspect access token
+	result, err := s.introspectToken(ctx, sess.AccessToken, &mapping)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to introspect an access token")
+		slogctx.Error(ctx, "Could not introspect access token", "error", err)
+		return &sessionv1.GetSessionResponse{Valid: false}, err
+	}
+	if !result.Active {
+		slogctx.Warn(ctx, "Access token is not active", "result", result)
+		span.SetStatus(codes.Ok, "access token is not active")
+		return &sessionv1.GetSessionResponse{Valid: false}, nil
 	}
 
+	if result.Groups != nil {
+		response.Groups = result.Groups
+	}
+
+	// Bump the session to keep it active
 	if err := s.sessionRepo.BumpActive(ctx, req.GetSessionId(), s.idleSessionTimeout); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to bump the session status")
@@ -187,4 +190,40 @@ func (s *SessionServer) GetOIDCProvider(ctx context.Context, req *sessionv1.GetO
 			Audiences: provider.Audiences,
 		},
 	}, nil
+}
+
+func (s *SessionServer) introspectToken(ctx context.Context, token string, oidcTrust *trust.OIDCMapping) (oidc.Introspection, error) {
+	const introspectPrefix = "introspect_"
+
+	// first check the cache for a recent introspection result for this token
+	cacheKey := introspectPrefix + token
+	cache, ok := s.cache.Get(cacheKey)
+	if ok {
+		//nolint:forcetypeassert
+		return cache.(oidc.Introspection), nil
+	}
+
+	// create the provider for the given issuer
+	provider, err := oidc.NewProvider(oidcTrust.IssuerURL, oidcTrust.Audiences,
+		oidc.WithIntrospectQueryParameters(oidcTrust.GetIntrospectParameters(s.queryParametersIntrospect)),
+		oidc.WithAllowHttpScheme(s.allowHttpScheme),
+	)
+	if err != nil {
+		slogctx.Error(ctx, "Could not create OpenID provider", "issuer", oidcTrust.IssuerURL, "error", err)
+		return oidc.Introspection{Active: false}, err
+	}
+
+	// introspect the token and cache the result
+	intr, err := provider.IntrospectToken(ctx, token)
+	if err != nil {
+		if errors.Is(err, oidc.ErrNoIntrospectionEndpoint) {
+			slogctx.Debug(ctx, "No introspection endpoint configured", "issuer", provider.Issuer)
+			return oidc.Introspection{Active: true}, nil
+		}
+		slogctx.Error(ctx, "Could not introspect access token", "error", err)
+		return oidc.Introspection{Active: false}, err
+	}
+	s.cache.Set(cacheKey, intr, 0)
+
+	return intr, nil
 }
