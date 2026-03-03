@@ -2,6 +2,8 @@ package session
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 
 	"github.com/openkcm/common-sdk/pkg/oidc"
 )
@@ -10,11 +12,16 @@ func (m *Manager) getOpenIDConfig(ctx context.Context, issuerURL string) (*oidc.
 	const wkocPrefix = "wkoc_"
 
 	// first check the cache for a recent WKOC configuration for this issuer
-	cacheKey := wkocPrefix + issuerURL
+	hashedSuffix := sha256.Sum256([]byte(issuerURL))
+	cacheKey := wkocPrefix + base64.RawURLEncoding.EncodeToString(hashedSuffix[:])
+
 	cache, ok := m.cache.Get(cacheKey)
 	if ok {
-		//nolint:forcetypeassert
-		return cache.(*oidc.Configuration), nil
+		value, ok := cache.(*oidc.Configuration)
+		if ok {
+			return value, nil
+		}
+		m.cache.Delete(cacheKey)
 	}
 
 	// otherwise, fetch the configuration and cache it

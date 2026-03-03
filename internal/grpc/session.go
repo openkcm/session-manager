@@ -2,6 +2,8 @@ package grpc
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -196,11 +198,16 @@ func (s *SessionServer) introspectToken(ctx context.Context, token string, oidcT
 	const introspectPrefix = "introspect_"
 
 	// first check the cache for a recent introspection result for this token
-	cacheKey := introspectPrefix + token
+	hashedSuffix := sha256.Sum256([]byte(token))
+	cacheKey := introspectPrefix + base64.RawURLEncoding.EncodeToString(hashedSuffix[:])
+
 	cache, ok := s.cache.Get(cacheKey)
 	if ok {
-		//nolint:forcetypeassert
-		return cache.(oidc.Introspection), nil
+		value, ok := cache.(oidc.Introspection)
+		if ok {
+			return value, nil
+		}
+		s.cache.Delete(cacheKey)
 	}
 
 	// create the provider for the given issuer
