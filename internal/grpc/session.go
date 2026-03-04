@@ -12,10 +12,13 @@ import (
 	"github.com/patrickmn/go-cache"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
+	"google.golang.org/grpc/status"
 
+	rpcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/rpc/v1"
 	sessionv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/session/v1"
 	typesv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/types/v1"
 	slogctx "github.com/veqryn/slog-context"
+	grpccodes "google.golang.org/grpc/codes"
 
 	"github.com/openkcm/session-manager/internal/session"
 	"github.com/openkcm/session-manager/internal/trust"
@@ -107,9 +110,24 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 		return &sessionv1.GetSessionResponse{Valid: false}, nil
 	}
 	if mapping.Blocked {
-		span.SetStatus(codes.Ok, "the tenant is blocked")
 		slogctx.Warn(ctx, "Tenant is blocked", "issuer", sess.Issuer)
-		return &sessionv1.GetSessionResponse{Valid: false}, nil
+		span.SetStatus(codes.Ok, "the tenant is blocked")
+		st := status.New(grpccodes.FailedPrecondition, "the tenant is blocked")
+		dt, err := st.WithDetails(&rpcv1.PreconditionFailure{
+			Violations: []*rpcv1.PreconditionFailure_Violation{
+				{
+					Type:        violationTenantBlocked,
+					Subject:     "tenant:" + req.GetTenantId(),
+					Description: "The tenant is blocked",
+				},
+			},
+		})
+		if err != nil {
+			slogctx.Error(ctx, "Failed to add error details", "error", err)
+			return nil, st.Err()
+		}
+
+		return nil, dt.Err()
 	}
 
 	// Compare fingerprints
