@@ -16,7 +16,7 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
-	"github.com/openkcm/common-sdk/pkg/openid"
+	"github.com/openkcm/common-sdk/pkg/oidc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -139,7 +139,9 @@ func TestManager_Auth(t *testing.T) {
 			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
 			require.NoError(t, err)
 
-			m, err := session.NewManager(tt.cfg, tt.oidc, tt.sessions, auditLogger, http.DefaultClient)
+			m, err := session.NewManager(tt.cfg, tt.oidc, tt.sessions, auditLogger, http.DefaultClient,
+				session.WithAllowHttpScheme(true),
+			)
 			require.NoError(t, err)
 			got, err := m.MakeAuthURI(t.Context(), tt.tenantID, tt.fingerprint, tt.requestURI)
 
@@ -381,7 +383,9 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 
 			tt.oidc.TAdd(tenantID, localOIDCMapping)
 
-			m, err := session.NewManager(tt.cfg, tt.oidc, tt.sessions, auditLogger, http.DefaultClient)
+			m, err := session.NewManager(tt.cfg, tt.oidc, tt.sessions, auditLogger, http.DefaultClient,
+				session.WithAllowHttpScheme(true),
+			)
 			require.NoError(t, err)
 
 			result, err := m.FinaliseOIDCLogin(context.Background(), tt.stateID, tt.code, tt.fingerprint)
@@ -510,7 +514,7 @@ func TestManager_BCLogout(t *testing.T) {
 			cli := &http.Client{
 				Transport: localRoundTripper{
 					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						b, err := json.Marshal(openid.Configuration{
+						b, err := json.Marshal(oidc.Configuration{
 							JwksURI: jwksSrv.URL,
 							Issuer:  jwksSrv.URL,
 						})
@@ -709,7 +713,7 @@ func TestManager_BCLogout_ErrorCases(t *testing.T) {
 			cli := &http.Client{
 				Transport: localRoundTripper{
 					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						b, _ := json.Marshal(openid.Configuration{
+						b, _ := json.Marshal(oidc.Configuration{
 							JwksURI: jwksSrv.URL,
 							Issuer:  jwksSrv.URL,
 						})
