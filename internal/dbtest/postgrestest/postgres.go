@@ -65,7 +65,8 @@ func Start(ctx context.Context) (*pgxpool.Pool, nat.Port, func(ctx context.Conte
 	prepareDB(ctx, dbPool, port)
 
 	terminate := func(ctx context.Context) {
-		if err := pgContainer.Terminate(ctx); err != nil {
+		err := pgContainer.Terminate(ctx)
+		if err != nil {
 			slogctx.Error(ctx, "Failed to terminate PosgtgreSQL container", slog.String("error", err.Error()))
 			panic(err)
 		}
@@ -96,11 +97,13 @@ func migrateDB(ctx context.Context, port nat.Port) {
 	defer db.Close()
 
 	goose.SetBaseFS(migrations.FS)
-	if err := goose.SetDialect("pgx"); err != nil {
+	err = goose.SetDialect("pgx")
+	if err != nil {
 		panic(err)
 	}
 
-	if err := goose.UpContext(ctx, db, "."); err != nil {
+	err = goose.UpContext(ctx, db, ".")
+	if err != nil {
 		panic(err)
 	}
 }
@@ -109,18 +112,13 @@ func prepareDB(ctx context.Context, dbPool *pgxpool.Pool, port nat.Port) {
 	migrateDB(ctx, port)
 
 	b := new(pgx.Batch)
-	b.Queue(`INSERT INTO oidc_providers (issuer_url) VALUES ('url-one');`)
-	b.Queue(`SELECT set_config('app.tenant_id', 'tenant1-id', false);`)
-	b.Queue(`INSERT INTO oidc_provider_map (tenant_id, issuer_url) VALUES (current_setting('app.tenant_id'), 'url-one');`)
-	b.Queue(`INSERT INTO oidc_providers (issuer_url) VALUES ('url-two');`)
-	b.Queue(`SELECT set_config('app.tenant_id', 'tenant2-id', false);`)
-	b.Queue(`INSERT INTO oidc_provider_map (tenant_id, issuer_url) VALUES (current_setting('app.tenant_id'), 'url-two');`)
-	b.Queue(`INSERT INTO oidc_providers (issuer_url) VALUES ('url-three');`)
-	b.Queue(`SELECT set_config('app.tenant_id', 'tenant3-id', false);`)
-	b.Queue(`INSERT INTO oidc_provider_map (tenant_id, issuer_url) VALUES (current_setting('app.tenant_id'), 'url-three');`)
+	b.Queue(`INSERT INTO trust (tenant_id, blocked, issuer, jwks_uri, audiences, properties) VALUES ('tenant1-id', false, 'url-one', '', '{}', '{}');`)
+	b.Queue(`INSERT INTO trust (tenant_id, blocked, issuer, jwks_uri, audiences, properties) VALUES ('tenant2-id', false, 'url-two', '', '{}', '{}');`)
+	b.Queue(`INSERT INTO trust (tenant_id, blocked, issuer, jwks_uri, audiences, properties) VALUES ('tenant3-id', false, 'url-three', '', '{}', '{}');`)
 
 	res := dbPool.SendBatch(ctx, b)
-	if err := res.Close(); err != nil {
+	err := res.Close()
+	if err != nil {
 		panic(err)
 	}
 }

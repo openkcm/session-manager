@@ -33,7 +33,8 @@ func Start(ctx context.Context) (valkey.Client, nat.Port, func(ctx context.Conte
 	}
 
 	terminate := func(ctx context.Context) {
-		if err := valkeyContainer.Terminate(ctx); err != nil {
+		err := valkeyContainer.Terminate(ctx)
+		if err != nil {
 			slogctx.Error(ctx, "Failed to terminate ValKey container", "error", err)
 			panic(err)
 		}

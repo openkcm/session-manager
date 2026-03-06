@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
-	"time"
 
+	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/valkey-io/valkey-go"
@@ -18,10 +18,10 @@ import (
 	"github.com/openkcm/session-manager/internal/business/server"
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/grpc"
-	"github.com/openkcm/session-manager/internal/oidc"
-	oidcsql "github.com/openkcm/session-manager/internal/oidc/sql"
-	"github.com/openkcm/session-manager/pkg/session"
-	sessionvalkey "github.com/openkcm/session-manager/pkg/session/valkey"
+	"github.com/openkcm/session-manager/internal/session"
+	sessionvalkey "github.com/openkcm/session-manager/internal/session/valkey"
+	"github.com/openkcm/session-manager/internal/trust"
+	"github.com/openkcm/session-manager/internal/trust/trustsql"
 )
 
 // Main starts both API servers
@@ -46,7 +46,8 @@ func Main(ctx context.Context, cfg *config.Config) error {
 	})
 
 	// wait for any error to initiate the shutdown
-	if err := <-errChan; err != nil {
+	err := <-errChan
+	if err != nil {
 		slogctx.Error(ctx, "Shutting down servers", "error", err)
 	}
 	cancel()
@@ -59,9 +60,19 @@ func Main(ctx context.Context, cfg *config.Config) error {
 
 // publicMain starts the HTTP REST public API server.
 func publicMain(ctx context.Context, cfg *config.Config) error {
+	csrfSecret, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.CSRFSecret)
+	if err != nil {
+		return fmt.Errorf("loading csrf token from source ref: %w", err)
+	}
+	if len(csrfSecret) < 32 {
+		return errors.New("CSRF secret must be at least 32 bytes")
+	}
+
+	cfg.SessionManager.CSRFSecretParsed = csrfSecret
+
 	sessionManager, closeFn, err := initSessionManager(ctx, cfg)
 	if err != nil {
-		return fmt.Errorf("initialising the session manager: %w", err)
+		return fmt.Errorf("failed to initialise the session manager: %w", err)
 	}
 
 	defer closeFn()
@@ -69,81 +80,116 @@ func publicMain(ctx context.Context, cfg *config.Config) error {
 	return server.StartHTTPServer(ctx, cfg, sessionManager)
 }
 
-func TokenRefresherMain(ctx context.Context, cfg *config.Config) error {
-	sessionManager, closeFn, err := initSessionManager(ctx, cfg)
-	if err != nil {
-		return fmt.Errorf("initialising the session manager: %w", err)
-	}
-
-	defer closeFn()
-
-	slogctx.Info(ctx, "Starting token refresh job")
-	return startTokenRefresher(ctx, sessionManager, cfg)
-}
-
 // internalMain starts the gRPC private API server.
 func internalMain(ctx context.Context, cfg *config.Config) error {
-	connStr, err := config.MakeConnStr(cfg.Database)
+	// Create trust service
+	trustRepo, err := trustRepoFromConfig(ctx, cfg)
 	if err != nil {
-		return fmt.Errorf("making dsn from config: %w", err)
+		return fmt.Errorf("failed to create trust service: %w", err)
 	}
+	trustService := trust.NewService(trustRepo)
 
-	db, err := pgxpool.New(ctx, connStr)
+	// Create session repository
+	valkeyClient, err := valkeyClientFromConfig(cfg)
 	if err != nil {
-		return fmt.Errorf("initialising pgxpool connection: %w", err)
+		return fmt.Errorf("failed to create valkey client: %w", err)
 	}
+	defer valkeyClient.Close()
+	sessionRepo := sessionvalkey.NewRepository(valkeyClient, cfg.ValKey.Prefix)
 
-	// Create the database repository.
-	repo := oidcsql.NewRepository(db)
-	service := oidc.NewService(repo)
+	// Create HTTP client
+	httpClient, err := loadHTTPClient(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to load http client: %w", err)
+	}
 
 	// Initialize the gRPC servers.
-	oidcprovidersrv := grpc.NewOIDCProviderServer(service)
-	oidcmappingsrv := grpc.NewOIDCMappingServer(service)
-	return server.StartGRPCServer(ctx, cfg, oidcprovidersrv, oidcmappingsrv)
-}
-
-func startTokenRefresher(ctx context.Context, sessionManager *session.Manager, cfg *config.Config) error {
-	c := time.Tick(cfg.TokenRefresher.RefreshInterval)
-	for {
-		slogctx.Info(ctx, "Triggering tokens refresh")
-		if err := sessionManager.RefreshExpiringSessions(ctx); err != nil {
-			slogctx.Error(ctx, "Failed to refresh tokens", "error", err)
-		}
-
-		select {
-		case <-c:
-			continue
-		case <-ctx.Done():
-			return nil
-		}
+	oidcmappingsrv := grpc.NewOIDCMappingServer(trustService)
+	opts := []grpc.SessionServerOption{
+		grpc.WithQueryParametersIntrospect(cfg.SessionManager.AdditionalQueryParametersIntrospect),
 	}
+	sessionsrv := grpc.NewSessionServer(sessionRepo, trustRepo, httpClient, cfg.SessionManager.IdleSessionTimeout, opts...)
+	return server.StartGRPCServer(ctx, cfg, oidcmappingsrv, sessionsrv)
 }
 
 func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Manager, closeFn func(), _ error) {
+	// Create trust repository
+	trustRepo, err := trustRepoFromConfig(ctx, cfg)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create trust repository: %w", err)
+	}
+
+	// Create session repository
+	valkeyClient, err := valkeyClientFromConfig(cfg)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create valkey client: %w", err)
+	}
+	sessionRepo := sessionvalkey.NewRepository(valkeyClient, cfg.ValKey.Prefix)
+
+	// Create HTTP client
+	httpClient, err := loadHTTPClient(cfg)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load http client: %w", err)
+	}
+
+	auditLogger, err := otlpaudit.NewLogger(&cfg.Audit)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create audit logger: %w", err)
+	}
+
+	sessManager, err := session.NewManager(
+		&cfg.SessionManager,
+		trustRepo,
+		sessionRepo,
+		auditLogger,
+		httpClient,
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create session manager: %w", err)
+	}
+
+	return sessManager, valkeyClient.Close, nil
+}
+
+func trustRepoFromConfig(ctx context.Context, cfg *config.Config) (*trustsql.Repository, error) {
 	connStr, err := config.MakeConnStr(cfg.Database)
 	if err != nil {
-		return nil, nil, fmt.Errorf("making dsn from config: %w", err)
+		return nil, fmt.Errorf("failed to make dsn from config: %w", err)
 	}
 
-	db, err := pgxpool.New(ctx, connStr)
+	pgxpoolCfg, err := pgxpool.ParseConfig(connStr)
 	if err != nil {
-		return nil, nil, fmt.Errorf("initialising pgxpool connection: %w", err)
+		return nil, fmt.Errorf("parsing pgxpool config: %w", err)
 	}
 
+	pgxpoolCfg.ConnConfig.Tracer = otelpgx.NewTracer()
+
+	db, err := pgxpool.NewWithConfig(ctx, pgxpoolCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialise pgxpool connection: %w", err)
+	}
+
+	if err := otelpgx.RecordStats(db); err != nil {
+		return nil, fmt.Errorf("recording database stat: %w", err)
+	}
+
+	return trustsql.NewRepository(db), nil
+}
+
+func valkeyClientFromConfig(cfg *config.Config) (valkey.Client, error) {
 	valkeyHost, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.Host)
 	if err != nil {
-		return nil, nil, fmt.Errorf("loading valkey host: %w", err)
+		return nil, fmt.Errorf("failed to load valkey host: %w", err)
 	}
 
 	valkeyUsername, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.User)
 	if err != nil {
-		return nil, nil, fmt.Errorf("loading valkey username: %w", err)
+		return nil, fmt.Errorf("failed to load valkey username: %w", err)
 	}
 
 	valkeyPassword, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.Password)
 	if err != nil {
-		return nil, nil, fmt.Errorf("loading valkey password: %w", err)
+		return nil, fmt.Errorf("failed to load valkey password: %w", err)
 	}
 
 	valkeyOpts := valkey.ClientOption{
@@ -155,7 +201,7 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Man
 	if cfg.ValKey.SecretRef.Type == commoncfg.MTLSSecretType {
 		tlsConfig, err := commoncfg.LoadMTLSConfig(&cfg.ValKey.SecretRef.MTLS)
 		if err != nil {
-			return nil, nil, fmt.Errorf("loading valkey mTLS config from secret ref: %w", err)
+			return nil, fmt.Errorf("failed to load valkey mTLS config from secret ref: %w", err)
 		}
 
 		valkeyOpts.TLSConfig = tlsConfig
@@ -163,58 +209,19 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Man
 
 	valkeyClient, err := valkey.NewClient(valkeyOpts)
 	if err != nil {
-		return nil, nil, fmt.Errorf("creating a new valkey client: %w", err)
+		return nil, fmt.Errorf("failed to create a new valkey client: %w", err)
 	}
-
-	oidcProviderRepo := oidcsql.NewRepository(db)
-	sessionRepo := sessionvalkey.NewRepository(valkeyClient, cfg.ValKey.Prefix)
-	httpClient, clientID, err := loadHTTPClient(cfg)
-	if err != nil {
-		return nil, nil, fmt.Errorf("loading http client: %w", err)
-	}
-
-	auditLogger, err := otlpaudit.NewLogger(&cfg.Audit)
-	if err != nil {
-		return nil, nil, fmt.Errorf("creating audit logger: %w", err)
-	}
-
-	csrfSecret, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.CSRFSecret)
-	if err != nil {
-		return nil, nil, fmt.Errorf("loading csrf token from source ref: %w", err)
-	}
-
-	if len(csrfSecret) < 32 {
-		return nil, nil, errors.New("CSRF secret must be at least 32 bytes")
-	}
-
-	clientSecret, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.ClientAuth.ClientSecret)
-	if err != nil {
-		return nil, nil, fmt.Errorf("loading client secret: %w", err)
-	}
-	return session.NewManager(
-		oidcProviderRepo,
-		sessionRepo,
-		auditLogger,
-		cfg.SessionManager.SessionDuration,
-		cfg.SessionManager.AdditionalGetParametersAuthorize,
-		cfg.SessionManager.AdditionalGetParametersToken,
-		cfg.SessionManager.AdditionalAuthContextKeys,
-		cfg.SessionManager.RedirectURI,
-		clientID,
-		string(clientSecret),
-		httpClient,
-		string(csrfSecret),
-	), valkeyClient.Close, nil
+	return valkeyClient, nil
 }
 
-func loadHTTPClient(cfg *config.Config) (*http.Client, string, error) {
+func loadHTTPClient(cfg *config.Config) (*http.Client, error) {
 	clientID := cfg.SessionManager.ClientAuth.ClientID
 
 	switch cfg.SessionManager.ClientAuth.Type {
 	case "mtls":
 		tlsConfig, err := commoncfg.LoadMTLSConfig(cfg.SessionManager.ClientAuth.MTLS)
 		if err != nil {
-			return nil, "", fmt.Errorf("loading mTLS config: %w", err)
+			return nil, fmt.Errorf("failed to load mTLS config: %w", err)
 		}
 
 		return &http.Client{
@@ -224,11 +231,11 @@ func loadHTTPClient(cfg *config.Config) (*http.Client, string, error) {
 					TLSClientConfig: tlsConfig,
 				},
 			},
-		}, clientID, nil
+		}, nil
 	case "client_secret":
 		secret, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.ClientAuth.ClientSecret)
 		if err != nil {
-			return nil, "", fmt.Errorf("loading client secret: %w", err)
+			return nil, fmt.Errorf("failed to load client secret: %w", err)
 		}
 
 		return &http.Client{
@@ -237,11 +244,11 @@ func loadHTTPClient(cfg *config.Config) (*http.Client, string, error) {
 				clientSecret: string(secret),
 				next:         http.DefaultTransport,
 			},
-		}, clientID, nil
+		}, nil
 	case "insecure":
-		return http.DefaultClient, clientID, nil
+		return http.DefaultClient, nil
 	default:
-		return nil, "", errors.New("unknown Client Auth type")
+		return nil, errors.New("unknown Client Auth type")
 	}
 }
 
@@ -253,11 +260,12 @@ type clientAuthRoundTripper struct {
 
 func (t *clientAuthRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	q := req.URL.Query()
-	q.Set("client_id", t.clientID)
 
+	q.Set("client_id", t.clientID)
 	if t.clientSecret != "" {
 		q.Set("client_secret", t.clientSecret)
 	}
+	req.URL.RawQuery = q.Encode()
 
 	return t.next.RoundTrip(req)
 }

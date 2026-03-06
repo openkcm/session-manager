@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "session-manager.fullname" . }}-housekeeper
+  labels:
+    {{- include "session-manager.labels" . | nindent 4 }}
+    app.kubernetes.io/component: housekeeper
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "session-manager.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: housekeeper
+  template:
+    metadata:
+      {{- with .Values.pod.annotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "session-manager.labels" . | nindent 8 }}
+        {{- with .Values.pod.labels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        app.kubernetes.io/component: housekeeper
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "session-manager.serviceAccountName" . }}
+      {{- with .Values.pod.securityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+      {{- with .Values.extraInitContainers }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      {{- with .Values.extraContainers }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+        - name: {{ include "session-manager.name" . }}-housekeeper
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ template "session-manager.image" (tuple .Values.image $.Chart.AppVersion) }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.image.command }}
+          command: {{ . }}
+          {{- end }}
+          args: [ "housekeeper" ]
+          env: []
+          resources:
+          {{- if .Values.resources }}
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- else }}
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+          {{- end }}
+          volumeMounts:
+            - name: {{ include "session-manager.name" . }}-config-volume
+              mountPath: /etc/{{ include "session-manager.name" . }}
+              readOnly: true
+          {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: {{ include "session-manager.name" . }}-config-volume
+          projected:
+            sources:
+              - configMap:
+                  name: {{ include "session-manager.name" . }}-config
+      {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

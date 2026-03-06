@@ -2,37 +2,76 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
-	"fmt"
+	"net/http"
+
+	"github.com/openkcm/common-sdk/pkg/csrf"
+	"github.com/openkcm/common-sdk/pkg/fingerprint"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 
 	slogctx "github.com/veqryn/slog-context"
 
+	"github.com/openkcm/session-manager/internal/middleware"
 	"github.com/openkcm/session-manager/internal/openapi"
 	"github.com/openkcm/session-manager/internal/serviceerr"
-	"github.com/openkcm/session-manager/pkg/fingerprint"
-	"github.com/openkcm/session-manager/pkg/session"
+	"github.com/openkcm/session-manager/internal/session"
 )
+
+// sessionManager defines the interface for session management operations
+// used by the OpenAPI server.
+type sessionManager interface {
+	MakeAuthURI(ctx context.Context, tenantID, fingerprint, requestURI string) (string, error)
+	FinaliseOIDCLogin(ctx context.Context, state, code, fingerprint string) (session.OIDCSessionData, error)
+	MakeSessionCookie(ctx context.Context, tenantID, sessionID string) (*http.Cookie, error)
+	MakeCSRFCookie(ctx context.Context, tenantID, csrfToken string) (*http.Cookie, error)
+	Logout(ctx context.Context, sessionID string) (string, error)
+	BCLogout(ctx context.Context, logoutToken string) error
+}
 
 // openAPIServer is an implementation of the OpenAPI interface.
 type openAPIServer struct {
-	sManager *session.Manager
+	sManager sessionManager
+
+	csrfSecret []byte
+
+	sessionIDCookieName,
+	csrfTokenCookieName string
 }
 
 // Ensure openAPIServer implements [openapi.StrictServerInterface]
 var _ openapi.StrictServerInterface = (*openAPIServer)(nil)
 
 // newOpenAPIServer creates a new implementation of the openapi.StrictServerInterface.
-func newOpenAPIServer(sManager *session.Manager) *openAPIServer {
+func newOpenAPIServer(
+	sManager sessionManager,
+	csrfSecret []byte,
+	sessionIDCookieName,
+	csrfTokenCookieName string,
+) *openAPIServer {
 	return &openAPIServer{
-		sManager: sManager,
+		sManager:            sManager,
+		csrfSecret:          csrfSecret,
+		sessionIDCookieName: sessionIDCookieName,
+		csrfTokenCookieName: csrfTokenCookieName,
 	}
 }
 
 // Auth implements openapi.StrictServerInterface.
 func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObject) (openapi.AuthResponseObject, error) {
-	var extractFingerprint string
-	extractFingerprint, err := fingerprint.ExtractFingerprint(ctx)
+	tracer := otel.GetTracerProvider()
+	ctx, span := tracer.Tracer("").Start(ctx, "auth")
+	defer span.End()
+
+	slogctx.Debug(ctx, "Auth() called", "tenant_id", request.Params.TenantID, "request_uri", request.Params.RequestURI)
+	defer slogctx.Debug(ctx, "Auth() completed")
+
+	fingerprint, err := fingerprint.ExtractFingerprint(ctx)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to extract fingerprint")
 		slogctx.Error(ctx, "Failed to extract fingerprint", "error", err)
 
 		body, status := s.toErrorModel(serviceerr.ErrUnknown)
@@ -42,8 +81,10 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 		}, nil
 	}
 
-	url, err := s.sManager.MakeAuthURI(ctx, request.Params.TenantID, extractFingerprint, request.Params.RequestURI)
+	url, err := s.sManager.MakeAuthURI(ctx, request.Params.TenantID, fingerprint, request.Params.RequestURI)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to build auth URI")
 		slogctx.Error(ctx, "Failed build auth URI", "error", err)
 
 		body, status := s.toErrorModel(err)
@@ -53,8 +94,7 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 		}, nil
 	}
 
-	slogctx.Info(ctx, "Redirecting user to the OIDC provider authentication URL")
-
+	span.SetStatus(codes.Ok, "")
 	return openapi.Auth302Response{
 		Headers: openapi.Auth302ResponseHeaders{
 			Location: url,
@@ -64,12 +104,32 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 
 // Callback implements openapi.StrictServerInterface.
 func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackRequestObject) (openapi.CallbackResponseObject, error) {
-	slogctx.Info(ctx, "Finalising OIDC flow")
+	tracer := otel.GetTracerProvider()
+	ctx, span := tracer.Tracer("").Start(ctx, "callback")
+	defer span.End()
 
-	var currentFingerprint string
+	slogctx.Debug(ctx, "Callback() called", "state", req.Params.State)
+	defer slogctx.Debug(ctx, "Callback() completed")
+
 	currentFingerprint, err := fingerprint.ExtractFingerprint(ctx)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed extract fingerprint")
 		slogctx.Error(ctx, "Failed to extract fingerprint", "error", err)
+
+		body, status := s.toErrorModel(serviceerr.ErrUnknown)
+		return openapi.CallbackdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+
+	// Get the response writer from the context
+	rw, err := middleware.ResponseWriterFromContext(ctx)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to get response writer from context")
+		slogctx.Error(ctx, "Failed to get response writer from context", "error", err)
 
 		body, status := s.toErrorModel(serviceerr.ErrUnknown)
 		return openapi.CallbackdefaultJSONResponse{
@@ -80,11 +140,15 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 
 	result, err := s.sManager.FinaliseOIDCLogin(ctx, req.Params.State, req.Params.Code, currentFingerprint)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to finalise OIDC login")
 		slogctx.Error(ctx, "Failed to finalise OIDC login", "error", err)
 
 		body, status := s.toErrorModel(err)
 		if status == 403 {
-			return openapi.Callback403JSONResponse(body), nil
+			// return generic Unauthorized for 403 Forbidden to avoid leaking information on
+			// fingerprint mismatch in the original error body
+			body, status = s.toErrorModel(serviceerr.ErrUnauthorized)
 		}
 
 		return openapi.CallbackdefaultJSONResponse{
@@ -93,19 +157,189 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 		}, nil
 	}
 
-	cookies := []string{
-		fmt.Sprintf("__Host-Http-SESSION=%s; Path=/; Secure; HttpOnly; SameSite=Strict", result.SessionID),
-		fmt.Sprintf("__Host-CSRF=%s; Path=/; Secure; SameSite=Strict", result.CSRFToken),
+	// Session cookie
+	sessionCookie, err := s.sManager.MakeSessionCookie(ctx, result.TenantID, result.SessionID)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to create session cookie")
+		slogctx.Error(ctx, "Failed to create session cookie", "error", err)
+
+		body, status := s.toErrorModel(serviceerr.ErrUnknown)
+		return openapi.CallbackdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
 	}
 
-	slogctx.Info(ctx, "Redirecting user to the request URI", "request_uri", result.RequestURI)
+	// CSRF cookie
+	csrfCookie, err := s.sManager.MakeCSRFCookie(ctx, result.TenantID, result.CSRFToken)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to create CSRF cookie")
+		slogctx.Error(ctx, "Failed to create CSRF cookie", "error", err)
 
+		body, status := s.toErrorModel(serviceerr.ErrUnknown)
+		return openapi.CallbackdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+
+	// There is a limitation of OpenAPI that does not allow setting multiple cookies
+	// with the strict handlers. Therefore, we do not define the Set-Cookie header
+	// in the yaml spec. However, in the actual implementation both cookies are set.
+	// See https://github.com/OAI/OpenAPI-Specification/issues/1237 for details.
+	http.SetCookie(rw, sessionCookie)
+	http.SetCookie(rw, csrfCookie)
+
+	span.SetStatus(codes.Ok, "")
+	slogctx.Debug(ctx, "Redirecting user", "to", result.RequestURI)
 	return openapi.Callback302Response{
 		Headers: openapi.Callback302ResponseHeaders{
-			Location:  result.RequestURI,
-			SetCookie: cookies,
+			Location: result.RequestURI,
 		},
 	}, nil
+}
+
+// Logout implements openapi.StrictServerInterface.
+func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutRequestObject) (openapi.LogoutResponseObject, error) {
+	tracer := otel.GetTracerProvider()
+	ctx, span := tracer.Tracer("").Start(ctx, "logout")
+	defer span.End()
+
+	slogctx.Debug(ctx, "Logout() called")
+	defer slogctx.Debug(ctx, "Logout() completed")
+
+	rw, err := middleware.ResponseWriterFromContext(ctx)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to get response writer from context")
+		slogctx.Error(ctx, "Failed to get response writer from context", "error", err)
+
+		body, status := s.toErrorModel(serviceerr.ErrUnknown)
+		return openapi.LogoutdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+
+	cookies, err := http.ParseCookie(request.Params.Cookie)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to parse 'Cookie' header")
+		slogctx.Warn(ctx, "failed to parse 'Cookie' header", "error", err)
+
+		body, status := newBadRequest("invalid 'Cookie' header")
+		return openapi.LogoutdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+
+	var sessionCookie *http.Cookie
+	var csrfCookie *http.Cookie
+
+	// http.ParseCookie limits the number of cookies to 3000
+	// (configurable with $GODEBUG environment variable, see httpcookiemaxnum),
+	// so we can safely iterate over the cookies.
+	for _, cookie := range cookies {
+		switch cookie.Name {
+		case s.csrfTokenCookieName:
+			csrfCookie = cookie
+		case s.sessionIDCookieName:
+			sessionCookie = cookie
+		}
+
+		if sessionCookie != nil && sessionCookie.Value != "" && csrfCookie != nil && csrfCookie.Value != "" {
+			break
+		}
+	}
+
+	if sessionCookie == nil || sessionCookie.Value == "" {
+		body, status := newBadRequest("missing session id in the cookies")
+		return openapi.LogoutdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+
+	if csrfCookie == nil || csrfCookie.Value == "" {
+		body, status := newBadRequest("missing csrf token in the cookies")
+		return openapi.LogoutdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+
+	if !csrf.Validate(request.Params.XCSRFToken, sessionCookie.Value, s.csrfSecret) {
+		csrfTokenHash := sha256.Sum256([]byte(csrfCookie.Value))
+		csrfSecretHash := sha256.Sum256(s.csrfSecret)
+		sessionIDHash := sha256.Sum256([]byte(sessionCookie.Value))
+
+		slogctx.Warn(
+			ctx,
+			"received invalid csrf token value",
+			"csrf_token_hash",
+			base64.RawStdEncoding.EncodeToString(csrfTokenHash[:5]),
+			"csrf_secret_hash",
+			base64.RawStdEncoding.EncodeToString(csrfSecretHash[:5]),
+			"session_id_hash",
+			base64.RawStdEncoding.EncodeToString(sessionIDHash[:5]),
+		)
+
+		body, status := s.toErrorModel(serviceerr.ErrInvalidCSRFToken)
+		return openapi.LogoutdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+
+	logoutURL, err := s.sManager.Logout(ctx, sessionCookie.Value)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to logout user")
+		slogctx.Error(ctx, "failed to logout user", "error", err)
+
+		body, status := s.toErrorModel(err)
+		return openapi.LogoutdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+
+	// Reset all cookies
+	for _, cookie := range []*http.Cookie{csrfCookie, sessionCookie} {
+		cookie.MaxAge = -1
+		cookie.Value = ""
+		http.SetCookie(rw, cookie)
+	}
+
+	span.SetStatus(codes.Ok, "")
+	return openapi.Logout302Response{
+		Headers: openapi.Logout302ResponseHeaders{
+			Location: logoutURL,
+		},
+	}, nil
+}
+
+func (s *openAPIServer) Bclogout(ctx context.Context, request openapi.BclogoutRequestObject) (openapi.BclogoutResponseObject, error) {
+	tracer := otel.GetTracerProvider()
+	ctx, span := tracer.Tracer("").Start(ctx, "bc_logout")
+	defer span.End()
+
+	slogctx.Debug(ctx, "Bclogout() called")
+	defer slogctx.Debug(ctx, "Bclogout() completed")
+
+	if err := s.sManager.BCLogout(ctx, request.Body.LogoutToken); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "back channel logout failed")
+		slogctx.Error(ctx, "back-channel logout failed", "error", err)
+		body, _ := s.toErrorModel(err)
+		return openapi.Bclogout400JSONResponse(body), nil
+	}
+
+	span.SetStatus(codes.Ok, "")
+	return openapi.Bclogout200Response{}, nil
 }
 
 func (s *openAPIServer) toErrorModel(err error) (model openapi.ErrorModel, httpStatus int) {
@@ -115,7 +349,14 @@ func (s *openAPIServer) toErrorModel(err error) (model openapi.ErrorModel, httpS
 	}
 
 	return openapi.ErrorModel{
-		ErrorCode: (*int)(&serviceErr.Code),
-		ErrorMsg:  &serviceErr.Message,
+		Error:            string(serviceErr.Err),
+		ErrorDescription: &serviceErr.Description,
 	}, serviceErr.HTTPStatus()
+}
+
+func newBadRequest(description string) (model openapi.ErrorModel, httpStatus int) {
+	return openapi.ErrorModel{
+		Error:            string(serviceerr.CodeInvalidRequest),
+		ErrorDescription: &description,
+	}, http.StatusBadRequest
 }

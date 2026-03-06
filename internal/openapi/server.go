@@ -17,8 +17,8 @@ import (
 
 // ErrorModel defines model for ErrorModel.
 type ErrorModel struct {
-	ErrorCode *int    `json:"error_code,omitempty"`
-	ErrorMsg  *string `json:"error_msg,omitempty"`
+	Error            string  `json:"error"`
+	ErrorDescription *string `json:"error_description,omitempty"`
 }
 
 // AuthParams defines parameters for Auth.
@@ -27,11 +27,26 @@ type AuthParams struct {
 	RequestURI string `form:"request_uri" json:"request_uri"`
 }
 
+// BclogoutFormdataBody defines parameters for Bclogout.
+type BclogoutFormdataBody struct {
+	// LogoutToken Logout token
+	LogoutToken string `form:"logout_token" json:"logout_token"`
+}
+
 // CallbackParams defines parameters for Callback.
 type CallbackParams struct {
 	Code  string `form:"code" json:"code"`
 	State string `form:"state" json:"state"`
 }
+
+// LogoutParams defines parameters for Logout.
+type LogoutParams struct {
+	Cookie     string `json:"Cookie"`
+	XCSRFToken string `json:"X-CSRF-Token"`
+}
+
+// BclogoutFormdataRequestBody defines body for Bclogout for application/x-www-form-urlencoded ContentType.
+type BclogoutFormdataRequestBody BclogoutFormdataBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -39,8 +54,14 @@ type ServerInterface interface {
 	// (GET /sm/auth)
 	Auth(w http.ResponseWriter, r *http.Request, params AuthParams)
 
+	// (POST /sm/bclogout)
+	Bclogout(w http.ResponseWriter, r *http.Request)
+
 	// (GET /sm/callback)
 	Callback(w http.ResponseWriter, r *http.Request, params CallbackParams)
+
+	// (GET /sm/logout)
+	Logout(w http.ResponseWriter, r *http.Request, params LogoutParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -101,6 +122,20 @@ func (siw *ServerInterfaceWrapper) Auth(w http.ResponseWriter, r *http.Request) 
 	handler.ServeHTTP(w, r)
 }
 
+// Bclogout operation middleware
+func (siw *ServerInterfaceWrapper) Bclogout(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Bclogout(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // Callback operation middleware
 func (siw *ServerInterfaceWrapper) Callback(w http.ResponseWriter, r *http.Request) {
 
@@ -141,6 +176,73 @@ func (siw *ServerInterfaceWrapper) Callback(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Callback(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Logout operation middleware
+func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params LogoutParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Cookie" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Cookie")]; found {
+		var Cookie string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Cookie", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Cookie", valueList[0], &Cookie, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Cookie", Err: err})
+			return
+		}
+
+		params.Cookie = Cookie
+
+	} else {
+		err := fmt.Errorf("Header parameter Cookie is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Cookie", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Logout(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -271,7 +373,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc("GET "+options.BaseURL+"/sm/auth", wrapper.Auth)
+	m.HandleFunc("POST "+options.BaseURL+"/sm/bclogout", wrapper.Bclogout)
 	m.HandleFunc("GET "+options.BaseURL+"/sm/callback", wrapper.Callback)
+	m.HandleFunc("GET "+options.BaseURL+"/sm/logout", wrapper.Logout)
 
 	return m
 }
@@ -310,6 +414,37 @@ func (response AuthdefaultJSONResponse) VisitAuthResponse(w http.ResponseWriter)
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type BclogoutRequestObject struct {
+	Body *BclogoutFormdataRequestBody
+}
+
+type BclogoutResponseObject interface {
+	VisitBclogoutResponse(w http.ResponseWriter) error
+}
+
+type Bclogout200ResponseHeaders struct {
+	CacheControl string
+}
+
+type Bclogout200Response struct {
+	Headers Bclogout200ResponseHeaders
+}
+
+func (response Bclogout200Response) VisitBclogoutResponse(w http.ResponseWriter) error {
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+	return nil
+}
+
+type Bclogout400JSONResponse ErrorModel
+
+func (response Bclogout400JSONResponse) VisitBclogoutResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type CallbackRequestObject struct {
 	Params CallbackParams
 }
@@ -319,8 +454,7 @@ type CallbackResponseObject interface {
 }
 
 type Callback302ResponseHeaders struct {
-	Location  string
-	SetCookie []string
+	Location string
 }
 
 type Callback302Response struct {
@@ -329,7 +463,6 @@ type Callback302Response struct {
 
 func (response Callback302Response) VisitCallbackResponse(w http.ResponseWriter) error {
 	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
-	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
 	w.WriteHeader(302)
 	return nil
 }
@@ -355,14 +488,54 @@ func (response CallbackdefaultJSONResponse) VisitCallbackResponse(w http.Respons
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type LogoutRequestObject struct {
+	Params LogoutParams
+}
+
+type LogoutResponseObject interface {
+	VisitLogoutResponse(w http.ResponseWriter) error
+}
+
+type Logout302ResponseHeaders struct {
+	Location string
+}
+
+type Logout302Response struct {
+	Headers Logout302ResponseHeaders
+}
+
+func (response Logout302Response) VisitLogoutResponse(w http.ResponseWriter) error {
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(302)
+	return nil
+}
+
+type LogoutdefaultJSONResponse struct {
+	Body       ErrorModel
+	StatusCode int
+}
+
+func (response LogoutdefaultJSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
 	// (GET /sm/auth)
 	Auth(ctx context.Context, request AuthRequestObject) (AuthResponseObject, error)
 
+	// (POST /sm/bclogout)
+	Bclogout(ctx context.Context, request BclogoutRequestObject) (BclogoutResponseObject, error)
+
 	// (GET /sm/callback)
 	Callback(ctx context.Context, request CallbackRequestObject) (CallbackResponseObject, error)
+
+	// (GET /sm/logout)
+	Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error)
 }
 
 type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
@@ -420,6 +593,41 @@ func (sh *strictHandler) Auth(w http.ResponseWriter, r *http.Request, params Aut
 	}
 }
 
+// Bclogout operation middleware
+func (sh *strictHandler) Bclogout(w http.ResponseWriter, r *http.Request) {
+	var request BclogoutRequestObject
+
+	if err := r.ParseForm(); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode formdata: %w", err))
+		return
+	}
+	var body BclogoutFormdataRequestBody
+	if err := runtime.BindForm(&body, r.Form, nil, nil); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't bind formdata: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.Bclogout(ctx, request.(BclogoutRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "Bclogout")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(BclogoutResponseObject); ok {
+		if err := validResponse.VisitBclogoutResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Callback operation middleware
 func (sh *strictHandler) Callback(w http.ResponseWriter, r *http.Request, params CallbackParams) {
 	var request CallbackRequestObject
@@ -439,6 +647,32 @@ func (sh *strictHandler) Callback(w http.ResponseWriter, r *http.Request, params
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CallbackResponseObject); ok {
 		if err := validResponse.VisitCallbackResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// Logout operation middleware
+func (sh *strictHandler) Logout(w http.ResponseWriter, r *http.Request, params LogoutParams) {
+	var request LogoutRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.Logout(ctx, request.(LogoutRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "Logout")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(LogoutResponseObject); ok {
+		if err := validResponse.VisitLogoutResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

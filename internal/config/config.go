@@ -18,7 +18,17 @@ type Config struct {
 	ValKey         ValKey         `yaml:"valkey"`
 	Migrate        Migrate        `yaml:"migrate"`
 	SessionManager SessionManager `yaml:"sessionManager"`
-	TokenRefresher TokenRefresher `yaml:"tokenRefresher"`
+	Housekeeper    Housekeeper    `yaml:"housekeeper"`
+}
+
+type Housekeeper struct {
+	// TriggerInterval defines how often the housekeeper jobs run.
+	TriggerInterval time.Duration `yaml:"triggerInterval" default:"10m"`
+	// ConcurrencyLimit defines the maximum number of sessions handled concurrently during housekeeping.
+	ConcurrencyLimit int `yaml:"concurrencyLimit" default:"10"`
+	// TokenRefreshTriggerInterval defines the duration before token expiry when a token refresh should be triggered.
+	// This should at least match the TriggerInterval to ensure that expiring tokens are refreshed in time.
+	TokenRefreshTriggerInterval time.Duration `yaml:"tokenRefreshTriggerInterval" default:"15m"`
 }
 
 type HTTPServer struct {
@@ -49,14 +59,49 @@ type ValKey struct {
 }
 
 type SessionManager struct {
-	SessionDuration                  time.Duration       `yaml:"sessionDuration" default:"12h"`
-	RedirectURI                      string              `yaml:"redirectURI" default:"https://api.cmk/callback"`
-	ClientAuth                       ClientAuth          `yaml:"clientAuth"`
-	CSRFSecret                       commoncfg.SourceRef `yaml:"csrfSecret"`
-	JWSSigAlgs                       []string            `yaml:"jwsSigAlgs"` // A list of supported JWT signature algorithms
-	AdditionalGetParametersAuthorize []string            `yaml:"additionalGetParametersAuthorize"`
-	AdditionalGetParametersToken     []string            `yaml:"additionalGetParametersToken"`
-	AdditionalAuthContextKeys        []string            `yaml:"additionalAuthContextKeys"`
+	IdleSessionTimeout time.Duration `yaml:"idleSessionTimeout" default:"90m"`
+	SessionDuration    time.Duration `yaml:"sessionDuration" default:"12h"`
+
+	// CallbackURL is the URL path for the OAuth2 callback endpoint, where we receive the authorization code.
+	CallbackURL                         string              `yaml:"callbackURL" default:"/sm/callback"`
+	ClientAuth                          ClientAuth          `yaml:"clientAuth"`
+	CSRFSecret                          commoncfg.SourceRef `yaml:"csrfSecret"`
+	CSRFSecretParsed                    []byte              `yaml:"-"`
+	AdditionalQueryParametersAuthorize  []string            `yaml:"additionalQueryParametersAuthorize"`
+	AdditionalQueryParametersToken      []string            `yaml:"additionalQueryParametersToken"`
+	AdditionalQueryParametersIntrospect []string            `yaml:"additionalQueryParametersIntrospect"`
+	AdditionalQueryParametersLogout     []string            `yaml:"additionalQueryParametersLogout"`
+	AdditionalAuthContextKeys           []string            `yaml:"additionalAuthContextKeys"`
+	PostLogoutRedirectURL               string              `yaml:"postLogoutRedirectURL"`
+	// SessionCookieTemplate defines the template attributes for the session cookie.
+	SessionCookieTemplate CookieTemplate `yaml:"sessionCookieTemplate"`
+	// CSRFCookieTemplate defines the template attributes for the CSRF cookie.
+	CSRFCookieTemplate CookieTemplate `yaml:"csrfCookieTemplate"`
+
+	// Deprecated: not used anymore. Kept for a helm issue with the migrate job.
+	RedirectURL string `yaml:"redirectURL" default:"/sm/redirect"`
+	// Deprecated: use AdditionalQueryParametersAuthorize instead.
+	AdditionalGetParametersAuthorize []string `yaml:"additionalGetParametersAuthorize"`
+	// Deprecated: use AdditionalQueryParametersToken instead.
+	AdditionalGetParametersToken []string `yaml:"additionalGetParametersToken"`
+}
+
+type CookieSameSiteValue string
+
+const (
+	CookieSameSiteLax    CookieSameSiteValue = "Lax"
+	CookieSameSiteStrict CookieSameSiteValue = "Strict"
+	CookieSameSiteNone   CookieSameSiteValue = "None"
+)
+
+type CookieTemplate struct {
+	Name     string              `yaml:"name"`
+	MaxAge   int                 `yaml:"maxAge"`
+	Path     string              `yaml:"path"`
+	Domain   string              `yaml:"domain"`
+	Secure   bool                `yaml:"secure"`
+	SameSite CookieSameSiteValue `yaml:"sameSite"`
+	HTTPOnly bool                `yaml:"httpOnly"`
 }
 
 type ClientAuth struct {
@@ -74,8 +119,4 @@ type ClientAuth struct {
 
 type Migrate struct {
 	Source string `yaml:"source" default:"file://./sql"`
-}
-
-type TokenRefresher struct {
-	RefreshInterval time.Duration `yaml:"refreshInterval" default:"30m"`
 }

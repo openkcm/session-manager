@@ -1,5 +1,245 @@
 # Changelog
 
+## [0.17.0](https://github.com/openkcm/session-manager/compare/v0.16.1...v0.17.0) (2026-02-04)
+
+
+### Features
+
+* get oidc provider ([#227](https://github.com/openkcm/session-manager/issues/227)) ([ca1ebf3](https://github.com/openkcm/session-manager/commit/ca1ebf3b27d7f1a877716656a6adf03734a81980))
+* introspect groups ([#224](https://github.com/openkcm/session-manager/issues/224)) ([1e53b2e](https://github.com/openkcm/session-manager/commit/1e53b2e54608a78ace8ac19756f85a028556b1a1))
+* make RemoveOIDCMapping method indempotent ([#215](https://github.com/openkcm/session-manager/issues/215)) ([fc1e3e3](https://github.com/openkcm/session-manager/commit/fc1e3e3dc36a4b72947ea9cf3839faaffc638049))
+
+
+### Bug Fixes
+
+* actually run integration tests ([#217](https://github.com/openkcm/session-manager/issues/217)) ([87415aa](https://github.com/openkcm/session-manager/commit/87415aa22b0e2a8899f1749cb0360871b2e33e6d))
+* add missing log call ([#219](https://github.com/openkcm/session-manager/issues/219)) ([76f0c73](https://github.com/openkcm/session-manager/commit/76f0c73831aa243241f22867adbb5ce04e968cf7))
+* Always use the default client in `GetOpenIDConfig()` ([#220](https://github.com/openkcm/session-manager/issues/220)) ([7ce7d75](https://github.com/openkcm/session-manager/commit/7ce7d75baa7d6fe885f9f6454f5395c8a3ddbf4d))
+
+## [0.16.1](https://github.com/openkcm/session-manager/compare/v0.16.0...v0.16.1) (2026-01-13)
+
+
+### Bug Fixes
+
+* initialise idle session timeout ([#207](https://github.com/openkcm/session-manager/issues/207)) ([e017706](https://github.com/openkcm/session-manager/commit/e017706c7931b7dfb053ddb1c004bbf07ceb7e0d))
+* set idle session timeout correctly ([e017706](https://github.com/openkcm/session-manager/commit/e017706c7931b7dfb053ddb1c004bbf07ceb7e0d))
+
+## [0.16.0](https://github.com/openkcm/session-manager/compare/v0.15.0...v0.16.0) (2026-01-12)
+
+
+### Features
+
+* backchannel logout ([#191](https://github.com/openkcm/session-manager/issues/191)) ([8d3beba](https://github.com/openkcm/session-manager/commit/8d3bebae3e6ba5429d0e09ad8c2456213dacd996))
+* store session active state as an object ([#196](https://github.com/openkcm/session-manager/issues/196)) ([b87d0f5](https://github.com/openkcm/session-manager/commit/b87d0f561a36e033824dc1cb94c4c4c7b71b8dbf))
+
+
+### Bug Fixes
+
+* config and session repo mock ([#200](https://github.com/openkcm/session-manager/issues/200)) ([18e2907](https://github.com/openkcm/session-manager/commit/18e2907d64f999edd645d83ba56c5c7e85d0c3e4))
+* config keys in chart values and example config ([#199](https://github.com/openkcm/session-manager/issues/199)) ([7b69b2c](https://github.com/openkcm/session-manager/commit/7b69b2c4d5bbd253e5bdb1aadab74a82fd86a7cd))
+* log messages for logout and bclogout ([#195](https://github.com/openkcm/session-manager/issues/195)) ([e621692](https://github.com/openkcm/session-manager/commit/e6216922a7677434437b710af1d576130ef9bc6f))
+* session housekeeping ([#194](https://github.com/openkcm/session-manager/issues/194)) ([9bdc872](https://github.com/openkcm/session-manager/commit/9bdc872cbccc4647da2cce377247b17a6a932d9b))
+
+## [0.15.0](https://github.com/openkcm/session-manager/compare/v0.14.1...v0.15.0) (2026-01-06)
+
+
+### Features
+
+* logout ([#173](https://github.com/openkcm/session-manager/issues/173)) ([b748864](https://github.com/openkcm/session-manager/commit/b74886408b7080f40d01e73cca6d604201764085))
+
+
+### Bug Fixes
+
+* token refresh ([#190](https://github.com/openkcm/session-manager/issues/190)) ([a42955d](https://github.com/openkcm/session-manager/commit/a42955d096da46099a1470bf0df709141672c847))
+
+## [0.14.1](https://github.com/openkcm/session-manager/compare/v0.14.0...v0.14.1) (2025-12-17)
+
+
+### Bug Fixes
+
+* syntax errors in integration tests ([#184](https://github.com/openkcm/session-manager/issues/184)) ([3b4ed57](https://github.com/openkcm/session-manager/commit/3b4ed57ff9ebc11b6af46b446e501b768c309661))
+
+## [0.14.0](https://github.com/openkcm/session-manager/compare/v0.13.4...v0.14.0) (2025-12-17)
+
+
+### Features
+
+* use tenant specific cookies ([#180](https://github.com/openkcm/session-manager/issues/180)) ([0c47910](https://github.com/openkcm/session-manager/commit/0c47910645d55971280ec0bcb7763361d9b59ffb))
+
+
+### Bug Fixes
+
+* token introspection: deny if invalid ([#182](https://github.com/openkcm/session-manager/issues/182)) ([60db523](https://github.com/openkcm/session-manager/commit/60db52309469248fc8ef389e1a4891f8f728873b))
+
+## [0.13.4](https://github.com/openkcm/session-manager/compare/v0.13.3...v0.13.4) (2025-12-16)
+
+
+### Bug Fixes
+
+* token refresh not using WKOC endpoint ([#179](https://github.com/openkcm/session-manager/issues/179)) ([4f7939e](https://github.com/openkcm/session-manager/commit/4f7939e582d799a60fe03dbbd658ee02d6f22bda))
+
+## [0.13.3](https://github.com/openkcm/session-manager/compare/v0.13.2...v0.13.3) (2025-12-15)
+
+
+### Bug Fixes
+
+* use the default http client for the WKOC endpoint ([#176](https://github.com/openkcm/session-manager/issues/176)) ([4571e47](https://github.com/openkcm/session-manager/commit/4571e4719439e9871aa88bc1f0df1cfb7df5e5c3))
+
+## [0.13.2](https://github.com/openkcm/session-manager/compare/v0.13.1...v0.13.2) (2025-12-15)
+
+
+### Bug Fixes
+
+* the round tripper to actually add the client_id ([#174](https://github.com/openkcm/session-manager/issues/174)) ([de06e4f](https://github.com/openkcm/session-manager/commit/de06e4fc7b55f0fdacbb90c7cfb3b9ca466cad3d))
+
+## [0.13.1](https://github.com/openkcm/session-manager/compare/v0.13.0...v0.13.1) (2025-12-08)
+
+
+### Bug Fixes
+
+* client ID handling ([#166](https://github.com/openkcm/session-manager/issues/166)) ([bcde51b](https://github.com/openkcm/session-manager/commit/bcde51b0a93b23c2ebfb0aaa4993284d463dd915))
+
+## [0.13.0](https://github.com/openkcm/session-manager/compare/v0.12.3...v0.13.0) (2025-12-08)
+
+
+### Features
+
+* cleanup idle sessions ([#156](https://github.com/openkcm/session-manager/issues/156)) ([6e125e0](https://github.com/openkcm/session-manager/commit/6e125e03d794d135a3d45062268de5581509bad9))
+
+
+### Bug Fixes
+
+* deny session on fingerprint mismatch ([#154](https://github.com/openkcm/session-manager/issues/154)) ([b24d4e5](https://github.com/openkcm/session-manager/commit/b24d4e57cb3e51f163647c19b9fdf9aa9c3b935f))
+* Remove invalid golangci-lint config ([#161](https://github.com/openkcm/session-manager/issues/161)) ([4b4bc3f](https://github.com/openkcm/session-manager/commit/4b4bc3f05920eaeed36a520a519f1ef88ede5a66))
+* token introspection ([#155](https://github.com/openkcm/session-manager/issues/155)) ([c4a32a6](https://github.com/openkcm/session-manager/commit/c4a32a6c7f57b829904acdfc5a20ab70561162f1))
+
+## [0.12.3](https://github.com/openkcm/session-manager/compare/v0.12.2...v0.12.3) (2025-12-01)
+
+
+### Bug Fixes
+
+* add missing `sid` claim as provider session ID ([#151](https://github.com/openkcm/session-manager/issues/151)) ([e39b88f](https://github.com/openkcm/session-manager/commit/e39b88fb1c868c7524b167bf441995bbab6c2cd3))
+
+## [0.12.2](https://github.com/openkcm/session-manager/compare/v0.12.1...v0.12.2) (2025-11-28)
+
+
+### Bug Fixes
+
+* disable token introspection ([#148](https://github.com/openkcm/session-manager/issues/148)) ([03492dc](https://github.com/openkcm/session-manager/commit/03492dc01b09a19049312b132a8855dc256f9790))
+
+## [0.12.1](https://github.com/openkcm/session-manager/compare/v0.12.0...v0.12.1) (2025-11-28)
+
+
+### Bug Fixes
+
+* debug fingerprinting ([#145](https://github.com/openkcm/session-manager/issues/145)) ([42adbba](https://github.com/openkcm/session-manager/commit/42adbba45a748c3e0e86b0df3325ac500ab68949))
+
+## [0.12.0](https://github.com/openkcm/session-manager/compare/v0.11.0...v0.12.0) (2025-11-27)
+
+
+### Features
+
+* implement remove ODIC mapping ([61c088a](https://github.com/openkcm/session-manager/commit/61c088a3ee228a4b923bf2cbf903d316337946b9))
+* implement remove OIDC mapping ([#140](https://github.com/openkcm/session-manager/issues/140)) ([61c088a](https://github.com/openkcm/session-manager/commit/61c088a3ee228a4b923bf2cbf903d316337946b9))
+
+
+### Bug Fixes
+
+* configmap hook weight ([#141](https://github.com/openkcm/session-manager/issues/141)) ([55a06ef](https://github.com/openkcm/session-manager/commit/55a06efd477c4f6da29b458fa3a1fb55f381a792))
+* migration script ([#142](https://github.com/openkcm/session-manager/issues/142)) ([c775ebb](https://github.com/openkcm/session-manager/commit/c775ebb5c90d93741cb7fc52e709358f26d0d813))
+
+## [0.11.0](https://github.com/openkcm/session-manager/compare/v0.10.1...v0.11.0) (2025-11-27)
+
+
+### Features
+
+* implement the gRPC session service ([#131](https://github.com/openkcm/session-manager/issues/131)) ([4361b20](https://github.com/openkcm/session-manager/commit/4361b20c8ad489f259f51051e0d23ab28c66ad73))
+
+## [0.10.1](https://github.com/openkcm/session-manager/compare/v0.10.0...v0.10.1) (2025-11-25)
+
+
+### Bug Fixes
+
+* cookie configuration and config loading ([#132](https://github.com/openkcm/session-manager/issues/132)) ([0b34e08](https://github.com/openkcm/session-manager/commit/0b34e08a538d244ac6effc5e2f80b7d08e1ddd12))
+
+## [0.10.0](https://github.com/openkcm/session-manager/compare/v0.9.10...v0.10.0) (2025-11-25)
+
+
+### Features
+
+* make cookies configurable ([#124](https://github.com/openkcm/session-manager/issues/124)) ([7705585](https://github.com/openkcm/session-manager/commit/77055855073549ad4aa249ad4dfd3ce7db4eacc2))
+
+## [0.9.10](https://github.com/openkcm/session-manager/compare/v0.9.9...v0.9.10) (2025-11-24)
+
+
+### Bug Fixes
+
+* include missing claims ([#125](https://github.com/openkcm/session-manager/issues/125)) ([c89d76e](https://github.com/openkcm/session-manager/commit/c89d76e383ab6fff6524b115f3e96e82c2e441e8))
+
+## [0.9.9](https://github.com/openkcm/session-manager/compare/v0.9.8...v0.9.9) (2025-11-24)
+
+
+### Bug Fixes
+
+* define the CSRF cookie without the `__Host-` prefix ([#121](https://github.com/openkcm/session-manager/issues/121)) ([2dc708e](https://github.com/openkcm/session-manager/commit/2dc708ef3c913890093f4558819334c8ae5e10a0))
+
+## [0.9.8](https://github.com/openkcm/session-manager/compare/v0.9.7...v0.9.8) (2025-11-21)
+
+
+### Bug Fixes
+
+* reintroduce the redirectURL as deprecated ([#119](https://github.com/openkcm/session-manager/issues/119)) ([7c16c5b](https://github.com/openkcm/session-manager/commit/7c16c5bfe3406f9ee376ae2cb2fd23cad41ffadf))
+
+## [0.9.7](https://github.com/openkcm/session-manager/compare/v0.9.6...v0.9.7) (2025-11-21)
+
+
+### Bug Fixes
+
+* set the cookies for the correct domain ([#117](https://github.com/openkcm/session-manager/issues/117)) ([8cd8f5c](https://github.com/openkcm/session-manager/commit/8cd8f5c59c9d93124edd7fe6ea9aee538a447f99))
+
+## [0.9.6](https://github.com/openkcm/session-manager/compare/v0.9.5...v0.9.6) (2025-11-21)
+
+
+### Bug Fixes
+
+* set the cookies for the right domain ([#115](https://github.com/openkcm/session-manager/issues/115)) ([b7b0112](https://github.com/openkcm/session-manager/commit/b7b01124745887ed1f4456304ca262d3ce6fbc23))
+
+## [0.9.5](https://github.com/openkcm/session-manager/compare/v0.9.4...v0.9.5) (2025-11-18)
+
+
+### Bug Fixes
+
+* create cookies with SameSite: None ([#112](https://github.com/openkcm/session-manager/issues/112)) ([e55f39a](https://github.com/openkcm/session-manager/commit/e55f39a80feb83baac4acd9719d1f3e9f85bb0ed))
+
+## [0.9.4](https://github.com/openkcm/session-manager/compare/v0.9.3...v0.9.4) (2025-11-17)
+
+
+### Bug Fixes
+
+* redirect get parameter ([#110](https://github.com/openkcm/session-manager/issues/110)) ([d6c003a](https://github.com/openkcm/session-manager/commit/d6c003abd7cee03d76a4fb439126a09ea7f634d3))
+
+## [0.9.3](https://github.com/openkcm/session-manager/compare/v0.9.2...v0.9.3) (2025-11-17)
+
+
+### Bug Fixes
+
+* apply OIDC mapping response ([0342419](https://github.com/openkcm/session-manager/commit/03424194884165803eb64dc7633fb5458b4b0d33)), closes [#107](https://github.com/openkcm/session-manager/issues/107)
+* separate callback and redirect to properly set cookies ([#108](https://github.com/openkcm/session-manager/issues/108)) ([40742e5](https://github.com/openkcm/session-manager/commit/40742e58fbe682bed18c9177a496740b40305cc4))
+
+## [0.9.2](https://github.com/openkcm/session-manager/compare/v0.9.1...v0.9.2) (2025-11-17)
+
+
+### Bug Fixes
+
+* cookie handling with OpenAPI ([#104](https://github.com/openkcm/session-manager/issues/104)) ([2996a3b](https://github.com/openkcm/session-manager/commit/2996a3b9b4b1c8e3a0a9c8a535596ea0689b384e))
+
+## [0.9.1](https://github.com/openkcm/session-manager/compare/v0.9.0...v0.9.1) (2025-11-14)
+
+
+### Bug Fixes
+
+* set the cookies for the correct domain ([#101](https://github.com/openkcm/session-manager/issues/101)) ([df8f896](https://github.com/openkcm/session-manager/commit/df8f89626860f10a47bd6741c47e4b4e3a276c1e))
+
 ## [0.9.0](https://github.com/openkcm/session-manager/compare/v0.8.0...v0.9.0) (2025-11-11)
 
 

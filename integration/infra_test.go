@@ -36,7 +36,7 @@ func initInfra(t *testing.T, cmdName string) (istat infraStat) {
 	t.Helper()
 
 	// Since the config is read from the file $PWD/config.yaml,
-	// we're running a process in a subdirectory so that we aren't interferring with the other tests.
+	// we're running a process in a subdirectory so that we aren't interfering with the other tests.
 	wd, err := os.Getwd()
 	require.NoError(t, err, "failed to get wd")
 	istat.Procdir = filepath.Join(wd, cmdName+"-test")
@@ -60,11 +60,11 @@ func initInfra(t *testing.T, cmdName string) (istat infraStat) {
 }
 
 func (istat *infraStat) PreparePostgres(t *testing.T) {
+	t.Helper()
+
 	const dbuser = "postgres"
 	const dbpass = "secret"
 	const dbname = "session_manager"
-
-	t.Helper()
 
 	wd, err := os.Getwd()
 	require.NoError(t, err, "getting wd")

@@ -119,16 +119,25 @@ build:
 	go build ./cmd/session-manager
 
 .PHONY: test
-test: clean
+test: clean install-gotestsum
 	@mkdir -p cover/integration cover/unit
 	@go clean -testcache
 
-	go test -count=1 -race -cover ./... -args -test.gocoverdir="${PWD}/cover/unit"
-	GOCOVERDIR="${PWD}/cover/integration" go test -count=1 -race --tags=integration ./integration
+	gotestsum --junitfile="${CURDIR}/junit-unit.xml" --format=testname -- -count=1 -race -cover ./... -args -test.gocoverdir="${CURDIR}/cover/unit"
+	GOCOVERDIR="${CURDIR}/cover/integration" gotestsum --junitfile="${CURDIR}/junit-integration.xml" --format=testname -- -v -count=1 -race --tags=integration ./integration
 
 	@go tool covdata textfmt -i=./cover/unit,./cover/integration -o cover.out
+	@grep -v 'github.com/openkcm/session-manager/internal/openapi/'         cover.out > cover.tmp && mv cover.tmp cover.out
+	@grep -v 'github.com/openkcm/session-manager/internal/dbtest/'          cover.out > cover.tmp && mv cover.tmp cover.out
+	@grep -v 'github.com/openkcm/session-manager/internal/trust/trustmock/' cover.out > cover.tmp && mv cover.tmp cover.out
+	@grep -v 'github.com/openkcm/session-manager/internal/session/mock/'    cover.out > cover.tmp && mv cover.tmp cover.out
+	@go tool cover -func=cover.out
 
 	@echo "On a Mac, you can use the following command to open the coverage report in the browser\ngo tool cover -html=cover.out -o cover.html && open cover.html"
+
+.PHONY: install-gotestsum
+install-gotestsum:
+	(cd /tmp && go install gotest.tools/gotestsum@latest)
 
 .PHONY: image
 image:

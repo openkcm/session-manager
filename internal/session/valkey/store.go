@@ -1,0 +1,125 @@
+package sessionvalkey
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/valkey-io/valkey-go"
+
+	"github.com/openkcm/session-manager/internal/serviceerr"
+)
+
+type store struct {
+	valkey valkey.Client
+	prefix string
+}
+
+func newStore(valkeyClient valkey.Client, prefix string) *store {
+	prefix = strings.TrimSuffix(prefix, ":")
+	return &store{
+		valkey: valkeyClient,
+		prefix: prefix,
+	}
+}
+
+func (s *store) Get(ctx context.Context, objectType ObjectType, objectID string, decodeInto any) error {
+	key := s.key(objectType, objectID)
+	return s.get(ctx, key, decodeInto)
+}
+
+func (s *store) Set(ctx context.Context, objectType ObjectType, id string, val any, duration time.Duration) error {
+	key := s.key(objectType, id)
+	bytes, err := s.encode(val)
+	if err != nil {
+		return fmt.Errorf("encoding data: %w", err)
+	}
+
+	err = s.valkey.Do(ctx, s.valkey.B().Set().Key(key).Value(valkey.BinaryString(bytes)).Ex(duration).Build()).Error()
+	if err != nil {
+		return fmt.Errorf("executing set command: %w", err)
+	}
+
+	return nil
+}
+
+func (s *store) Destroy(ctx context.Context, objectType ObjectType, id string) error {
+	key := s.key(objectType, id)
+	err := s.valkey.Do(ctx, s.valkey.B().Del().Key(key).Build()).Error()
+	if err != nil {
+		return fmt.Errorf("executing del command: %w", err)
+	}
+
+	return nil
+}
+
+func (s *store) get(ctx context.Context, key string, decodeInto any) error {
+	bytes, err := s.valkey.Do(ctx, s.valkey.B().Get().Key(key).Build()).AsBytes()
+	if err != nil {
+		if valkey.IsValkeyNil(err) {
+			return errors.Join(err, serviceerr.ErrNotFound)
+		}
+
+		return fmt.Errorf("executing get command: %w", err)
+	}
+
+	err = s.decode(bytes, decodeInto)
+	if err != nil {
+		return fmt.Errorf("decoding state: %w", err)
+	}
+
+	return nil
+}
+
+func (s *store) key(objectType ObjectType, objectID string) string {
+	return fmt.Sprintf("%s:%s:%s", s.prefix, objectType, objectID)
+}
+
+func (s *store) encode(v any) ([]byte, error) {
+	bytes, err := json.Marshal(v)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling json: %w", err)
+	}
+
+	return bytes, nil
+}
+
+func (s *store) decode(data []byte, into any) error {
+	err := json.Unmarshal(data, into)
+	if err != nil {
+		return fmt.Errorf("unmarshaling json: %w", err)
+	}
+
+	return nil
+}
+
+func getStoreObjects[T any](ctx context.Context, s *store, objectType ObjectType, objectID string, decodeInto *[]T) error {
+	key := s.key(objectType, objectID)
+	var cursor uint64
+	for {
+		scan, err := s.valkey.Do(ctx, s.valkey.B().Scan().Cursor(cursor).Match(key).Count(100).Build()).AsScanEntry()
+		if err != nil {
+			return fmt.Errorf("executing scan command: %w", err)
+		}
+
+		cursor = scan.Cursor
+		*decodeInto = slices.Grow(*decodeInto, len(scan.Elements))
+		for _, key := range scan.Elements {
+			var decoded T
+			err := s.get(ctx, key, &decoded)
+			if err != nil {
+				return fmt.Errorf("getting an element: %w", err)
+			}
+
+			*decodeInto = append(*decodeInto, decoded)
+		}
+
+		if cursor == 0 {
+			return nil
+		}
+	}
+}

@@ -310,23 +310,34 @@ config:
 
   sessionManager:
     sessionDuration: 12h
-    redirectURI: http://localhost:8080/sm/callback
+    idleSessionTimeout: 90m
+    callbackURL: http://localhost:8080/sm/callback
     clientAuth:
       clientID: "client-id"
       type: client_secret
       clientSecret:
         source: embedded
         value: secret
-
+    sessionCookieTemplate:
+      name: "__Host-Http-SESSION"
+      path: "/"
+      secure: true
+      sameSite: None
+      httpOnly: true
+    csrfCookieTemplate:
+      name: "CSRF"
+      path: "/"
+      secure: true
+      sameSite: Strict
+      domain: localhost
     csrfSecret:
       source: embedded
       value: my-csrf-secret-at-least-thirty-two-bits-size
-    jwsSigAlgs:
-      - RS256
-      - HS256
 
   migrate:
     source: file:///sql
 
-  tokenRefresher:
-    refreshInterval: 30m
+  housekeeper:
+    triggerInterval: 10m
+    concurrencyLimit: 10
+    tokenRefreshTriggerInterval: 15m
