@@ -14,6 +14,8 @@ DB_PASS := secret
 DB_NAME := session_manager
 DB_ADMIN_PASS_KEY := secretKey
 VALKEY_PASS := $(DB_PASS)
+K3D_CLUSTER_NAME := session-manager-test
+SERVICE_NAME := session-manager
 
 all: clean lint build test image
 
@@ -134,6 +136,35 @@ test: clean install-gotestsum
 	@go tool cover -func=cover.out
 
 	@echo "On a Mac, you can use the following command to open the coverage report in the browser\ngo tool cover -html=cover.out -o cover.html && open cover.html"
+
+.PHONY: helm-test
+helm-test:
+	@echo "Running Helm unit tests"
+	cd helm-tests/unit && go test -v -count=1 -race ./...
+
+.PHONY: helm-integration-test
+helm-integration-test:
+	# we are explicit here to ensure that teardown really runs twice
+	$(MAKE) k3d-teardown
+	$(MAKE) k3d-setup
+	$(MAKE) helm-integration-test-run
+	$(MAKE) k3d-teardown
+
+.PHONY: k3d-setup
+k3d-setup:
+	k3d cluster create $(K3D_CLUSTER_NAME) -p "30083:30083@server:0" --api-port 127.0.0.1:6444
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o $(SERVICE_NAME) ./cmd/$(SERVICE_NAME)
+	docker build --no-cache -t localhost/$(SERVICE_NAME):latest -f Dockerfile.dev .
+	k3d image import localhost/$(SERVICE_NAME):latest -c $(K3D_CLUSTER_NAME)
+
+.PHONY: helm-integration-test-run
+helm-integration-test-run:
+	kubectl config current-context
+	cd ./helm-tests/integration && go test -v -count=1 -race .
+
+.PHONY: k3d-teardown
+k3d-teardown:
+	k3d cluster delete $(K3D_CLUSTER_NAME)
 
 .PHONY: install-gotestsum
 install-gotestsum:
