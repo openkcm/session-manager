@@ -119,14 +119,14 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 	// Compare fingerprints
 	if sess.Fingerprint != req.GetFingerprint() {
 		span.SetStatus(codes.Ok, "fingerprint mismatch")
-		slogctx.Warn(ctx, "Is this an attack? Fingerprints do not match", "session_fingerprint", sess.Fingerprint, "request_fingerprint", req.GetFingerprint())
+		slogctx.Warn(ctx, "Is this an attack? Fingerprints do not match", "sessionFingerprint", sess.Fingerprint, "requestFingerprint", req.GetFingerprint())
 		return &sessionv1.GetSessionResponse{Valid: false}, nil
 	}
 
 	// Compare tenant IDs
 	if sess.TenantID != req.GetTenantId() {
 		span.SetStatus(codes.Ok, "tenant id mismatch")
-		slogctx.Warn(ctx, "Is this an attack? Tenant IDs do not match", "session_tenant_id", sess.TenantID, "request_tenant_id", req.GetTenantId())
+		slogctx.Warn(ctx, "Is this an attack? Tenant IDs do not match", "sessionTenantId", sess.TenantID, "requestTenantId", req.GetTenantId())
 		return &sessionv1.GetSessionResponse{Valid: false}, nil
 	}
 

@@ -204,7 +204,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("creating audit metadata: %w", err)
 	}
 
-	ctx = slogctx.With(ctx, "tenant_id", state.TenantID)
+	ctx = slogctx.With(ctx, "tenantId", state.TenantID)
 
 	if time.Now().After(state.Expiry) {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "state expired")
@@ -361,7 +361,7 @@ func (m *Manager) Logout(ctx context.Context, sessionID string) (string, error) 
 		return "", fmt.Errorf("getting session id: %w", err)
 	}
 
-	ctx = slogctx.With(ctx, "tenant_id", session.TenantID)
+	ctx = slogctx.With(ctx, "tenantId", session.TenantID)
 
 	mapping, err := m.trustRepo.Get(ctx, session.TenantID)
 	if err != nil {
@@ -369,7 +369,7 @@ func (m *Manager) Logout(ctx context.Context, sessionID string) (string, error) 
 		return "", fmt.Errorf("getting trust mapping: %w", err)
 	}
 
-	ctx = slogctx.With(ctx, "issuer_url", mapping.IssuerURL)
+	ctx = slogctx.With(ctx, "issuerUrl", mapping.IssuerURL)
 
 	oidcConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL)
 	if err != nil {

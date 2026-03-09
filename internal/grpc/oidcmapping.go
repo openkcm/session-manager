@@ -30,9 +30,9 @@ func NewOIDCMappingServer(oidc *trust.Service) *OIDCMappingServer {
 
 func (srv *OIDCMappingServer) ApplyOIDCMapping(ctx context.Context, req *oidcmappingv1.ApplyOIDCMappingRequest) (*oidcmappingv1.ApplyOIDCMappingResponse, error) {
 	ctx = slogctx.With(ctx,
-		"tenant_id", req.GetTenantId(),
+		"tenantId", req.GetTenantId(),
 		"issuer", req.GetIssuer(),
-		"jwks_uri", req.GetJwksUri(),
+		"jwksUri", req.GetJwksUri(),
 		"audiences", req.GetAudiences(),
 		"properties", req.GetProperties(),
 	)
@@ -68,7 +68,7 @@ func (srv *OIDCMappingServer) ApplyOIDCMapping(ctx context.Context, req *oidcmap
 // It calls the underlying service to set the mapping as blocked.
 // Returns a response containing an optional error message if blocking fails.
 func (srv *OIDCMappingServer) BlockOIDCMapping(ctx context.Context, req *oidcmappingv1.BlockOIDCMappingRequest) (*oidcmappingv1.BlockOIDCMappingResponse, error) {
-	ctx = slogctx.With(ctx, "tenant_id", req.GetTenantId())
+	ctx = slogctx.With(ctx, "tenantId", req.GetTenantId())
 	slogctx.Debug(ctx, "BlockOIDCMapping called")
 
 	resp := &oidcmappingv1.BlockOIDCMappingResponse{}
@@ -87,7 +87,7 @@ func (srv *OIDCMappingServer) BlockOIDCMapping(ctx context.Context, req *oidcmap
 // It calls the underlying service to remove the mapping.
 // Returns a respose containing an optional error message if removing fails.
 func (srv *OIDCMappingServer) RemoveOIDCMapping(ctx context.Context, req *oidcmappingv1.RemoveOIDCMappingRequest) (*oidcmappingv1.RemoveOIDCMappingResponse, error) {
-	ctx = slogctx.With(ctx, "tenant_id", req.GetTenantId())
+	ctx = slogctx.With(ctx, "tenantId", req.GetTenantId())
 	slogctx.Debug(ctx, "RemoveOIDCMapping called")
 
 	resp := &oidcmappingv1.RemoveOIDCMappingResponse{}
@@ -109,7 +109,7 @@ func (srv *OIDCMappingServer) RemoveOIDCMapping(ctx context.Context, req *oidcma
 // It calls the underlying service to set the mapping as unblocked.
 // Returns a response containing an optional error message if unblocking fails.
 func (srv *OIDCMappingServer) UnblockOIDCMapping(ctx context.Context, req *oidcmappingv1.UnblockOIDCMappingRequest) (*oidcmappingv1.UnblockOIDCMappingResponse, error) {
-	ctx = slogctx.With(ctx, "tenant_id", req.GetTenantId())
+	ctx = slogctx.With(ctx, "tenantId", req.GetTenantId())
 	slogctx.Debug(ctx, "UnblockOIDCMapping called")
 
 	resp := &oidcmappingv1.UnblockOIDCMappingResponse{}
