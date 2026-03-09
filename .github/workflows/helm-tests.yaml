@@ -1,0 +1,30 @@
+name: Helm test
+
+on:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  helm-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+      - name: Build the Docker image
+        run: docker build --no-cache -f Dockerfile.dev -t localhost/session-manager:latest .
+      - name: Setup k3s
+        run: |
+          go install github.com/k3d-io/k3d/v5@v5.8.3
+          k3d --version
+          k3d cluster create k3scluster --wait --image=rancher/k3s:latest
+          while ! kubectl get serviceaccount default >/dev/null; do sleep 1; done
+      - name: Import the Docker image
+        run: k3d image import localhost/session-manager:latest -c k3scluster
+      - name: Run the tests
+        run: cd ./helm-tests && go test -v -count=1 -race ./...
