@@ -8,6 +8,7 @@ import (
 )
 
 func TestFullChartRendering(t *testing.T) {
+	ctx := t.Context()
 	tests := []struct {
 		name             string
 		values           string
@@ -95,7 +96,7 @@ func TestFullChartRendering(t *testing.T) {
 				args = append(args, strings.Split(tt.values, " ")...)
 			}
 
-			cmd := exec.Command("helm", args...)
+			cmd := exec.CommandContext(ctx, "helm", args...)
 			var out bytes.Buffer
 			cmd.Stdout = &out
 			cmd.Stderr = &out
@@ -126,6 +127,7 @@ func TestFullChartRendering(t *testing.T) {
 }
 
 func TestChartValidation(t *testing.T) {
+	ctx := t.Context()
 	tests := []struct {
 		name        string
 		values      string
@@ -151,7 +153,7 @@ func TestChartValidation(t *testing.T) {
 				args = append(args, strings.Split(tt.values, " ")...)
 			}
 
-			cmd := exec.Command("helm", args...)
+			cmd := exec.CommandContext(ctx, "helm", args...)
 			var out bytes.Buffer
 			cmd.Stdout = &out
 			cmd.Stderr = &out
@@ -177,6 +179,7 @@ func TestChartValidation(t *testing.T) {
 }
 
 func TestLabelsAndAnnotations(t *testing.T) {
+	ctx := t.Context()
 	tests := []struct {
 		name     string
 		values   string
@@ -200,7 +203,7 @@ func TestLabelsAndAnnotations(t *testing.T) {
 				args = append(args, strings.Split(tt.values, " ")...)
 			}
 
-			cmd := exec.Command("helm", args...)
+			cmd := exec.CommandContext(ctx, "helm", args...)
 			var out bytes.Buffer
 			cmd.Stdout = &out
 			cmd.Stderr = &out

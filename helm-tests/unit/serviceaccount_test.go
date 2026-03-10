@@ -8,6 +8,7 @@ import (
 )
 
 func TestServiceAccountRendering(t *testing.T) {
+	ctx := t.Context()
 	tests := []struct {
 		name     string
 		values   string
@@ -80,7 +81,7 @@ func TestServiceAccountRendering(t *testing.T) {
 				args = append(args, strings.Split(tt.values, " ")...)
 			}
 
-			cmd := exec.Command("helm", args...)
+			cmd := exec.CommandContext(ctx, "helm", args...)
 			var out bytes.Buffer
 			cmd.Stdout = &out
 			cmd.Stderr = &out

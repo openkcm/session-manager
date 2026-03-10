@@ -8,6 +8,7 @@ import (
 )
 
 func TestDeploymentRendering(t *testing.T) {
+	ctx := t.Context()
 	tests := []struct {
 		name     string
 		values   string
@@ -282,7 +283,7 @@ func TestDeploymentRendering(t *testing.T) {
 				args = append(args, strings.Split(tt.values, " ")...)
 			}
 
-			cmd := exec.Command("helm", args...)
+			cmd := exec.CommandContext(ctx, "helm", args...)
 			var out bytes.Buffer
 			cmd.Stdout = &out
 			cmd.Stderr = &out
@@ -303,6 +304,7 @@ func TestDeploymentRendering(t *testing.T) {
 }
 
 func TestHousekeeperDeployment(t *testing.T) {
+	ctx := t.Context()
 	tests := []struct {
 		name     string
 		values   string
@@ -476,7 +478,7 @@ func TestHousekeeperDeployment(t *testing.T) {
 				args = append(args, strings.Split(tt.values, " ")...)
 			}
 
-			cmd := exec.Command("helm", args...)
+			cmd := exec.CommandContext(ctx, "helm", args...)
 			var out bytes.Buffer
 			cmd.Stdout = &out
 			cmd.Stderr = &out
