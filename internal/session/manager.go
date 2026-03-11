@@ -24,25 +24,18 @@ import (
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/session-manager/internal/config"
+	"github.com/openkcm/session-manager/internal/credentials"
 	"github.com/openkcm/session-manager/internal/pkce"
 	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/internal/trust"
 )
 
-type ManagerOption func(*Manager)
-
-func WithAllowHttpScheme(allowHttpScheme bool) ManagerOption {
-	return func(m *Manager) {
-		m.allowHttpScheme = allowHttpScheme
-	}
-}
-
 type Manager struct {
-	trustRepo    trust.OIDCMappingRepository
-	sessions     Repository
-	pkce         pkce.Source
-	audit        *otlpaudit.AuditLogger
-	secureClient *http.Client
+	trustRepo trust.OIDCMappingRepository
+	sessions  Repository
+	pkce      pkce.Source
+	audit     *otlpaudit.AuditLogger
+	newCreds  CredentialsBuilder
 
 	sessionDuration       time.Duration
 	idleSessionTimeout    time.Duration
@@ -69,7 +62,6 @@ func NewManager(
 	trustRepo trust.OIDCMappingRepository,
 	sessionsRepo Repository,
 	auditLogger *otlpaudit.AuditLogger,
-	httpClient *http.Client,
 	opts ...ManagerOption,
 ) (*Manager, error) {
 	callbackURL, err := url.Parse(cfg.CallbackURL)
@@ -92,7 +84,7 @@ func NewManager(
 		csrfCookieTemplate:    cfg.CSRFCookieTemplate,
 		callbackURL:           callbackURL,
 		clientID:              cfg.ClientAuth.ClientID,
-		secureClient:          httpClient,
+		newCreds:              func(_ string) credentials.TransportCredentials { return credentials.NewDefault() },
 		csrfSecret:            cfg.CSRFSecretParsed,
 		cache:                 cache.New(2*time.Minute, 10*time.Minute),
 	}
@@ -135,7 +127,7 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 		return "", fmt.Errorf("storing session: %w", err)
 	}
 
-	u, err := m.authURI(openidConf, state, pkce, mapping.Properties)
+	u, err := m.authURI(openidConf, state, pkce, mapping)
 	if err != nil {
 		return "", fmt.Errorf("generating auth uri: %w", err)
 	}
@@ -143,7 +135,7 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 	return u, nil
 }
 
-func (m *Manager) authURI(openidConf *oidc.Configuration, state State, pkce pkce.PKCE, properties map[string]string) (string, error) {
+func (m *Manager) authURI(openidConf *oidc.Configuration, state State, pkce pkce.PKCE, mapping trust.OIDCMapping) (string, error) {
 	u, err := url.Parse(openidConf.AuthorizationEndpoint)
 	if err != nil {
 		return "", fmt.Errorf("parsing authorisation endpoint url: %w", err)
@@ -152,13 +144,13 @@ func (m *Manager) authURI(openidConf *oidc.Configuration, state State, pkce pkce
 	q := u.Query()
 	q.Set("scope", "openid profile email groups")
 	q.Set("response_type", "code")
-	q.Set("client_id", m.clientID)
+	q.Set("client_id", m.getClientID(mapping))
 	q.Set("state", state.ID)
 	q.Set("code_challenge", pkce.Challenge)
 	q.Set("code_challenge_method", pkce.Method)
 	q.Set("redirect_uri", m.callbackURL.String())
 	for _, parameter := range m.queryParametersAuth {
-		value, ok := properties[parameter]
+		value, ok := mapping.Properties[parameter]
 		if !ok {
 			return "", fmt.Errorf("missing auth parameter: %s", parameter)
 		}
@@ -228,7 +220,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("getting openid configuration: %w", err)
 	}
 
-	tokens, err := m.exchangeCode(ctx, openidConf, code, state.PKCEVerifier, mapping.Properties)
+	tokens, err := m.exchangeCode(ctx, openidConf, code, state.PKCEVerifier, mapping)
 	if err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to exchange code for tokens")
 		return OIDCSessionData{}, fmt.Errorf("exchanging code for tokens: %w", err)
@@ -286,7 +278,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 	// prepare the auth context used by ExtAuthZ
 	authContext := map[string]string{
 		"issuer":    mapping.IssuerURL,
-		"client_id": m.clientID,
+		"client_id": m.getClientID(mapping),
 	}
 	for _, parameter := range m.authContextKeys {
 		value, ok := mapping.Properties[parameter]
@@ -400,7 +392,7 @@ func (m *Manager) Logout(ctx context.Context, sessionID string) (string, error) 
 	}
 
 	vals := make(url.Values)
-	vals.Set("client_id", m.clientID)
+	vals.Set("client_id", m.getClientID(mapping))
 	if m.postLogoutRedirectURL != "" {
 		vals.Set("post_logout_redirect_uri", m.postLogoutRedirectURL)
 	}
@@ -590,15 +582,30 @@ func (m *Manager) verifyAccessToken(accessToken, atHash string, idToken *jwt.JSO
 	return nil
 }
 
-func (m *Manager) exchangeCode(ctx context.Context, openidConf *oidc.Configuration, code, codeVerifier string, properties map[string]string) (tokenResponse, error) {
+func (m *Manager) httpClient(mapping trust.OIDCMapping) *http.Client {
+	creds := m.newCreds(m.getClientID(mapping))
+	return &http.Client{
+		Transport: creds.Transport(),
+	}
+}
+
+func (m *Manager) getClientID(mapping trust.OIDCMapping) string {
+	if mapping.ClientID != "" {
+		return mapping.ClientID
+	}
+
+	return m.clientID
+}
+
+func (m *Manager) exchangeCode(ctx context.Context, openidConf *oidc.Configuration, code, codeVerifier string, mapping trust.OIDCMapping) (tokenResponse, error) {
 	data := url.Values{}
 	data.Set("grant_type", "authorization_code")
 	data.Set("code", code)
 	data.Set("code_verifier", codeVerifier)
 	data.Set("redirect_uri", m.callbackURL.String())
-	data.Set("client_id", m.clientID)
+	data.Set("client_id", m.getClientID(mapping))
 	for _, parameter := range m.queryParametersToken {
-		value, ok := properties[parameter]
+		value, ok := mapping.Properties[parameter]
 		if !ok {
 			return tokenResponse{}, fmt.Errorf("missing token parameter: %s", parameter)
 		}
@@ -611,7 +618,8 @@ func (m *Manager) exchangeCode(ctx context.Context, openidConf *oidc.Configurati
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := m.secureClient.Do(req)
+	client := m.httpClient(mapping)
+	resp, err := client.Do(req)
 	if err != nil {
 		return tokenResponse{}, fmt.Errorf("executing request: %w", err)
 	}

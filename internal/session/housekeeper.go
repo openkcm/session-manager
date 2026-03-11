@@ -109,7 +109,7 @@ func (m *Manager) refreshAccessToken(ctx context.Context, s Session) error {
 	data := url.Values{}
 	data.Set("grant_type", "refresh_token")
 	data.Set("refresh_token", s.RefreshToken)
-	data.Set("client_id", m.clientID)
+	data.Set("client_id", m.getClientID(mapping))
 	for _, parameter := range m.queryParametersToken {
 		value, ok := mapping.Properties[parameter]
 		if !ok {
@@ -124,7 +124,8 @@ func (m *Manager) refreshAccessToken(ctx context.Context, s Session) error {
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := m.secureClient.Do(req)
+	client := m.httpClient(mapping)
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}

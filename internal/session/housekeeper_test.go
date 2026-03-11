@@ -36,7 +36,7 @@ func TestDeleteIdleSessions(t *testing.T) {
 	err := sessions.BumpActive(ctx, sessionID, time.Hour)
 	require.NoError(t, err)
 
-	manager, err := session.NewManager(cfg, nil, sessions, nil, http.DefaultClient)
+	manager, err := session.NewManager(cfg, nil, sessions, nil)
 	require.NoError(t, err)
 
 	// Session should be there before cleanup
@@ -134,7 +134,11 @@ func TestRefreshAccessToken(t *testing.T) {
 			CSRFSecretParsed:               []byte(testCSRFSecret),
 		}
 
-		manager, err := session.NewManager(cfg, oidcRepo, sessions, nil, http.DefaultClient,
+		manager, err := session.NewManager(
+			cfg,
+			oidcRepo,
+			sessions,
+			nil,
 			session.WithAllowHttpScheme(true),
 		)
 		require.NoError(t, err)
@@ -172,7 +176,7 @@ func TestRefreshAccessToken(t *testing.T) {
 			CSRFSecretParsed: []byte(testCSRFSecret),
 		}
 
-		manager, err := session.NewManager(cfg, oidcRepo, sessions, nil, http.DefaultClient)
+		manager, err := session.NewManager(cfg, oidcRepo, sessions, nil)
 		require.NoError(t, err)
 
 		// Trigger housekeeping - should log error but not fail
@@ -228,7 +232,11 @@ func TestRefreshAccessToken(t *testing.T) {
 			CSRFSecretParsed: []byte(testCSRFSecret),
 		}
 
-		manager, err := session.NewManager(cfg, oidcRepo, sessions, nil, http.DefaultClient,
+		manager, err := session.NewManager(
+			cfg,
+			oidcRepo,
+			sessions,
+			nil,
 			session.WithAllowHttpScheme(true),
 		)
 		require.NoError(t, err)
@@ -282,7 +290,11 @@ func TestRefreshAccessToken(t *testing.T) {
 			CSRFSecretParsed:               []byte(testCSRFSecret),
 		}
 
-		manager, err := session.NewManager(cfg, oidcRepo, sessions, nil, http.DefaultClient,
+		manager, err := session.NewManager(
+			cfg,
+			oidcRepo,
+			sessions,
+			nil,
 			session.WithAllowHttpScheme(true),
 		)
 		require.NoError(t, err)
@@ -313,7 +325,7 @@ func TestHousekeepSession_ErrorCases(t *testing.T) {
 			CSRFSecretParsed: []byte(testCSRFSecret),
 		}
 
-		manager, err := session.NewManager(cfg, nil, sessions, nil, http.DefaultClient)
+		manager, err := session.NewManager(cfg, nil, sessions, nil)
 		require.NoError(t, err)
 
 		err = manager.TriggerHousekeeping(ctx, 1, time.Hour)
@@ -343,7 +355,7 @@ func TestHousekeepSession_ErrorCases(t *testing.T) {
 			CSRFSecretParsed: []byte(testCSRFSecret),
 		}
 
-		manager, err := session.NewManager(cfg, nil, sessions, nil, http.DefaultClient)
+		manager, err := session.NewManager(cfg, nil, sessions, nil)
 		require.NoError(t, err)
 
 		// Trigger with short refresh interval - token should not be refreshed

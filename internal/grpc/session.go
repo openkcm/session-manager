@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/openkcm/common-sdk/pkg/oidc"
@@ -41,7 +40,6 @@ type SessionServer struct {
 
 	sessionRepo session.Repository
 	trustRepo   trust.OIDCMappingRepository
-	httpClient  *http.Client
 
 	queryParametersIntrospect []string
 	idleSessionTimeout        time.Duration
@@ -53,14 +51,12 @@ type SessionServer struct {
 func NewSessionServer(
 	sessionRepo session.Repository,
 	trustRepo trust.OIDCMappingRepository,
-	httpClient *http.Client,
 	idleSessionTimeout time.Duration,
 	opts ...SessionServerOption,
 ) *SessionServer {
 	s := &SessionServer{
 		sessionRepo:        sessionRepo,
 		trustRepo:          trustRepo,
-		httpClient:         httpClient,
 		idleSessionTimeout: idleSessionTimeout,
 		cache:              cache.New(2*time.Minute, 10*time.Minute),
 	}

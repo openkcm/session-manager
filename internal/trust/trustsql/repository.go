@@ -36,7 +36,7 @@ func (r *Repository) Get(ctx context.Context, tenantID string) (trust.OIDCMappin
 	}
 	defer tx.Rollback(ctx)
 
-	row := tx.QueryRow(ctx, `SELECT issuer, blocked, jwks_uri, audiences, properties FROM trust WHERE tenant_id = $1;`, tenantID)
+	row := tx.QueryRow(ctx, `SELECT issuer, blocked, jwks_uri, audiences, properties, COALESCE(client_id, '') FROM trust WHERE tenant_id = $1;`, tenantID)
 	mapping, err := r.get(ctx, tx, row)
 	if err != nil {
 		span.RecordError(err)
@@ -50,7 +50,7 @@ func (r *Repository) get(ctx context.Context, tx pgx.Tx, row pgx.Row) (trust.OID
 	var propsBytes []byte
 	var mapping trust.OIDCMapping
 
-	err := row.Scan(&mapping.IssuerURL, &mapping.Blocked, &mapping.JWKSURI, &mapping.Audiences, &propsBytes)
+	err := row.Scan(&mapping.IssuerURL, &mapping.Blocked, &mapping.JWKSURI, &mapping.Audiences, &propsBytes, &mapping.ClientID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return trust.OIDCMapping{}, serviceerr.ErrNotFound
@@ -96,9 +96,9 @@ func (r *Repository) Create(ctx context.Context, tenantID string, mapping trust.
 
 	// The audiences value is optional, so we use COALESCE to default to an empty array if it's nil
 	_, err = tx.Exec(ctx,
-		`INSERT INTO trust (tenant_id, blocked, issuer, jwks_uri, audiences, properties)
-			 VALUES ($1, $2, $3, $4, COALESCE($5, '{}'::text[]), $6);`,
-		tenantID, mapping.Blocked, mapping.IssuerURL, mapping.JWKSURI, mapping.Audiences, propsBytes,
+		`INSERT INTO trust (tenant_id, blocked, issuer, jwks_uri, audiences, properties, client_id)
+			 VALUES ($1, $2, $3, $4, COALESCE($5, '{}'::text[]), $6, NULLIF($7, ''));`,
+		tenantID, mapping.Blocked, mapping.IssuerURL, mapping.JWKSURI, mapping.Audiences, propsBytes, mapping.ClientID,
 	)
 	if err != nil {
 		span.RecordError(err)
@@ -170,9 +170,9 @@ func (r *Repository) Update(ctx context.Context, tenantID string, mapping trust.
 	// The audiences value is optional, so we use COALESCE to default to an empty array if it's nil
 	ct, err := tx.Exec(ctx,
 		`UPDATE trust
-			 SET blocked = $1, issuer = $2, jwks_uri = $3, audiences = COALESCE($4, '{}'::text[]), properties = $5
-			 WHERE tenant_id = $6;`,
-		mapping.Blocked, mapping.IssuerURL, mapping.JWKSURI, mapping.Audiences, propsBytes, tenantID)
+			 SET blocked = $1, issuer = $2, jwks_uri = $3, audiences = COALESCE($4, '{}'::text[]), properties = $5, client_id = NULLIF($6, '')
+			 WHERE tenant_id = $7;`,
+		mapping.Blocked, mapping.IssuerURL, mapping.JWKSURI, mapping.Audiences, propsBytes, mapping.ClientID, tenantID)
 	if err != nil {
 		span.RecordError(err)
 		return fmt.Errorf("updating trust: %w", err)
