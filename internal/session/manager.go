@@ -152,17 +152,21 @@ func (m *Manager) authURI(openidConf *oidc.Configuration, state State, pkce pkce
 	q := u.Query()
 	q.Set("scope", "openid profile email groups")
 	q.Set("response_type", "code")
-	q.Set("client_id", m.clientID)
+	// The client_id can be set per tenant using the trust mapping properties.
+	// Otherwise, the default client_id configured in the manager will be used.
+	if v, ok := properties["client_id"]; ok {
+		q.Set("client_id", v)
+	} else {
+		q.Set("client_id", m.clientID)
+	}
 	q.Set("state", state.ID)
 	q.Set("code_challenge", pkce.Challenge)
 	q.Set("code_challenge_method", pkce.Method)
 	q.Set("redirect_uri", m.callbackURL.String())
 	for _, parameter := range m.queryParametersAuth {
-		value, ok := properties[parameter]
-		if !ok {
-			return "", fmt.Errorf("missing auth parameter: %s", parameter)
+		if value, ok := properties[parameter]; ok {
+			q.Set(parameter, value)
 		}
-		q.Set(parameter, value)
 	}
 
 	u.RawQuery = q.Encode()
@@ -283,10 +287,17 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		}
 	}
 
+	// The client_id can be set per tenant using the trust mapping properties.
+	// Otherwise, the default client_id configured in the manager will be used.
+	clientID := m.clientID
+	if v, ok := mapping.Properties["client_id"]; ok {
+		clientID = v
+	}
+
 	// prepare the auth context used by ExtAuthZ
 	authContext := map[string]string{
 		"issuer":    mapping.IssuerURL,
-		"client_id": m.clientID,
+		"client_id": clientID,
 	}
 	for _, parameter := range m.authContextKeys {
 		value, ok := mapping.Properties[parameter]
@@ -400,18 +411,21 @@ func (m *Manager) Logout(ctx context.Context, sessionID string) (string, error) 
 	}
 
 	vals := make(url.Values)
-	vals.Set("client_id", m.clientID)
+	// The client_id can be set per tenant using the trust mapping properties.
+	// Otherwise, the default client_id configured in the manager will be used.
+	if v, ok := mapping.Properties["client_id"]; ok {
+		vals.Set("client_id", v)
+	} else {
+		vals.Set("client_id", m.clientID)
+	}
 	if m.postLogoutRedirectURL != "" {
 		vals.Set("post_logout_redirect_uri", m.postLogoutRedirectURL)
 	}
 
 	for _, p := range m.queryParametersLogout {
-		v, ok := mapping.Properties[p]
-		if !ok {
-			return "", fmt.Errorf("missing auth parameter: %s", p)
+		if v, ok := mapping.Properties[p]; ok {
+			vals.Set(p, v)
 		}
-
-		vals.Set(p, v)
 	}
 
 	redirectURL.RawQuery = vals.Encode()
@@ -596,13 +610,17 @@ func (m *Manager) exchangeCode(ctx context.Context, openidConf *oidc.Configurati
 	data.Set("code", code)
 	data.Set("code_verifier", codeVerifier)
 	data.Set("redirect_uri", m.callbackURL.String())
-	data.Set("client_id", m.clientID)
+	// The client_id can be set per tenant using the trust mapping properties.
+	// Otherwise, the default client_id configured in the manager will be used.
+	if v, ok := properties["client_id"]; ok {
+		data.Set("client_id", v)
+	} else {
+		data.Set("client_id", m.clientID)
+	}
 	for _, parameter := range m.queryParametersToken {
-		value, ok := properties[parameter]
-		if !ok {
-			return tokenResponse{}, fmt.Errorf("missing token parameter: %s", parameter)
+		if value, ok := properties[parameter]; ok {
+			data.Set(parameter, value)
 		}
-		data.Set(parameter, value)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, openidConf.TokenEndpoint, strings.NewReader(data.Encode()))

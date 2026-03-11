@@ -109,13 +109,17 @@ func (m *Manager) refreshAccessToken(ctx context.Context, s Session) error {
 	data := url.Values{}
 	data.Set("grant_type", "refresh_token")
 	data.Set("refresh_token", s.RefreshToken)
-	data.Set("client_id", m.clientID)
+	// The client_id can be set per tenant using the trust mapping properties.
+	// Otherwise, the default client_id configured in the manager will be used.
+	if v, ok := mapping.Properties["client_id"]; ok {
+		data.Set("client_id", v)
+	} else {
+		data.Set("client_id", m.clientID)
+	}
 	for _, parameter := range m.queryParametersToken {
-		value, ok := mapping.Properties[parameter]
-		if !ok {
-			return fmt.Errorf("missing token parameter: %s", parameter)
+		if value, ok := mapping.Properties[parameter]; ok {
+			data.Set(parameter, value)
 		}
-		data.Set(parameter, value)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, openidConf.TokenEndpoint, bytes.NewBufferString(data.Encode()))
