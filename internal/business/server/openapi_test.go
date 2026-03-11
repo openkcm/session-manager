@@ -142,6 +142,48 @@ func TestOpenAPIServer_Auth_MakeAuthURI_Failed(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, r.StatusCode)
 }
 
+func TestOpenAPIServer_Auth_MakeCSRFCookie_Failed(t *testing.T) {
+	ctx := fingerprint.WithFingerprint(t.Context(), "")
+	mock := &mockSessionManager{
+		makeAuthURIFunc: func(ctx context.Context, tenantID string, fingerprint string, requestURI string) (string, string, error) {
+			return "https://example.com/redirect", "token", nil
+		},
+		makeCSRFCookieFunc: func(ctx context.Context, tenantID, csrfToken string) (*http.Cookie, error) {
+			return nil, errors.New("error")
+		},
+	}
+	server := newOpenAPIServer(mock, nil, "", "")
+	req := openapi.AuthRequestObject{}
+	resp, err := server.Auth(ctx, req)
+	assert.NoError(t, err)
+	assert.IsType(t, openapi.AuthdefaultJSONResponse{}, resp)
+
+	r, _ := resp.(openapi.AuthdefaultJSONResponse)
+	assert.Equal(t, string(serviceerr.CodeUnknown), r.Body.Error)
+	assert.Equal(t, http.StatusInternalServerError, r.StatusCode)
+}
+
+func TestOpenAPIServer_Auth_WriterNotFound_Failed(t *testing.T) {
+	ctx := fingerprint.WithFingerprint(t.Context(), "")
+	mock := &mockSessionManager{
+		makeAuthURIFunc: func(ctx context.Context, tenantID string, fingerprint string, requestURI string) (string, string, error) {
+			return "https://example.com/redirect", "token", nil
+		},
+		makeCSRFCookieFunc: func(ctx context.Context, tenantID, csrfToken string) (*http.Cookie, error) {
+			return &http.Cookie{Name: "csrf", Value: "value-12"}, nil
+		},
+	}
+	server := newOpenAPIServer(mock, nil, "", "")
+	req := openapi.AuthRequestObject{}
+	resp, err := server.Auth(ctx, req)
+	assert.NoError(t, err)
+	assert.IsType(t, openapi.AuthdefaultJSONResponse{}, resp)
+
+	r, _ := resp.(openapi.AuthdefaultJSONResponse)
+	assert.Equal(t, string(serviceerr.CodeUnknown), r.Body.Error)
+	assert.Equal(t, http.StatusInternalServerError, r.StatusCode)
+}
+
 func TestOpenAPIServer_Auth_MakeAuthURI_Success(t *testing.T) {
 	ctx := fingerprint.WithFingerprint(t.Context(), "")
 	w := httptest.NewRecorder()
@@ -302,6 +344,47 @@ func TestOpenAPIServer_Callback_MakeSessionCookie_Failed(t *testing.T) {
 		r, _ := resp.(openapi.CallbackdefaultJSONResponse)
 		assert.Equal(t, string(serviceerr.CodeUnknown), r.Body.Error)
 		assert.Equal(t, http.StatusInternalServerError, r.StatusCode)
+	})
+}
+func TestOpenAPIServer_Callback_InvalidCookieFormat_Failed(t *testing.T) {
+	t.Run("returns an error when MakeSessionCookie failed", func(t *testing.T) {
+		ctx := fingerprint.WithFingerprint(t.Context(), "fingerprint")
+		w := httptest.NewRecorder()
+		ctx = context.WithValue(ctx, middleware.ResponseWriterKey, w)
+
+		mock := &mockSessionManager{
+			finaliseOIDCLoginFunc: func(ctx context.Context, state, code, fingerprint string) (session.OIDCSessionData, error) {
+				return session.OIDCSessionData{
+					SessionID:  "s-id",
+					TenantID:   "t-id",
+					CSRFToken:  "csrf-token",
+					RequestURI: "https://example.com/request",
+				}, nil
+			},
+			makeSessionCookieFunc: func(ctx context.Context, tenantID, sessionID string) (*http.Cookie, error) {
+				return nil, errors.New("error")
+			},
+		}
+
+		server := newOpenAPIServer(mock, nil, "", "")
+
+		callbackReq := openapi.CallbackRequestObject{
+			Params: openapi.CallbackParams{
+				State:  "state",
+				Code:   "code",
+				Cookie: "\"invalid cookie format\\n\\n\"",
+			},
+		}
+
+		resp, err := server.Callback(ctx, callbackReq)
+		fmt.Println(resp)
+
+		require.NoError(t, err)
+		assert.IsType(t, openapi.CallbackdefaultJSONResponse{}, resp)
+
+		r, _ := resp.(openapi.CallbackdefaultJSONResponse)
+		assert.Equal(t, string(serviceerr.CodeInvalidRequest), r.Body.Error)
+		assert.Equal(t, http.StatusBadRequest, r.StatusCode)
 	})
 }
 
