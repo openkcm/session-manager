@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/openkcm/session-manager/internal/config"
+	"github.com/openkcm/session-manager/internal/credentials"
 )
 
 func TestLoadHTTPClient_MTLS(t *testing.T) {
@@ -28,7 +29,7 @@ func TestLoadHTTPClient_MTLS(t *testing.T) {
 	}
 
 	// This will fail without actual cert files, but tests the logic path
-	_, err := loadHTTPClient(cfg)
+	_, err := newCredsBuilder(cfg)
 	// We expect an error since we don't have real cert files
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to load mTLS config")
@@ -45,15 +46,17 @@ func TestLoadHTTPClient_ClientSecret(t *testing.T) {
 		},
 	}
 
-	client, err := loadHTTPClient(cfg)
+	builder, err := newCredsBuilder(cfg)
 	require.NoError(t, err)
-	require.NotNil(t, client)
+	require.NotNil(t, builder)
 
 	// Verify it's using our custom transport
-	transport, ok := client.Transport.(*clientAuthRoundTripper)
+	creds := builder(cfg.SessionManager.ClientAuth.ClientID)
+	clientSecretCreds, ok := creds.(*credentials.ClientSecret)
 	require.True(t, ok)
-	assert.Equal(t, "test-client", transport.clientID)
-	assert.Equal(t, "test-secret", transport.clientSecret)
+
+	assert.Equal(t, "test-client", clientSecretCreds.ClientID)
+	assert.Equal(t, "test-secret", clientSecretCreds.ClientSecret)
 }
 
 func TestLoadHTTPClient_Insecure(t *testing.T) {
@@ -66,9 +69,9 @@ func TestLoadHTTPClient_Insecure(t *testing.T) {
 		},
 	}
 
-	client, err := loadHTTPClient(cfg)
+	builder, err := newCredsBuilder(cfg)
 	require.NoError(t, err)
-	assert.Equal(t, http.DefaultClient, client)
+	assert.IsType(t, &credentials.Default{}, builder(""))
 }
 
 func TestLoadHTTPClient_UnknownType(t *testing.T) {
@@ -81,7 +84,7 @@ func TestLoadHTTPClient_UnknownType(t *testing.T) {
 		},
 	}
 
-	_, err := loadHTTPClient(cfg)
+	_, err := newCredsBuilder(cfg)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown Client Auth type")
 }
@@ -137,11 +140,7 @@ func TestClientAuthRoundTripper_RoundTrip(t *testing.T) {
 			defer server.Close()
 
 			// Create the round tripper
-			rt := &clientAuthRoundTripper{
-				clientID:     tt.clientID,
-				clientSecret: tt.clientSecret,
-				next:         http.DefaultTransport,
-			}
+			creds := credentials.NewClientSecret(tt.clientID, tt.clientSecret)
 
 			// Parse the test URL
 			reqURL, err := url.Parse(tt.requestURL)
@@ -155,7 +154,7 @@ func TestClientAuthRoundTripper_RoundTrip(t *testing.T) {
 			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, reqURL.String(), nil)
 			require.NoError(t, err)
 
-			resp, err := rt.RoundTrip(req)
+			resp, err := creds.Transport().RoundTrip(req)
 			require.NoError(t, err)
 			require.NotNil(t, resp)
 			defer resp.Body.Close()
@@ -191,17 +190,13 @@ func TestClientAuthRoundTripper_RoundTrip_PreservesExistingParams(t *testing.T) 
 	}))
 	defer server.Close()
 
-	rt := &clientAuthRoundTripper{
-		clientID:     "my-client",
-		clientSecret: "my-secret",
-		next:         http.DefaultTransport,
-	}
+	creds := credentials.NewClientSecret("my-client", "my-secret")
 
 	reqURL := server.URL + "?foo=bar&param2=baz"
 	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, reqURL, nil)
 	require.NoError(t, err)
 
-	resp, err := rt.RoundTrip(req)
+	resp, err := creds.Transport().RoundTrip(req)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	defer resp.Body.Close()

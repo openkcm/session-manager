@@ -144,7 +144,6 @@ func TestManager_MakeSessionCookie(t *testing.T) {
 				nil,
 				sessionmock.NewInMemRepository(),
 				nil,
-				http.DefaultClient,
 			)
 			require.NoError(t, err)
 
@@ -295,7 +294,6 @@ func TestManager_MakeCSRFCookie(t *testing.T) {
 				nil,
 				sessionmock.NewInMemRepository(),
 				nil,
-				http.DefaultClient,
 			)
 			require.NoError(t, err)
 
@@ -344,7 +342,6 @@ func TestManager_ValidateCSRFToken(t *testing.T) {
 		nil,
 		sessionmock.NewInMemRepository(),
 		nil,
-		http.DefaultClient,
 	)
 	require.NoError(t, err)
 
@@ -467,7 +464,11 @@ func TestManager_Logout(t *testing.T) {
 
 			oidcRepo := tt.setupOIDCRepo(t)
 
-			m, err := session.NewManager(tt.cfg, oidcRepo, sessionRepo, nil, http.DefaultClient,
+			m, err := session.NewManager(
+				tt.cfg,
+				oidcRepo,
+				sessionRepo,
+				nil,
 				session.WithAllowHttpScheme(true),
 			)
 			require.NoError(t, err)

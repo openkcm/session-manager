@@ -13,7 +13,10 @@ type OIDCMapping struct {
 	Audiences  []string
 	Properties map[string]string
 
-	QueryParametersIntrospect []string
+	// ClientID is a client_id property used for authentication.
+	// It is an optional value for the trust config. If the trust's client id is not specified,
+	// the application-global client id is used.
+	ClientID string
 }
 
 func (p *OIDCMapping) GetIntrospectParameters(keys []string) map[string]string {

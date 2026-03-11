@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"net/http"
 	"testing"
 	"time"
 
@@ -200,7 +199,7 @@ func startSessionServer(t *testing.T, port int) (*stdgrpc.Server, session.Reposi
 	}
 
 	srv := stdgrpc.NewServer()
-	sessionv1.RegisterServiceServer(srv, grpc.NewSessionServer(sessionRepo, trustRepo, http.DefaultClient, 90*time.Minute))
+	sessionv1.RegisterServiceServer(srv, grpc.NewSessionServer(sessionRepo, trustRepo, 90*time.Minute))
 
 	// start
 	go func() {
