@@ -143,7 +143,7 @@ func TestManager_Auth(t *testing.T) {
 				session.WithAllowHttpScheme(true),
 			)
 			require.NoError(t, err)
-			got, err := m.MakeAuthURI(t.Context(), tt.tenantID, tt.fingerprint, tt.requestURI)
+			got, _, err := m.MakeAuthURI(t.Context(), tt.tenantID, tt.fingerprint, tt.requestURI)
 
 			if !tt.errAssert(t, err, fmt.Sprintf("Manager.Auth() error = %v", err)) || err != nil {
 				return

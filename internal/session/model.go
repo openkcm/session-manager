@@ -12,6 +12,7 @@ type State struct {
 	PKCEVerifier string    // PKCE verifier to validate the PKCE challenge
 	RequestURI   string    // Request URI for the eventual redirect
 	Expiry       time.Time // Expiry time of the login process
+	CSRFToken    string    // CSRF token to prevent CSRF attacks
 }
 
 // Session represents a user session in our system.

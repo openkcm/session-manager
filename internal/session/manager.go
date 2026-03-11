@@ -107,19 +107,20 @@ func NewManager(
 }
 
 // MakeAuthURI returns an OIDC authentication URI.
-func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, requestURI string) (string, error) {
+func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, requestURI string) (string, string, error) {
 	mapping, err := m.trustRepo.Get(ctx, tenantID)
 	if err != nil {
-		return "", fmt.Errorf("getting trust mapping: %w", err)
+		return "", "", fmt.Errorf("getting trust mapping: %w", err)
 	}
 
 	openidConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL)
 	if err != nil {
-		return "", fmt.Errorf("getting an openid config: %w", err)
+		return "", "", fmt.Errorf("getting an openid config: %w", err)
 	}
 
 	stateID := m.pkce.State()
 	pkce := m.pkce.PKCE()
+	csrfToken := csrf.NewToken(stateID, m.csrfSecret)
 
 	state := State{
 		ID:           stateID,
@@ -128,19 +129,24 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 		PKCEVerifier: pkce.Verifier,
 		RequestURI:   requestURI,
 		Expiry:       time.Now().Add(m.sessionDuration),
+		CSRFToken:    csrfToken,
 	}
 
 	err = m.sessions.StoreState(ctx, state)
 	if err != nil {
-		return "", fmt.Errorf("storing session: %w", err)
+		return "", "", fmt.Errorf("storing session: %w", err)
 	}
 
 	u, err := m.authURI(openidConf, state, pkce, mapping.Properties)
 	if err != nil {
-		return "", fmt.Errorf("generating auth uri: %w", err)
+		return "", "", fmt.Errorf("generating auth uri: %w", err)
 	}
 
-	return u, nil
+	return u, csrfToken, nil
+}
+
+func (m *Manager) LoadState(ctx context.Context, stateID string) (State, error) {
+	return m.sessions.LoadState(ctx, stateID)
 }
 
 func (m *Manager) authURI(openidConf *oidc.Configuration, state State, pkce pkce.PKCE, properties map[string]string) (string, error) {

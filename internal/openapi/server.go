@@ -35,8 +35,9 @@ type BclogoutFormdataBody struct {
 
 // CallbackParams defines parameters for Callback.
 type CallbackParams struct {
-	Code  string `form:"code" json:"code"`
-	State string `form:"state" json:"state"`
+	Code   string `form:"code" json:"code"`
+	State  string `form:"state" json:"state"`
+	Cookie string `json:"Cookie"`
 }
 
 // LogoutParams defines parameters for Logout.
@@ -171,6 +172,31 @@ func (siw *ServerInterfaceWrapper) Callback(w http.ResponseWriter, r *http.Reque
 	err = runtime.BindQueryParameter("form", true, true, "state", r.URL.Query(), &params.State)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Cookie" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Cookie")]; found {
+		var Cookie string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Cookie", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Cookie", valueList[0], &Cookie, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Cookie", Err: err})
+			return
+		}
+
+		params.Cookie = Cookie
+
+	} else {
+		err := fmt.Errorf("Header parameter Cookie is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Cookie", Err: err})
 		return
 	}
 
@@ -389,7 +415,8 @@ type AuthResponseObject interface {
 }
 
 type Auth302ResponseHeaders struct {
-	Location string
+	Location  string
+	SetCookie []string
 }
 
 type Auth302Response struct {
@@ -398,6 +425,7 @@ type Auth302Response struct {
 
 func (response Auth302Response) VisitAuthResponse(w http.ResponseWriter) error {
 	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
 	w.WriteHeader(302)
 	return nil
 }

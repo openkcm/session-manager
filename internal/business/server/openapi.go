@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/openkcm/common-sdk/pkg/csrf"
@@ -23,12 +24,13 @@ import (
 // sessionManager defines the interface for session management operations
 // used by the OpenAPI server.
 type sessionManager interface {
-	MakeAuthURI(ctx context.Context, tenantID, fingerprint, requestURI string) (string, error)
+	MakeAuthURI(ctx context.Context, tenantID, fingerprint, requestURI string) (string, string, error)
 	FinaliseOIDCLogin(ctx context.Context, state, code, fingerprint string) (session.OIDCSessionData, error)
 	MakeSessionCookie(ctx context.Context, tenantID, sessionID string) (*http.Cookie, error)
 	MakeCSRFCookie(ctx context.Context, tenantID, csrfToken string) (*http.Cookie, error)
 	Logout(ctx context.Context, sessionID string) (string, error)
 	BCLogout(ctx context.Context, logoutToken string) error
+	ValidateCSRFToken(token, sessionID string) bool
 }
 
 // openAPIServer is an implementation of the OpenAPI interface.
@@ -81,7 +83,7 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 		}, nil
 	}
 
-	url, err := s.sManager.MakeAuthURI(ctx, request.Params.TenantID, fingerprint, request.Params.RequestURI)
+	url, csrfToken, err := s.sManager.MakeAuthURI(ctx, request.Params.TenantID, fingerprint, request.Params.RequestURI)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to build auth URI")
@@ -93,6 +95,27 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 			StatusCode: status,
 		}, nil
 	}
+	csrfCookie, err := s.sManager.MakeCSRFCookie(ctx, request.Params.TenantID, csrfToken)
+	if err != nil {
+		span.RecordError(err)
+		slogctx.Error(ctx, "Failed to make CSRF cookie", "error", err)
+		body, status := s.toErrorModel(err)
+		return openapi.AuthdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+	rw, err := middleware.ResponseWriterFromContext(ctx)
+	if err != nil {
+		span.RecordError(err)
+		slogctx.Error(ctx, "Failed to create responseWriterFromContext", "error", err)
+		body, status := s.toErrorModel(err)
+		return openapi.AuthdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+	http.SetCookie(rw, csrfCookie)
 
 	span.SetStatus(codes.Ok, "")
 	return openapi.Auth302Response{
@@ -137,7 +160,42 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 			StatusCode: status,
 		}, nil
 	}
+	cookies, err := http.ParseCookie(req.Params.Cookie)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to parse 'Cookie' header")
+		slogctx.Warn(ctx, "failed to parse 'Cookie' header", "error", err)
 
+		body, status := newBadRequest("invalid 'Cookie' header")
+		return openapi.CallbackdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
+	var csrfCookie *http.Cookie
+	// http.ParseCookie limits the number of cookies to 3000
+	// (configurable with $GODEBUG environment variable, see httpcookiemaxnum),
+	// so we can safely iterate over the cookies.
+	for _, cookie := range cookies {
+		switch cookie.Name {
+		case s.csrfTokenCookieName:
+			csrfCookie = cookie
+		}
+
+		if csrfCookie != nil && csrfCookie.Value != "" {
+			break
+		}
+	}
+	if csrfCookie != nil && csrf.Validate(csrfCookie.Value, req.Params.State, s.csrfSecret) {
+		err = fmt.Errorf("invalid CSRF cookie")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		body, status := s.toErrorModel(err)
+		return openapi.CallbackdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
 	result, err := s.sManager.FinaliseOIDCLogin(ctx, req.Params.State, req.Params.Code, currentFingerprint)
 	if err != nil {
 		span.RecordError(err)
@@ -172,7 +230,7 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 	}
 
 	// CSRF cookie
-	csrfCookie, err := s.sManager.MakeCSRFCookie(ctx, result.TenantID, result.CSRFToken)
+	csrfCookie, err = s.sManager.MakeCSRFCookie(ctx, result.TenantID, result.CSRFToken)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to create CSRF cookie")
