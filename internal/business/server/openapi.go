@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/openkcm/common-sdk/pkg/csrf"
@@ -187,7 +186,7 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 		}
 	}
 	if csrfCookie != nil && csrf.Validate(csrfCookie.Value, req.Params.State, s.csrfSecret) {
-		err = fmt.Errorf("invalid CSRF cookie")
+		err = errors.New("invalid CSRF cookie")
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		body, status := s.toErrorModel(err)
