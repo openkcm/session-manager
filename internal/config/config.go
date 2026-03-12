@@ -77,6 +77,8 @@ type SessionManager struct {
 	SessionCookieTemplate CookieTemplate `yaml:"sessionCookieTemplate"`
 	// CSRFCookieTemplate defines the template attributes for the CSRF cookie.
 	CSRFCookieTemplate CookieTemplate `yaml:"csrfCookieTemplate"`
+	// LoginCSRFCookieTemplate defines the template attributes for the CSRF cookie.
+	LoginCSRFCookieTemplate CookieTemplate `yaml:"loginCSRFCookieTemplate"`
 
 	// Deprecated: not used anymore. Kept for a helm issue with the migrate job.
 	RedirectURL string `yaml:"redirectURL" default:"/sm/redirect"`

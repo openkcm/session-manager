@@ -229,9 +229,9 @@ func TestOpenAPIServer_Callback_ExtractFingerprint_Failed(t *testing.T) {
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:  "state",
-				Code:   "code",
-				Cookie: "session-id=123",
+				State:          "state",
+				Code:           "code",
+				LoginCsrfToken: "session-id=123",
 			},
 		}
 
@@ -255,9 +255,9 @@ func TestOpenAPIServer_Callback_NoResponseWriter(t *testing.T) {
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:  "state",
-				Code:   "code",
-				Cookie: "session-id=123",
+				State:          "state",
+				Code:           "code",
+				LoginCsrfToken: "session-id=123",
 			},
 		}
 
@@ -288,9 +288,9 @@ func TestOpenAPIServer_Callback_FinaliseOIDCLogin_Failed(t *testing.T) {
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:  "state",
-				Code:   "code",
-				Cookie: "session-id=123",
+				State:          "state",
+				Code:           "code",
+				LoginCsrfToken: "session-id=123",
 			},
 		}
 
@@ -329,9 +329,9 @@ func TestOpenAPIServer_Callback_MakeSessionCookie_Failed(t *testing.T) {
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:  "state",
-				Code:   "code",
-				Cookie: "session-id=123",
+				State:          "state",
+				Code:           "code",
+				LoginCsrfToken: "session-id=123",
 			},
 		}
 
@@ -370,9 +370,9 @@ func TestOpenAPIServer_Callback_InvalidCookieFormat_Failed(t *testing.T) {
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:  "state",
-				Code:   "code",
-				Cookie: "\"invalid cookie format\\n\\n\"",
+				State:          "state",
+				Code:           "code",
+				LoginCsrfToken: "\"invalid cookie format\\n\\n\"",
 			},
 		}
 
@@ -415,9 +415,9 @@ func TestOpenAPIServer_Callback_MakeCSRFCookie_Failed(t *testing.T) {
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:  "state",
-				Code:   "code",
-				Cookie: "session-id=123",
+				State:          "state",
+				Code:           "code",
+				LoginCsrfToken: "session-id=123",
 			},
 		}
 
@@ -460,9 +460,9 @@ func TestOpenAPIServer_Callback_Success(t *testing.T) {
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:  "state",
-				Code:   "code",
-				Cookie: "session-id=123",
+				State:          "state",
+				Code:           "code",
+				LoginCsrfToken: "session-id=123",
 			},
 		}
 

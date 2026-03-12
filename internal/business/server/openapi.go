@@ -29,7 +29,6 @@ type sessionManager interface {
 	MakeCSRFCookie(ctx context.Context, tenantID, csrfToken string) (*http.Cookie, error)
 	Logout(ctx context.Context, sessionID string) (string, error)
 	BCLogout(ctx context.Context, logoutToken string) error
-	ValidateCSRFToken(token, sessionID string) bool
 }
 
 // openAPIServer is an implementation of the OpenAPI interface.
@@ -94,7 +93,7 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 			StatusCode: status,
 		}, nil
 	}
-	csrfCookie, err := s.sManager.MakeCSRFCookie(ctx, request.Params.TenantID, csrfToken)
+	csrfCookie, err := s.sManager.MakeCSRFCookie(ctx, "", csrfToken)
 	if err != nil {
 		span.RecordError(err)
 		slogctx.Error(ctx, "Failed to make CSRF cookie", "error", err)
@@ -159,7 +158,7 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 			StatusCode: status,
 		}, nil
 	}
-	cookies, err := http.ParseCookie(req.Params.Cookie)
+	cookies, err := http.ParseCookie(req.Params.LoginCsrfToken)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to parse 'Cookie' header")

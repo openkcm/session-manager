@@ -54,8 +54,9 @@ type Manager struct {
 	queryParametersLogout []string
 	postLogoutRedirectURL string
 
-	sessionCookieTemplate config.CookieTemplate
-	csrfCookieTemplate    config.CookieTemplate
+	sessionCookieTemplate   config.CookieTemplate
+	csrfCookieTemplate      config.CookieTemplate
+	loginCSRFCookieTemplate config.CookieTemplate
 
 	csrfSecret []byte
 
