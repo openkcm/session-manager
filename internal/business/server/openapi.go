@@ -38,7 +38,8 @@ type openAPIServer struct {
 	csrfSecret []byte
 
 	sessionIDCookieName,
-	csrfTokenCookieName string
+	csrfTokenCookieName,
+	loginCsrfTokenCookieName string
 }
 
 // Ensure openAPIServer implements [openapi.StrictServerInterface]
@@ -50,12 +51,14 @@ func newOpenAPIServer(
 	csrfSecret []byte,
 	sessionIDCookieName,
 	csrfTokenCookieName string,
+	loginCsrfTokenCookieName string,
 ) *openAPIServer {
 	return &openAPIServer{
-		sManager:            sManager,
-		csrfSecret:          csrfSecret,
-		sessionIDCookieName: sessionIDCookieName,
-		csrfTokenCookieName: csrfTokenCookieName,
+		sManager:                 sManager,
+		csrfSecret:               csrfSecret,
+		sessionIDCookieName:      sessionIDCookieName,
+		csrfTokenCookieName:      csrfTokenCookieName,
+		loginCsrfTokenCookieName: loginCsrfTokenCookieName,
 	}
 }
 
@@ -170,21 +173,21 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 			StatusCode: status,
 		}, nil
 	}
-	var csrfCookie *http.Cookie
+	var loginCsrfCookie *http.Cookie
 	// http.ParseCookie limits the number of cookies to 3000
 	// (configurable with $GODEBUG environment variable, see httpcookiemaxnum),
 	// so we can safely iterate over the cookies.
 	for _, cookie := range cookies {
 		switch cookie.Name {
-		case s.csrfTokenCookieName:
-			csrfCookie = cookie
+		case s.loginCsrfTokenCookieName:
+			loginCsrfCookie = cookie
 		}
 
-		if csrfCookie != nil && csrfCookie.Value != "" {
+		if loginCsrfCookie != nil && loginCsrfCookie.Value != "" {
 			break
 		}
 	}
-	if csrfCookie != nil && csrf.Validate(csrfCookie.Value, req.Params.State, s.csrfSecret) {
+	if loginCsrfCookie != nil && !csrf.Validate(loginCsrfCookie.Value, req.Params.State, s.csrfSecret) {
 		err = errors.New("invalid CSRF cookie")
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -228,7 +231,7 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 	}
 
 	// CSRF cookie
-	csrfCookie, err = s.sManager.MakeCSRFCookie(ctx, result.TenantID, result.CSRFToken, false)
+	csrfCookie, err := s.sManager.MakeCSRFCookie(ctx, result.TenantID, result.CSRFToken, false)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to create CSRF cookie")
