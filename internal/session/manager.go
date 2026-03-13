@@ -79,23 +79,24 @@ func NewManager(
 	}
 
 	m := &Manager{
-		trustRepo:             trustRepo,
-		sessions:              sessionsRepo,
-		audit:                 auditLogger,
-		sessionDuration:       cfg.SessionDuration,
-		idleSessionTimeout:    cfg.IdleSessionTimeout,
-		queryParametersAuth:   cfg.AdditionalQueryParametersAuthorize,
-		queryParametersToken:  cfg.AdditionalQueryParametersToken,
-		authContextKeys:       cfg.AdditionalAuthContextKeys,
-		queryParametersLogout: cfg.AdditionalQueryParametersLogout,
-		postLogoutRedirectURL: cfg.PostLogoutRedirectURL,
-		sessionCookieTemplate: cfg.SessionCookieTemplate,
-		csrfCookieTemplate:    cfg.CSRFCookieTemplate,
-		callbackURL:           callbackURL,
-		clientID:              cfg.ClientAuth.ClientID,
-		secureClient:          httpClient,
-		csrfSecret:            cfg.CSRFSecretParsed,
-		cache:                 cache.New(2*time.Minute, 10*time.Minute),
+		trustRepo:               trustRepo,
+		sessions:                sessionsRepo,
+		audit:                   auditLogger,
+		sessionDuration:         cfg.SessionDuration,
+		idleSessionTimeout:      cfg.IdleSessionTimeout,
+		queryParametersAuth:     cfg.AdditionalQueryParametersAuthorize,
+		queryParametersToken:    cfg.AdditionalQueryParametersToken,
+		authContextKeys:         cfg.AdditionalAuthContextKeys,
+		queryParametersLogout:   cfg.AdditionalQueryParametersLogout,
+		postLogoutRedirectURL:   cfg.PostLogoutRedirectURL,
+		sessionCookieTemplate:   cfg.SessionCookieTemplate,
+		csrfCookieTemplate:      cfg.CSRFCookieTemplate,
+		loginCSRFCookieTemplate: cfg.LoginCSRFCookieTemplate,
+		callbackURL:             callbackURL,
+		clientID:                cfg.ClientAuth.ClientID,
+		secureClient:            httpClient,
+		csrfSecret:              cfg.CSRFSecretParsed,
+		cache:                   cache.New(2*time.Minute, 10*time.Minute),
 	}
 
 	for _, opt := range opts {
@@ -528,8 +529,13 @@ func (m *Manager) MakeSessionCookie(ctx context.Context, tenantID, value string)
 	return sessionCookie, nil
 }
 
-func (m *Manager) MakeCSRFCookie(ctx context.Context, tenantID, value string) (*http.Cookie, error) {
-	csrfCookie := m.csrfCookieTemplate.ToCookie(value)
+func (m *Manager) MakeCSRFCookie(ctx context.Context, tenantID, value string, login bool) (*http.Cookie, error) {
+	var csrfCookie *http.Cookie
+	if login {
+		csrfCookie = m.loginCSRFCookieTemplate.ToCookie(value)
+	} else {
+		csrfCookie = m.csrfCookieTemplate.ToCookie(value)
+	}
 	if tenantID != "" {
 		csrfCookie.Name = csrfCookie.Name + "-" + tenantID
 	}
