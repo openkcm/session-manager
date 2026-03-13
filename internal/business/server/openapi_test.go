@@ -279,19 +279,23 @@ func TestOpenAPIServer_Callback_FinaliseOIDCLogin_Failed(t *testing.T) {
 		w := httptest.NewRecorder()
 		ctx = context.WithValue(ctx, middleware.ResponseWriterKey, w)
 
+		csrfSecret := []byte("test-secret")
+		state := "state"
+		loginCsrfToken := csrf.NewToken(state, csrfSecret)
+
 		mock := &mockSessionManager{
 			finaliseOIDCLoginFunc: func(ctx context.Context, state, code, fingerprint string) (session.OIDCSessionData, error) {
 				return session.OIDCSessionData{}, serviceerr.ErrAccessDenied
 			},
 		}
 
-		server := newOpenAPIServer(mock, nil, "", "", "")
+		server := newOpenAPIServer(mock, csrfSecret, "", "", "LoginCSRF")
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
 				State:          "state",
 				Code:           "code",
-				LoginCsrfToken: "session-id=123",
+				LoginCsrfToken: "LoginCSRF=" + loginCsrfToken,
 			},
 		}
 
@@ -440,6 +444,10 @@ func TestOpenAPIServer_Callback_Success(t *testing.T) {
 		w := httptest.NewRecorder()
 		ctx = context.WithValue(ctx, middleware.ResponseWriterKey, w)
 
+		csrfSecret := []byte("test-secret")
+		state := "state"
+		loginCsrfToken := csrf.NewToken(state, csrfSecret)
+
 		mock := &mockSessionManager{
 			finaliseOIDCLoginFunc: func(ctx context.Context, state, code, fingerprint string) (session.OIDCSessionData, error) {
 				return session.OIDCSessionData{
@@ -457,13 +465,13 @@ func TestOpenAPIServer_Callback_Success(t *testing.T) {
 			},
 		}
 
-		server := newOpenAPIServer(mock, nil, "", "", "")
+		server := newOpenAPIServer(mock, csrfSecret, "", "", "LoginCSRF")
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:          "state",
+				State:          state,
 				Code:           "code",
-				LoginCsrfToken: "session-id=123",
+				LoginCsrfToken: "LoginCSRF=" + loginCsrfToken,
 			},
 		}
 

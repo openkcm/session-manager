@@ -187,8 +187,8 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 			break
 		}
 	}
-	if loginCsrfCookie != nil && !csrf.Validate(loginCsrfCookie.Value, req.Params.State, s.csrfSecret) {
-		err = errors.New("invalid CSRF cookie")
+	if loginCsrfCookie == nil || !csrf.Validate(loginCsrfCookie.Value, req.Params.State, s.csrfSecret) {
+		err = errors.New("login CSRF cookie invalid or missing")
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		body, status := s.toErrorModel(err)
