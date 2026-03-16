@@ -125,13 +125,13 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 	csrfToken := csrf.NewToken(stateID, m.csrfSecret)
 
 	state := State{
-		ID:           stateID,
-		TenantID:     tenantID,
-		Fingerprint:  fingerprint,
-		PKCEVerifier: pkce.Verifier,
-		RequestURI:   requestURI,
-		Expiry:       time.Now().Add(m.sessionDuration),
-		CSRFToken:    csrfToken,
+		ID:             stateID,
+		TenantID:       tenantID,
+		Fingerprint:    fingerprint,
+		PKCEVerifier:   pkce.Verifier,
+		RequestURI:     requestURI,
+		Expiry:         time.Now().Add(m.sessionDuration),
+		LoginCSRFToken: csrfToken,
 	}
 
 	err = m.sessions.StoreState(ctx, state)
