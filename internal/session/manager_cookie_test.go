@@ -170,7 +170,6 @@ func TestManager_MakeCSRFCookie(t *testing.T) {
 		cfg         *config.SessionManager
 		tenantID    string
 		value       string
-		login       bool
 		wantErr     bool
 		checkCookie func(*testing.T, *http.Cookie)
 	}{
@@ -189,7 +188,6 @@ func TestManager_MakeCSRFCookie(t *testing.T) {
 			},
 			tenantID: "tenant-1",
 			value:    "csrf-123",
-			login:    false,
 			wantErr:  false,
 			checkCookie: func(t *testing.T, cookie *http.Cookie) {
 				t.Helper()
@@ -217,34 +215,10 @@ func TestManager_MakeCSRFCookie(t *testing.T) {
 			},
 			tenantID: "",
 			value:    "csrf-456",
-			login:    false,
 			wantErr:  false,
 			checkCookie: func(t *testing.T, cookie *http.Cookie) {
 				t.Helper()
 				assert.Equal(t, "CSRF-Token", cookie.Name)
-				assert.Equal(t, "csrf-456", cookie.Value)
-			},
-		},
-		{
-			name: "Success with login",
-			cfg: &config.SessionManager{
-				CSRFSecretParsed: []byte(testCSRFSecret),
-				LoginCSRFCookieTemplate: config.CookieTemplate{
-					Name:     "LoginCSRFToken",
-					MaxAge:   3600,
-					Path:     "/",
-					Secure:   true,
-					HTTPOnly: false,
-					SameSite: config.CookieSameSiteStrict,
-				},
-			},
-			tenantID: "",
-			value:    "csrf-456",
-			login:    true,
-			wantErr:  false,
-			checkCookie: func(t *testing.T, cookie *http.Cookie) {
-				t.Helper()
-				assert.Equal(t, "LoginCSRFToken", cookie.Name)
 				assert.Equal(t, "csrf-456", cookie.Value)
 			},
 		},
@@ -264,7 +238,6 @@ func TestManager_MakeCSRFCookie(t *testing.T) {
 			tenantID: "tenant-1",
 			value:    "csrf-789",
 			wantErr:  false,
-			login:    false,
 			checkCookie: func(t *testing.T, cookie *http.Cookie) {
 				t.Helper()
 				assert.False(t, cookie.Secure)
@@ -285,7 +258,6 @@ func TestManager_MakeCSRFCookie(t *testing.T) {
 			},
 			tenantID: "tenant-1",
 			value:    "csrf-abc",
-			login:    false,
 			wantErr:  false,
 			checkCookie: func(t *testing.T, cookie *http.Cookie) {
 				t.Helper()
@@ -307,7 +279,6 @@ func TestManager_MakeCSRFCookie(t *testing.T) {
 			},
 			tenantID: "tenant-1",
 			value:    "csrf-def",
-			login:    false,
 			wantErr:  false,
 			checkCookie: func(t *testing.T, cookie *http.Cookie) {
 				t.Helper()
@@ -326,7 +297,7 @@ func TestManager_MakeCSRFCookie(t *testing.T) {
 			)
 			require.NoError(t, err)
 
-			cookie, err := m.MakeCSRFCookie(t.Context(), tt.tenantID, tt.value, tt.login)
+			cookie, err := m.MakeCSRFCookie(t.Context(), tt.tenantID, tt.value)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -341,6 +312,30 @@ func TestManager_MakeCSRFCookie(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestManager_MakeLoginCSRFCookie(t *testing.T) {
+	cfg := &config.SessionManager{
+		CSRFSecretParsed: []byte(testCSRFSecret),
+		LoginCSRFCookieTemplate: config.CookieTemplate{
+			Name:     "LoginCSRFToken",
+			MaxAge:   3600,
+			Path:     "/",
+			Secure:   true,
+			HTTPOnly: false,
+			SameSite: config.CookieSameSiteStrict,
+		},
+	}
+
+	m, err := session.NewManager(cfg, nil, sessionmock.NewInMemRepository(), nil)
+	require.NoError(t, err)
+
+	cookie, err := m.MakeLoginCSRFCookie(t.Context(), "csrf-456")
+
+	require.NoError(t, err)
+	require.NotNil(t, cookie)
+	assert.Equal(t, "LoginCSRFToken", cookie.Name)
+	assert.Equal(t, "csrf-456", cookie.Value)
 }
 
 func TestManager_ValidateCSRFToken(t *testing.T) {

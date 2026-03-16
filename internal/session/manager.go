@@ -521,13 +521,9 @@ func (m *Manager) MakeSessionCookie(ctx context.Context, tenantID, value string)
 	return sessionCookie, nil
 }
 
-func (m *Manager) MakeCSRFCookie(ctx context.Context, tenantID, value string, login bool) (*http.Cookie, error) {
-	var csrfCookie *http.Cookie
-	if login {
-		csrfCookie = m.loginCSRFCookieTemplate.ToCookie(value)
-	} else {
-		csrfCookie = m.csrfCookieTemplate.ToCookie(value)
-	}
+func (m *Manager) MakeCSRFCookie(ctx context.Context, tenantID, value string) (*http.Cookie, error) {
+	csrfCookie := m.csrfCookieTemplate.ToCookie(value)
+
 	if tenantID != "" {
 		csrfCookie.Name = csrfCookie.Name + "-" + tenantID
 	}
@@ -537,6 +533,25 @@ func (m *Manager) MakeCSRFCookie(ctx context.Context, tenantID, value string, lo
 		return nil, fmt.Errorf("invalid CSRF cookie: %w", err)
 	}
 
+	checkCookie(ctx, csrfCookie)
+
+	return csrfCookie, nil
+}
+
+func (m *Manager) MakeLoginCSRFCookie(ctx context.Context, value string) (*http.Cookie, error) {
+	loginCSRFCookie := m.loginCSRFCookieTemplate.ToCookie(value)
+
+	err := loginCSRFCookie.Valid()
+	if err != nil {
+		return nil, fmt.Errorf("invalid CSRF cookie: %w", err)
+	}
+
+	checkCookie(ctx, loginCSRFCookie)
+
+	return loginCSRFCookie, nil
+}
+
+func checkCookie(ctx context.Context, csrfCookie *http.Cookie) {
 	if !csrfCookie.Secure {
 		slogctx.Warn(ctx, "CSRF cookie is not marked as Secure; this is not recommended in production environments")
 	}
@@ -546,8 +561,6 @@ func (m *Manager) MakeCSRFCookie(ctx context.Context, tenantID, value string, lo
 	if csrfCookie.SameSite != http.SameSiteStrictMode {
 		slogctx.Warn(ctx, "CSRF cookie is not marked as SameSite=Strict; this is not recommended in production environments")
 	}
-
-	return csrfCookie, nil
 }
 
 // sendUserLoginFailureAudit creates the user-login-failure audit event and sends it.

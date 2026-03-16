@@ -21,13 +21,14 @@ import (
 
 // mockSessionManager is a mock implementation of sessionManager interface for testing
 type mockSessionManager struct {
-	makeAuthURIFunc       func(ctx context.Context, tenantID, fingerprint, requestURI string) (string, string, error)
-	finaliseOIDCLoginFunc func(ctx context.Context, state, code, fingerprint string) (session.OIDCSessionData, error)
-	makeSessionCookieFunc func(ctx context.Context, tenantID, sessionID string) (*http.Cookie, error)
-	makeCSRFCookieFunc    func(ctx context.Context, tenantID, csrfToken string, login bool) (*http.Cookie, error)
-	logoutFunc            func(ctx context.Context, sessionID string) (string, error)
-	bcLogoutFunc          func(ctx context.Context, logoutToken string) error
-	validateCSRFTokenFunc func(token, sessionID string) bool
+	makeAuthURIFunc           func(ctx context.Context, tenantID, fingerprint, requestURI string) (string, string, error)
+	finaliseOIDCLoginFunc     func(ctx context.Context, state, code, fingerprint string) (session.OIDCSessionData, error)
+	makeSessionCookieFunc     func(ctx context.Context, tenantID, sessionID string) (*http.Cookie, error)
+	makeCSRFCookieFunc        func(ctx context.Context, tenantID, csrfToken string) (*http.Cookie, error)
+	makeLoginCSRFCookieFunc   func(ctx context.Context, csrfToken string) (*http.Cookie, error)
+	logoutFunc                func(ctx context.Context, sessionID string) (string, error)
+	bcLogoutFunc              func(ctx context.Context, logoutToken string) error
+	validateCSRFTokenFunc     func(token, sessionID string) bool
 }
 
 func (m *mockSessionManager) MakeAuthURI(ctx context.Context, tenantID, fp, requestURI string) (string, string, error) {
@@ -51,9 +52,16 @@ func (m *mockSessionManager) MakeSessionCookie(ctx context.Context, tenantID, se
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockSessionManager) MakeCSRFCookie(ctx context.Context, tenantID, csrfToken string, login bool) (*http.Cookie, error) {
+func (m *mockSessionManager) MakeCSRFCookie(ctx context.Context, tenantID, csrfToken string) (*http.Cookie, error) {
 	if m.makeCSRFCookieFunc != nil {
-		return m.makeCSRFCookieFunc(ctx, tenantID, csrfToken, login)
+		return m.makeCSRFCookieFunc(ctx, tenantID, csrfToken)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockSessionManager) MakeLoginCSRFCookie(ctx context.Context, csrfToken string) (*http.Cookie, error) {
+	if m.makeLoginCSRFCookieFunc != nil {
+		return m.makeLoginCSRFCookieFunc(ctx, csrfToken)
 	}
 	return nil, errors.New("not implemented")
 }
@@ -149,7 +157,7 @@ func TestOpenAPIServer_Auth_MakeCSRFCookie_Failed(t *testing.T) {
 		makeAuthURIFunc: func(ctx context.Context, tenantID string, fingerprint string, requestURI string) (string, string, error) {
 			return "https://example.com/redirect", "token", nil
 		},
-		makeCSRFCookieFunc: func(ctx context.Context, tenantID, csrfToken string, login bool) (*http.Cookie, error) {
+		makeLoginCSRFCookieFunc: func(ctx context.Context, csrfToken string) (*http.Cookie, error) {
 			return nil, errors.New("error")
 		},
 	}
@@ -170,7 +178,7 @@ func TestOpenAPIServer_Auth_MakeAuthURI_Success(t *testing.T) {
 		makeAuthURIFunc: func(ctx context.Context, tenantID string, fingerprint string, requestURI string) (string, string, error) {
 			return "https://example.com/redirect", "token", nil
 		},
-		makeCSRFCookieFunc: func(ctx context.Context, tenantID, csrfToken string, login bool) (*http.Cookie, error) {
+		makeLoginCSRFCookieFunc: func(ctx context.Context, csrfToken string) (*http.Cookie, error) {
 			return &http.Cookie{Name: "csrf-token", Value: csrfToken}, nil
 		},
 	}
@@ -385,7 +393,7 @@ func TestOpenAPIServer_Callback_MakeCSRFCookie_Failed(t *testing.T) {
 			makeSessionCookieFunc: func(ctx context.Context, tenantID, sessionID string) (*http.Cookie, error) {
 				return &http.Cookie{Name: "session", Value: "s-id"}, nil
 			},
-			makeCSRFCookieFunc: func(ctx context.Context, tenantID, csrfToken string, login bool) (*http.Cookie, error) {
+			makeCSRFCookieFunc: func(ctx context.Context, tenantID, csrfToken string) (*http.Cookie, error) {
 				return nil, errors.New("error")
 			},
 		}
@@ -434,7 +442,7 @@ func TestOpenAPIServer_Callback_Success(t *testing.T) {
 			makeSessionCookieFunc: func(ctx context.Context, tenantID, sessionID string) (*http.Cookie, error) {
 				return &http.Cookie{Name: "session", Value: "s-id"}, nil
 			},
-			makeCSRFCookieFunc: func(ctx context.Context, tenantID, csrfToken string, login bool) (*http.Cookie, error) {
+			makeCSRFCookieFunc: func(ctx context.Context, tenantID, csrfToken string) (*http.Cookie, error) {
 				return &http.Cookie{Name: "csrf", Value: "csrf-token"}, nil
 			},
 		}

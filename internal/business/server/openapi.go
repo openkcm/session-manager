@@ -26,7 +26,8 @@ type sessionManager interface {
 	MakeAuthURI(ctx context.Context, tenantID, fingerprint, requestURI string) (string, string, error)
 	FinaliseOIDCLogin(ctx context.Context, state, code, fingerprint string) (session.OIDCSessionData, error)
 	MakeSessionCookie(ctx context.Context, tenantID, sessionID string) (*http.Cookie, error)
-	MakeCSRFCookie(ctx context.Context, tenantID, csrfToken string, login bool) (*http.Cookie, error)
+	MakeCSRFCookie(ctx context.Context, tenantID, csrfToken string) (*http.Cookie, error)
+	MakeLoginCSRFCookie(ctx context.Context, csrfToken string) (*http.Cookie, error)
 	Logout(ctx context.Context, sessionID string) (string, error)
 	BCLogout(ctx context.Context, logoutToken string) error
 }
@@ -96,7 +97,7 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 			StatusCode: status,
 		}, nil
 	}
-	loginCsrfCookie, err := s.sManager.MakeCSRFCookie(ctx, "", csrfToken, true)
+	loginCsrfCookie, err := s.sManager.MakeLoginCSRFCookie(ctx, csrfToken)
 	if err != nil {
 		span.RecordError(err)
 		slogctx.Error(ctx, "Failed to make CSRF cookie", "error", err)
@@ -195,7 +196,7 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 	}
 
 	// CSRF cookie
-	csrfCookie, err := s.sManager.MakeCSRFCookie(ctx, result.TenantID, result.CSRFToken, false)
+	csrfCookie, err := s.sManager.MakeCSRFCookie(ctx, result.TenantID, result.CSRFToken)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to create CSRF cookie")
