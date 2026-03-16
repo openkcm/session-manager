@@ -240,7 +240,7 @@ sessionManager:
         sameSite: Strict
         domain: localhost
     loginCSRFCookieTemplate:
-        name: "loginCsrfToken"
+        name: "LoginCSRF"
         path: "/"
         secure: true
         sameSite: Strict

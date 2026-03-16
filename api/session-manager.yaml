@@ -34,20 +34,15 @@ paths:
                       type: string
             responses:
                 "302":
-                    description: Redirect to the OIDC provider
+                    description: Redirect to the OIDC provider with the login CSRF token cookie set.
                     headers:
                         Location:
                             schema:
                                 type: string
                         Set-Cookie:
-                            description: |
-                                This response sets the CSRF token cookie
+                            description: Sets the login CSRF token cookie (LoginCSRFToken).
                             schema:
-                                type: array
-                                items:
-                                    type: string
-                            style: simple
-                            explode: false
+                                type: string
                 default:
                     description: Unexpected error
                     content:
@@ -159,7 +154,7 @@ paths:
                   required: true
                   schema:
                       type: string
-                - name: loginCsrfToken
+                - name: LoginCSRF
                   in: cookie
                   required: true
                   schema:

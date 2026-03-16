@@ -164,31 +164,8 @@ func TestOpenAPIServer_Auth_MakeCSRFCookie_Failed(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, r.StatusCode)
 }
 
-func TestOpenAPIServer_Auth_WriterNotFound_Failed(t *testing.T) {
-	ctx := fingerprint.WithFingerprint(t.Context(), "")
-	mock := &mockSessionManager{
-		makeAuthURIFunc: func(ctx context.Context, tenantID string, fingerprint string, requestURI string) (string, string, error) {
-			return "https://example.com/redirect", "token", nil
-		},
-		makeCSRFCookieFunc: func(ctx context.Context, tenantID, csrfToken string, login bool) (*http.Cookie, error) {
-			return &http.Cookie{Name: "csrf", Value: "value-12"}, nil
-		},
-	}
-	server := newOpenAPIServer(mock, nil, "", "", "")
-	req := openapi.AuthRequestObject{}
-	resp, err := server.Auth(ctx, req)
-	assert.NoError(t, err)
-	assert.IsType(t, openapi.AuthdefaultJSONResponse{}, resp)
-
-	r, _ := resp.(openapi.AuthdefaultJSONResponse)
-	assert.Equal(t, string(serviceerr.CodeUnknown), r.Body.Error)
-	assert.Equal(t, http.StatusInternalServerError, r.StatusCode)
-}
-
 func TestOpenAPIServer_Auth_MakeAuthURI_Success(t *testing.T) {
 	ctx := fingerprint.WithFingerprint(t.Context(), "")
-	w := httptest.NewRecorder()
-	ctx = context.WithValue(ctx, middleware.ResponseWriterKey, w)
 	mock := &mockSessionManager{
 		makeAuthURIFunc: func(ctx context.Context, tenantID string, fingerprint string, requestURI string) (string, string, error) {
 			return "https://example.com/redirect", "token", nil
@@ -206,6 +183,7 @@ func TestOpenAPIServer_Auth_MakeAuthURI_Success(t *testing.T) {
 
 	r, _ := resp.(openapi.Auth302Response)
 	assert.Equal(t, "https://example.com/redirect", r.Headers.Location)
+	assert.Equal(t, "csrf-token=token", r.Headers.SetCookie)
 }
 
 func TestOpenAPIServer_Callback_ContextCanceled(t *testing.T) {
@@ -232,7 +210,7 @@ func TestOpenAPIServer_Callback_ExtractFingerprint_Failed(t *testing.T) {
 			Params: openapi.CallbackParams{
 				State:          "state",
 				Code:           "code",
-				LoginCsrfToken: "session-id=123",
+				LoginCSRF: "session-id=123",
 			},
 		}
 
@@ -258,7 +236,7 @@ func TestOpenAPIServer_Callback_NoResponseWriter(t *testing.T) {
 			Params: openapi.CallbackParams{
 				State:          "state",
 				Code:           "code",
-				LoginCsrfToken: "session-id=123",
+				LoginCSRF: "session-id=123",
 			},
 		}
 
@@ -295,7 +273,7 @@ func TestOpenAPIServer_Callback_FinaliseOIDCLogin_Failed(t *testing.T) {
 			Params: openapi.CallbackParams{
 				State:          "state",
 				Code:           "code",
-				LoginCsrfToken: loginCsrfToken,
+				LoginCSRF: loginCsrfToken,
 			},
 		}
 
@@ -340,7 +318,7 @@ func TestOpenAPIServer_Callback_MakeSessionCookie_Failed(t *testing.T) {
 			Params: openapi.CallbackParams{
 				State:          state,
 				Code:           "code",
-				LoginCsrfToken: loginCsrfToken,
+				LoginCSRF: loginCsrfToken,
 			},
 		}
 
@@ -369,7 +347,7 @@ func TestOpenAPIServer_Callback_InvalidCsrfToken_Failed(t *testing.T) {
 			Params: openapi.CallbackParams{
 				State:          "state",
 				Code:           "code",
-				LoginCsrfToken: "invalid-csrf-token",
+				LoginCSRF: "invalid-csrf-token",
 			},
 		}
 
@@ -418,7 +396,7 @@ func TestOpenAPIServer_Callback_MakeCSRFCookie_Failed(t *testing.T) {
 			Params: openapi.CallbackParams{
 				State:          state,
 				Code:           "code",
-				LoginCsrfToken: loginCsrfToken,
+				LoginCSRF: loginCsrfToken,
 			},
 		}
 
@@ -467,7 +445,7 @@ func TestOpenAPIServer_Callback_Success(t *testing.T) {
 			Params: openapi.CallbackParams{
 				State:          state,
 				Code:           "code",
-				LoginCsrfToken: loginCsrfToken,
+				LoginCSRF: loginCsrfToken,
 			},
 		}
 

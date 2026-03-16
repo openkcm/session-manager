@@ -35,9 +35,9 @@ type BclogoutFormdataBody struct {
 
 // CallbackParams defines parameters for Callback.
 type CallbackParams struct {
-	Code           string `form:"code" json:"code"`
-	State          string `form:"state" json:"state"`
-	LoginCsrfToken string `form:"loginCsrfToken" json:"loginCsrfToken"`
+	Code      string `form:"code" json:"code"`
+	State     string `form:"state" json:"state"`
+	LoginCSRF string `form:"LoginCSRF" json:"LoginCSRF"`
 }
 
 // LogoutParams defines parameters for Logout.
@@ -178,17 +178,17 @@ func (siw *ServerInterfaceWrapper) Callback(w http.ResponseWriter, r *http.Reque
 	{
 		var cookie *http.Cookie
 
-		if cookie, err = r.Cookie("loginCsrfToken"); err == nil {
+		if cookie, err = r.Cookie("LoginCSRF"); err == nil {
 			var value string
-			err = runtime.BindStyledParameterWithOptions("simple", "loginCsrfToken", cookie.Value, &value, runtime.BindStyledParameterOptions{Explode: true, Required: true})
+			err = runtime.BindStyledParameterWithOptions("simple", "LoginCSRF", cookie.Value, &value, runtime.BindStyledParameterOptions{Explode: true, Required: true})
 			if err != nil {
-				siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "loginCsrfToken", Err: err})
+				siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "LoginCSRF", Err: err})
 				return
 			}
-			params.LoginCsrfToken = value
+			params.LoginCSRF = value
 
 		} else {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "loginCsrfToken"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "LoginCSRF"})
 			return
 		}
 	}
@@ -409,7 +409,7 @@ type AuthResponseObject interface {
 
 type Auth302ResponseHeaders struct {
 	Location  string
-	SetCookie []string
+	SetCookie string
 }
 
 type Auth302Response struct {

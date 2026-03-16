@@ -106,22 +106,12 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 			StatusCode: status,
 		}, nil
 	}
-	rw, err := middleware.ResponseWriterFromContext(ctx)
-	if err != nil {
-		span.RecordError(err)
-		slogctx.Error(ctx, "Failed to create responseWriterFromContext", "error", err)
-		body, status := s.toErrorModel(err)
-		return openapi.AuthdefaultJSONResponse{
-			Body:       body,
-			StatusCode: status,
-		}, nil
-	}
-	http.SetCookie(rw, loginCsrfCookie)
 
 	span.SetStatus(codes.Ok, "")
 	return openapi.Auth302Response{
 		Headers: openapi.Auth302ResponseHeaders{
-			Location: url,
+			Location:  url,
+			SetCookie: loginCsrfCookie.String(),
 		},
 	}, nil
 }
@@ -161,7 +151,7 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 			StatusCode: status,
 		}, nil
 	}
-	if !csrf.Validate(req.Params.LoginCsrfToken, req.Params.State, s.csrfSecret) {
+	if !csrf.Validate(req.Params.LoginCSRF, req.Params.State, s.csrfSecret) {
 		err := errors.New("login CSRF cookie invalid or missing")
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
