@@ -161,34 +161,8 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 			StatusCode: status,
 		}, nil
 	}
-	cookies, err := http.ParseCookie(req.Params.LoginCsrfToken)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to parse 'Cookie' header")
-		slogctx.Warn(ctx, "failed to parse 'Cookie' header", "error", err)
-
-		body, status := newBadRequest("invalid 'Cookie' header")
-		return openapi.CallbackdefaultJSONResponse{
-			Body:       body,
-			StatusCode: status,
-		}, nil
-	}
-	var loginCsrfCookie *http.Cookie
-	// http.ParseCookie limits the number of cookies to 3000
-	// (configurable with $GODEBUG environment variable, see httpcookiemaxnum),
-	// so we can safely iterate over the cookies.
-	for _, cookie := range cookies {
-		switch cookie.Name {
-		case s.loginCsrfTokenCookieName:
-			loginCsrfCookie = cookie
-		}
-
-		if loginCsrfCookie != nil && loginCsrfCookie.Value != "" {
-			break
-		}
-	}
-	if loginCsrfCookie == nil || !csrf.Validate(loginCsrfCookie.Value, req.Params.State, s.csrfSecret) {
-		err = errors.New("login CSRF cookie invalid or missing")
+	if !csrf.Validate(req.Params.LoginCsrfToken, req.Params.State, s.csrfSecret) {
+		err := errors.New("login CSRF cookie invalid or missing")
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		body, status := s.toErrorModel(err)

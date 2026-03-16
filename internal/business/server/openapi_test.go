@@ -295,7 +295,7 @@ func TestOpenAPIServer_Callback_FinaliseOIDCLogin_Failed(t *testing.T) {
 			Params: openapi.CallbackParams{
 				State:          "state",
 				Code:           "code",
-				LoginCsrfToken: "LoginCSRF=" + loginCsrfToken,
+				LoginCsrfToken: loginCsrfToken,
 			},
 		}
 
@@ -316,6 +316,10 @@ func TestOpenAPIServer_Callback_MakeSessionCookie_Failed(t *testing.T) {
 		w := httptest.NewRecorder()
 		ctx = context.WithValue(ctx, middleware.ResponseWriterKey, w)
 
+		csrfSecret := []byte("test-secret")
+		state := "state"
+		loginCsrfToken := csrf.NewToken(state, csrfSecret)
+
 		mock := &mockSessionManager{
 			finaliseOIDCLoginFunc: func(ctx context.Context, state, code, fingerprint string) (session.OIDCSessionData, error) {
 				return session.OIDCSessionData{
@@ -330,13 +334,13 @@ func TestOpenAPIServer_Callback_MakeSessionCookie_Failed(t *testing.T) {
 			},
 		}
 
-		server := newOpenAPIServer(mock, nil, "", "", "")
+		server := newOpenAPIServer(mock, csrfSecret, "", "", "")
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:          "state",
+				State:          state,
 				Code:           "code",
-				LoginCsrfToken: "session-id=123",
+				LoginCsrfToken: loginCsrfToken,
 			},
 		}
 
@@ -351,33 +355,21 @@ func TestOpenAPIServer_Callback_MakeSessionCookie_Failed(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, r.StatusCode)
 	})
 }
-func TestOpenAPIServer_Callback_InvalidCookieFormat_Failed(t *testing.T) {
-	t.Run("returns an error when MakeSessionCookie failed", func(t *testing.T) {
+func TestOpenAPIServer_Callback_InvalidCsrfToken_Failed(t *testing.T) {
+	t.Run("returns an error when login CSRF token is invalid", func(t *testing.T) {
 		ctx := fingerprint.WithFingerprint(t.Context(), "fingerprint")
 		w := httptest.NewRecorder()
 		ctx = context.WithValue(ctx, middleware.ResponseWriterKey, w)
 
-		mock := &mockSessionManager{
-			finaliseOIDCLoginFunc: func(ctx context.Context, state, code, fingerprint string) (session.OIDCSessionData, error) {
-				return session.OIDCSessionData{
-					SessionID:  "s-id",
-					TenantID:   "t-id",
-					CSRFToken:  "csrf-token",
-					RequestURI: "https://example.com/request",
-				}, nil
-			},
-			makeSessionCookieFunc: func(ctx context.Context, tenantID, sessionID string) (*http.Cookie, error) {
-				return nil, errors.New("error")
-			},
-		}
+		csrfSecret := []byte("test-secret")
 
-		server := newOpenAPIServer(mock, nil, "", "", "")
+		server := newOpenAPIServer(nil, csrfSecret, "", "", "")
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
 				State:          "state",
 				Code:           "code",
-				LoginCsrfToken: "\"invalid cookie format\\n\\n\"",
+				LoginCsrfToken: "invalid-csrf-token",
 			},
 		}
 
@@ -388,8 +380,8 @@ func TestOpenAPIServer_Callback_InvalidCookieFormat_Failed(t *testing.T) {
 		assert.IsType(t, openapi.CallbackdefaultJSONResponse{}, resp)
 
 		r, _ := resp.(openapi.CallbackdefaultJSONResponse)
-		assert.Equal(t, string(serviceerr.CodeInvalidRequest), r.Body.Error)
-		assert.Equal(t, http.StatusBadRequest, r.StatusCode)
+		assert.Equal(t, string(serviceerr.CodeUnknown), r.Body.Error)
+		assert.Equal(t, http.StatusInternalServerError, r.StatusCode)
 	})
 }
 
@@ -398,6 +390,10 @@ func TestOpenAPIServer_Callback_MakeCSRFCookie_Failed(t *testing.T) {
 		ctx := fingerprint.WithFingerprint(t.Context(), "fingerprint")
 		w := httptest.NewRecorder()
 		ctx = context.WithValue(ctx, middleware.ResponseWriterKey, w)
+
+		csrfSecret := []byte("test-secret")
+		state := "state"
+		loginCsrfToken := csrf.NewToken(state, csrfSecret)
 
 		mock := &mockSessionManager{
 			finaliseOIDCLoginFunc: func(ctx context.Context, state, code, fingerprint string) (session.OIDCSessionData, error) {
@@ -416,13 +412,13 @@ func TestOpenAPIServer_Callback_MakeCSRFCookie_Failed(t *testing.T) {
 			},
 		}
 
-		server := newOpenAPIServer(mock, nil, "", "", "")
+		server := newOpenAPIServer(mock, csrfSecret, "", "", "")
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:          "state",
+				State:          state,
 				Code:           "code",
-				LoginCsrfToken: "session-id=123",
+				LoginCsrfToken: loginCsrfToken,
 			},
 		}
 
@@ -471,7 +467,7 @@ func TestOpenAPIServer_Callback_Success(t *testing.T) {
 			Params: openapi.CallbackParams{
 				State:          state,
 				Code:           "code",
-				LoginCsrfToken: "LoginCSRF=" + loginCsrfToken,
+				LoginCsrfToken: loginCsrfToken,
 			},
 		}
 
