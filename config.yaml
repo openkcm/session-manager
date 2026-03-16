@@ -239,6 +239,12 @@ sessionManager:
         secure: true
         sameSite: Strict
         domain: localhost
+    loginCSRFCookieTemplate:
+        name: "loginCsrfToken"
+        path: "/"
+        secure: true
+        sameSite: Strict
+        domain: localhost
     csrfSecret:
         source: embedded
         value: my-csrf-secret-at-least-thirty-two-bits-size

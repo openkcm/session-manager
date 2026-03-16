@@ -69,7 +69,7 @@ paths:
                 This allows the CMK UI to iniate the SLO.
             parameters:
                 - name: "Cookie"
-                  in: cookie
+                  in: header
                   required: true
                   schema:
                       type: string

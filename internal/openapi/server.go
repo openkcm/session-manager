@@ -42,8 +42,8 @@ type CallbackParams struct {
 
 // LogoutParams defines parameters for Logout.
 type LogoutParams struct {
+	Cookie     string `json:"Cookie"`
 	XCSRFToken string `json:"X-CSRF-Token"`
-	Cookie     string `form:"Cookie" json:"Cookie"`
 }
 
 // BclogoutFormdataRequestBody defines body for Bclogout for application/x-www-form-urlencoded ContentType.
@@ -214,6 +214,29 @@ func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request
 
 	headers := r.Header
 
+	// ------------- Required header parameter "Cookie" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Cookie")]; found {
+		var Cookie string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Cookie", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Cookie", valueList[0], &Cookie, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Cookie", Err: err})
+			return
+		}
+
+		params.Cookie = Cookie
+
+	} else {
+		err := fmt.Errorf("Header parameter Cookie is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Cookie", Err: err})
+		return
+	}
+
 	// ------------- Required header parameter "X-CSRF-Token" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
 		var XCSRFToken string
@@ -235,24 +258,6 @@ func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request
 		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
 		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
 		return
-	}
-
-	{
-		var cookie *http.Cookie
-
-		if cookie, err = r.Cookie("Cookie"); err == nil {
-			var value string
-			err = runtime.BindStyledParameterWithOptions("simple", "Cookie", cookie.Value, &value, runtime.BindStyledParameterOptions{Explode: true, Required: true})
-			if err != nil {
-				siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Cookie", Err: err})
-				return
-			}
-			params.Cookie = value
-
-		} else {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "Cookie"})
-			return
-		}
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
