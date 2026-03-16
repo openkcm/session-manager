@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"sync"
 
 	"github.com/exaring/otelpgx"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/openkcm/session-manager/internal/business/server"
 	"github.com/openkcm/session-manager/internal/config"
+	"github.com/openkcm/session-manager/internal/credentials"
 	"github.com/openkcm/session-manager/internal/grpc"
 	"github.com/openkcm/session-manager/internal/session"
 	sessionvalkey "github.com/openkcm/session-manager/internal/session/valkey"
@@ -97,18 +97,12 @@ func internalMain(ctx context.Context, cfg *config.Config) error {
 	defer valkeyClient.Close()
 	sessionRepo := sessionvalkey.NewRepository(valkeyClient, cfg.ValKey.Prefix)
 
-	// Create HTTP client
-	httpClient, err := loadHTTPClient(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to load http client: %w", err)
-	}
-
 	// Initialize the gRPC servers.
 	oidcmappingsrv := grpc.NewOIDCMappingServer(trustService)
 	opts := []grpc.SessionServerOption{
 		grpc.WithQueryParametersIntrospect(cfg.SessionManager.AdditionalQueryParametersIntrospect),
 	}
-	sessionsrv := grpc.NewSessionServer(sessionRepo, trustRepo, httpClient, cfg.SessionManager.IdleSessionTimeout, opts...)
+	sessionsrv := grpc.NewSessionServer(sessionRepo, trustRepo, cfg.SessionManager.IdleSessionTimeout, opts...)
 	return server.StartGRPCServer(ctx, cfg, oidcmappingsrv, sessionsrv)
 }
 
@@ -126,8 +120,7 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Man
 	}
 	sessionRepo := sessionvalkey.NewRepository(valkeyClient, cfg.ValKey.Prefix)
 
-	// Create HTTP client
-	httpClient, err := loadHTTPClient(cfg)
+	credsBuilder, err := newCredsBuilder(cfg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to load http client: %w", err)
 	}
@@ -142,7 +135,7 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Man
 		trustRepo,
 		sessionRepo,
 		auditLogger,
-		httpClient,
+		session.WithTransportCredentials(credsBuilder),
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create session manager: %w", err)
@@ -214,9 +207,7 @@ func valkeyClientFromConfig(cfg *config.Config) (valkey.Client, error) {
 	return valkeyClient, nil
 }
 
-func loadHTTPClient(cfg *config.Config) (*http.Client, error) {
-	clientID := cfg.SessionManager.ClientAuth.ClientID
-
+func newCredsBuilder(cfg *config.Config) (session.CredentialsBuilder, error) {
 	switch cfg.SessionManager.ClientAuth.Type {
 	case "mtls":
 		tlsConfig, err := commoncfg.LoadMTLSConfig(cfg.SessionManager.ClientAuth.MTLS)
@@ -224,48 +215,19 @@ func loadHTTPClient(cfg *config.Config) (*http.Client, error) {
 			return nil, fmt.Errorf("failed to load mTLS config: %w", err)
 		}
 
-		return &http.Client{
-			Transport: &clientAuthRoundTripper{
-				clientID: clientID,
-				next: &http.Transport{
-					TLSClientConfig: tlsConfig,
-				},
-			},
-		}, nil
+		return func(clientID string) credentials.TransportCredentials { return credentials.NewTLS(clientID, tlsConfig) }, nil
 	case "client_secret":
 		secret, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.ClientAuth.ClientSecret)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load client secret: %w", err)
 		}
 
-		return &http.Client{
-			Transport: &clientAuthRoundTripper{
-				clientID:     clientID,
-				clientSecret: string(secret),
-				next:         http.DefaultTransport,
-			},
+		return func(clientID string) credentials.TransportCredentials {
+			return credentials.NewClientSecret(clientID, string(secret))
 		}, nil
 	case "insecure":
-		return http.DefaultClient, nil
+		return func(_ string) credentials.TransportCredentials { return credentials.NewDefault() }, nil
 	default:
 		return nil, errors.New("unknown Client Auth type")
 	}
-}
-
-type clientAuthRoundTripper struct {
-	clientID     string
-	clientSecret string
-	next         http.RoundTripper
-}
-
-func (t *clientAuthRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	q := req.URL.Query()
-
-	q.Set("client_id", t.clientID)
-	if t.clientSecret != "" {
-		q.Set("client_secret", t.clientSecret)
-	}
-	req.URL.RawQuery = q.Encode()
-
-	return t.next.RoundTrip(req)
 }

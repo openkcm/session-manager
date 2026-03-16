@@ -68,7 +68,7 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 	ctx, span := tracer.Tracer("").Start(ctx, "auth")
 	defer span.End()
 
-	slogctx.Debug(ctx, "Auth() called", "tenant_id", request.Params.TenantID, "request_uri", request.Params.RequestURI)
+	slogctx.Debug(ctx, "Auth() called", "tenantId", request.Params.TenantID, "requestUri", request.Params.RequestURI)
 	defer slogctx.Debug(ctx, "Auth() completed")
 
 	fingerprint, err := fingerprint.ExtractFingerprint(ctx)
@@ -312,11 +312,11 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 		slogctx.Warn(
 			ctx,
 			"received invalid csrf token value",
-			"csrf_token_hash",
+			"csrfTokenHash",
 			base64.RawStdEncoding.EncodeToString(csrfTokenHash[:5]),
-			"csrf_secret_hash",
+			"csrfSecretHash",
 			base64.RawStdEncoding.EncodeToString(csrfSecretHash[:5]),
-			"session_id_hash",
+			"sessionIdHash",
 			base64.RawStdEncoding.EncodeToString(sessionIDHash[:5]),
 		)
 

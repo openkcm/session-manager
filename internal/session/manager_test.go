@@ -23,6 +23,7 @@ import (
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 
 	"github.com/openkcm/session-manager/internal/config"
+	"github.com/openkcm/session-manager/internal/credentials"
 	"github.com/openkcm/session-manager/internal/session"
 	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
 	"github.com/openkcm/session-manager/internal/trust"
@@ -139,7 +140,11 @@ func TestManager_Auth(t *testing.T) {
 			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
 			require.NoError(t, err)
 
-			m, err := session.NewManager(tt.cfg, tt.oidc, tt.sessions, auditLogger, http.DefaultClient,
+			m, err := session.NewManager(
+				tt.cfg,
+				tt.oidc,
+				tt.sessions,
+				auditLogger,
 				session.WithAllowHttpScheme(true),
 			)
 			require.NoError(t, err)
@@ -383,7 +388,11 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 
 			tt.oidc.TAdd(tenantID, localOIDCMapping)
 
-			m, err := session.NewManager(tt.cfg, tt.oidc, tt.sessions, auditLogger, http.DefaultClient,
+			m, err := session.NewManager(
+				tt.cfg,
+				tt.oidc,
+				tt.sessions,
+				auditLogger,
 				session.WithAllowHttpScheme(true),
 			)
 			require.NoError(t, err)
@@ -511,27 +520,31 @@ func TestManager_BCLogout(t *testing.T) {
 			oidcMock := trustmock.NewInMemRepository()
 			sessionMock := sessionmock.NewInMemRepository()
 
-			cli := &http.Client{
-				Transport: localRoundTripper{
-					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						b, err := json.Marshal(oidc.Configuration{
-							JwksURI: jwksSrv.URL,
-							Issuer:  jwksSrv.URL,
-						})
-						if err != nil {
-							panic(err)
-						}
+			rt := localRoundTripper{
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					b, err := json.Marshal(oidc.Configuration{
+						JwksURI: jwksSrv.URL,
+						Issuer:  jwksSrv.URL,
+					})
+					if err != nil {
+						panic(err)
+					}
 
-						if _, err := w.Write(b); err != nil {
-							panic(err)
-						}
-					}),
-				},
+					if _, err := w.Write(b); err != nil {
+						panic(err)
+					}
+				}),
 			}
 
 			tt.setupMock(oidcMock, sessionMock)
 
-			m, err := session.NewManager(tt.cfg, oidcMock, sessionMock, auditLogger, cli)
+			m, err := session.NewManager(
+				tt.cfg,
+				oidcMock,
+				sessionMock,
+				auditLogger,
+				session.WithTransportCredentials(newTCBuilder(rt)),
+			)
 			require.NoError(t, err)
 
 			err = m.BCLogout(ctx, tt.jwt)
@@ -600,7 +613,7 @@ func TestManager_LogoutEdgeCases(t *testing.T) {
 				},
 			}
 
-			m, err := session.NewManager(cfg, oidcMock, sessionMock, auditLogger, http.DefaultClient)
+			m, err := session.NewManager(cfg, oidcMock, sessionMock, auditLogger)
 			require.NoError(t, err)
 
 			_, err = m.Logout(ctx, tt.sessionID)
@@ -710,16 +723,14 @@ func TestManager_BCLogout_ErrorCases(t *testing.T) {
 			oidcMock := trustmock.NewInMemRepository()
 			sessionMock := sessionmock.NewInMemRepository()
 
-			cli := &http.Client{
-				Transport: localRoundTripper{
-					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						b, _ := json.Marshal(oidc.Configuration{
-							JwksURI: jwksSrv.URL,
-							Issuer:  jwksSrv.URL,
-						})
-						_, _ = w.Write(b)
-					}),
-				},
+			rt := localRoundTripper{
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					b, _ := json.Marshal(oidc.Configuration{
+						JwksURI: jwksSrv.URL,
+						Issuer:  jwksSrv.URL,
+					})
+					_, _ = w.Write(b)
+				}),
 			}
 
 			tt.setupMock(oidcMock, sessionMock)
@@ -728,7 +739,7 @@ func TestManager_BCLogout_ErrorCases(t *testing.T) {
 				CSRFSecretParsed: []byte(testCSRFSecret),
 			}
 
-			m, err := session.NewManager(cfg, oidcMock, sessionMock, auditLogger, cli)
+			m, err := session.NewManager(cfg, oidcMock, sessionMock, auditLogger, session.WithTransportCredentials(newTCBuilder(rt)))
 			require.NoError(t, err)
 
 			err = m.BCLogout(ctx, tt.jwt)
@@ -749,7 +760,7 @@ func TestManager_NewManager_Error(t *testing.T) {
 		CSRFSecretParsed: []byte(testCSRFSecret),
 	}
 
-	m, err := session.NewManager(cfg, trustmock.NewInMemRepository(), sessionmock.NewInMemRepository(), auditLogger, http.DefaultClient)
+	m, err := session.NewManager(cfg, trustmock.NewInMemRepository(), sessionmock.NewInMemRepository(), auditLogger)
 	assert.Error(t, err)
 	assert.Nil(t, m)
 	assert.Contains(t, err.Error(), "parsing callback URL")
@@ -765,4 +776,20 @@ func (l localRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 	w := httptest.NewRecorder()
 	l.handler.ServeHTTP(w, req)
 	return w.Result(), nil
+}
+
+type transportCredentials struct {
+	rt localRoundTripper
+}
+
+func (tc transportCredentials) Transport() http.RoundTripper {
+	return tc.rt
+}
+
+func newTCBuilder(rt localRoundTripper) session.CredentialsBuilder {
+	return func(clientID string) credentials.TransportCredentials {
+		return transportCredentials{
+			rt: rt,
+		}
+	}
 }
