@@ -21,14 +21,14 @@ import (
 
 // mockSessionManager is a mock implementation of sessionManager interface for testing
 type mockSessionManager struct {
-	makeAuthURIFunc           func(ctx context.Context, tenantID, fingerprint, requestURI string) (string, string, error)
-	finaliseOIDCLoginFunc     func(ctx context.Context, state, code, fingerprint string) (session.OIDCSessionData, error)
-	makeSessionCookieFunc     func(ctx context.Context, tenantID, sessionID string) (*http.Cookie, error)
-	makeCSRFCookieFunc        func(ctx context.Context, tenantID, csrfToken string) (*http.Cookie, error)
-	makeLoginCSRFCookieFunc   func(ctx context.Context, csrfToken string) (*http.Cookie, error)
-	logoutFunc                func(ctx context.Context, sessionID string) (string, error)
-	bcLogoutFunc              func(ctx context.Context, logoutToken string) error
-	validateCSRFTokenFunc     func(token, sessionID string) bool
+	makeAuthURIFunc         func(ctx context.Context, tenantID, fingerprint, requestURI string) (string, string, error)
+	finaliseOIDCLoginFunc   func(ctx context.Context, state, code, fingerprint string) (session.OIDCSessionData, error)
+	makeSessionCookieFunc   func(ctx context.Context, tenantID, sessionID string) (*http.Cookie, error)
+	makeCSRFCookieFunc      func(ctx context.Context, tenantID, csrfToken string) (*http.Cookie, error)
+	makeLoginCSRFCookieFunc func(ctx context.Context, csrfToken string) (*http.Cookie, error)
+	logoutFunc              func(ctx context.Context, sessionID string) (string, error)
+	bcLogoutFunc            func(ctx context.Context, logoutToken string) error
+	validateCSRFTokenFunc   func(token, sessionID string) bool
 }
 
 func (m *mockSessionManager) MakeAuthURI(ctx context.Context, tenantID, fp, requestURI string) (string, string, error) {
@@ -216,8 +216,8 @@ func TestOpenAPIServer_Callback_ExtractFingerprint_Failed(t *testing.T) {
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:          "state",
-				Code:           "code",
+				State:     "state",
+				Code:      "code",
 				LoginCSRF: "session-id=123",
 			},
 		}
@@ -242,8 +242,8 @@ func TestOpenAPIServer_Callback_NoResponseWriter(t *testing.T) {
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:          "state",
-				Code:           "code",
+				State:     "state",
+				Code:      "code",
 				LoginCSRF: "session-id=123",
 			},
 		}
@@ -279,8 +279,8 @@ func TestOpenAPIServer_Callback_FinaliseOIDCLogin_Failed(t *testing.T) {
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:          "state",
-				Code:           "code",
+				State:     "state",
+				Code:      "code",
 				LoginCSRF: loginCsrfToken,
 			},
 		}
@@ -324,8 +324,8 @@ func TestOpenAPIServer_Callback_MakeSessionCookie_Failed(t *testing.T) {
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:          state,
-				Code:           "code",
+				State:     state,
+				Code:      "code",
 				LoginCSRF: loginCsrfToken,
 			},
 		}
@@ -353,8 +353,8 @@ func TestOpenAPIServer_Callback_InvalidCsrfToken_Failed(t *testing.T) {
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:          "state",
-				Code:           "code",
+				State:     "state",
+				Code:      "code",
 				LoginCSRF: "invalid-csrf-token",
 			},
 		}
@@ -402,8 +402,8 @@ func TestOpenAPIServer_Callback_MakeCSRFCookie_Failed(t *testing.T) {
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:          state,
-				Code:           "code",
+				State:     state,
+				Code:      "code",
 				LoginCSRF: loginCsrfToken,
 			},
 		}
@@ -451,8 +451,8 @@ func TestOpenAPIServer_Callback_Success(t *testing.T) {
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:          state,
-				Code:           "code",
+				State:     state,
+				Code:      "code",
 				LoginCSRF: loginCsrfToken,
 			},
 		}
