@@ -30,6 +30,11 @@ import (
 	"github.com/openkcm/session-manager/internal/trust"
 )
 
+const (
+	LoginCSRFCookieName = "LoginCSRF"
+	CSRFCookieName      = "CSRF"
+)
+
 type Manager struct {
 	trustRepo trust.OIDCMappingRepository
 	sessions  Repository
@@ -525,7 +530,7 @@ func (m *Manager) MakeCSRFCookie(ctx context.Context, tenantID, value string) (*
 	csrfCookie := m.csrfCookieTemplate.ToCookie(value)
 
 	if tenantID != "" {
-		csrfCookie.Name = csrfCookie.Name + "-" + tenantID
+		csrfCookie.Name = CSRFCookieName + "-" + tenantID
 	}
 
 	err := csrfCookie.Valid()
@@ -540,7 +545,7 @@ func (m *Manager) MakeCSRFCookie(ctx context.Context, tenantID, value string) (*
 
 func (m *Manager) MakeLoginCSRFCookie(ctx context.Context, value string) (*http.Cookie, error) {
 	loginCSRFCookie := m.loginCSRFCookieTemplate.ToCookie(value)
-
+	loginCSRFCookie.Name = LoginCSRFCookieName
 	err := loginCSRFCookie.Valid()
 	if err != nil {
 		return nil, fmt.Errorf("invalid CSRF cookie: %w", err)

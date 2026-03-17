@@ -156,7 +156,7 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 		err := errors.New("login CSRF cookie invalid or missing")
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
-		body, status := s.toErrorModel(err)
+		body, status := newBadRequest(err.Error())
 		return openapi.CallbackdefaultJSONResponse{
 			Body:       body,
 			StatusCode: status,
