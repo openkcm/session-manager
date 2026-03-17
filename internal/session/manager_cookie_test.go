@@ -191,7 +191,7 @@ func TestManager_MakeCSRFCookie(t *testing.T) {
 			wantErr:  false,
 			checkCookie: func(t *testing.T, cookie *http.Cookie) {
 				t.Helper()
-				assert.Equal(t, "CSRF-Token-tenant-1", cookie.Name)
+				assert.Equal(t, "CSRF-tenant-1", cookie.Name)
 				assert.Equal(t, "csrf-123", cookie.Value)
 				assert.Equal(t, 3600, cookie.MaxAge)
 				assert.Equal(t, "/", cookie.Path)
@@ -334,7 +334,7 @@ func TestManager_MakeLoginCSRFCookie(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, cookie)
-	assert.Equal(t, "LoginCSRFToken", cookie.Name)
+	assert.Equal(t, "LoginCSRF", cookie.Name)
 	assert.Equal(t, "csrf-456", cookie.Value)
 }
 
