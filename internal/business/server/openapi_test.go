@@ -366,8 +366,8 @@ func TestOpenAPIServer_Callback_InvalidCsrfToken_Failed(t *testing.T) {
 		assert.IsType(t, openapi.CallbackdefaultJSONResponse{}, resp)
 
 		r, _ := resp.(openapi.CallbackdefaultJSONResponse)
-		assert.Equal(t, string(serviceerr.CodeUnknown), r.Body.Error)
-		assert.Equal(t, http.StatusInternalServerError, r.StatusCode)
+		assert.Equal(t, string(serviceerr.CodeInvalidRequest), r.Body.Error)
+		assert.Equal(t, http.StatusBadRequest, r.StatusCode)
 	})
 }
 
