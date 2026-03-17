@@ -106,6 +106,7 @@ docker-dev-build:
 .PHONY: codegen
 codegen:
 	go generate ./...
+	go run github.com/sqlc-dev/sqlc/cmd/sqlc@latest generate
 
 .PHONY: clean
 clean:
