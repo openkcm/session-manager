@@ -340,7 +340,6 @@ config:
       sameSite: Strict
       domain: localhost
     loginCSRFCookieTemplate:
-      name: "LoginCSRF"
       path: "/"
       secure: true
       sameSite: Strict

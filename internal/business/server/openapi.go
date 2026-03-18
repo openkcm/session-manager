@@ -52,14 +52,12 @@ func newOpenAPIServer(
 	csrfSecret []byte,
 	sessionIDCookieName,
 	csrfTokenCookieName string,
-	loginCsrfTokenCookieName string,
 ) *openAPIServer {
 	return &openAPIServer{
-		sManager:                 sManager,
-		csrfSecret:               csrfSecret,
-		sessionIDCookieName:      sessionIDCookieName,
-		csrfTokenCookieName:      csrfTokenCookieName,
-		loginCsrfTokenCookieName: loginCsrfTokenCookieName,
+		sManager:            sManager,
+		csrfSecret:          csrfSecret,
+		sessionIDCookieName: sessionIDCookieName,
+		csrfTokenCookieName: csrfTokenCookieName,
 	}
 }
 
@@ -153,7 +151,7 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 		}, nil
 	}
 	if !csrf.Validate(req.Params.LoginCSRF, req.Params.State, s.csrfSecret) {
-		err := errors.New("login CSRF cookie invalid or missing")
+		err := serviceerr.ErrInvalidLoginCSRFToken
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		body, status := newBadRequest(err.Error())

@@ -28,7 +28,6 @@ type mockSessionManager struct {
 	makeLoginCSRFCookieFunc func(ctx context.Context, csrfToken string) (*http.Cookie, error)
 	logoutFunc              func(ctx context.Context, sessionID string) (string, error)
 	bcLogoutFunc            func(ctx context.Context, logoutToken string) error
-	validateCSRFTokenFunc   func(token, sessionID string) bool
 }
 
 func (m *mockSessionManager) MakeAuthURI(ctx context.Context, tenantID, fp, requestURI string) (string, string, error) {
@@ -80,21 +79,13 @@ func (m *mockSessionManager) BCLogout(ctx context.Context, logoutToken string) e
 	return errors.New("not implemented")
 }
 
-func (m *mockSessionManager) ValidateCSRFToken(token, sessionID string) bool {
-	if m.validateCSRFTokenFunc != nil {
-		return m.validateCSRFTokenFunc(token, sessionID)
-	}
-	return false
-}
-
 func TestNewOpenAPIServer(t *testing.T) {
 	t.Run("creates server with all parameters", func(t *testing.T) {
 		csrfSecret := []byte("test-secret")
 		sessionCookieName := "session-id"
 		csrfCookieName := "csrf-token"
-		loginCsrfCookieName := "login-csrf-token"
 
-		server := newOpenAPIServer(nil, csrfSecret, sessionCookieName, csrfCookieName, loginCsrfCookieName)
+		server := newOpenAPIServer(nil, csrfSecret, sessionCookieName, csrfCookieName)
 
 		assert.NotNil(t, server)
 		assert.Equal(t, csrfSecret, server.csrfSecret)
@@ -106,7 +97,7 @@ func TestNewOpenAPIServer(t *testing.T) {
 func TestOpenAPIServer_Auth_ContextCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	server := newOpenAPIServer(nil, nil, "", "", "")
+	server := newOpenAPIServer(nil, nil, "", "")
 	req := openapi.AuthRequestObject{}
 	resp, err := server.Auth(ctx, req)
 	assert.NoError(t, err)
@@ -120,7 +111,7 @@ func TestOpenAPIServer_Auth_ContextCanceled(t *testing.T) {
 
 func TestOpenAPIServer_Auth_ExtractFingerprint_Failed(t *testing.T) {
 	ctx := t.Context()
-	server := newOpenAPIServer(nil, nil, "", "", "")
+	server := newOpenAPIServer(nil, nil, "", "")
 	req := openapi.AuthRequestObject{}
 	resp, err := server.Auth(ctx, req)
 	assert.NoError(t, err)
@@ -139,7 +130,7 @@ func TestOpenAPIServer_Auth_MakeAuthURI_Failed(t *testing.T) {
 			return "", "", errors.New("error")
 		},
 	}
-	server := newOpenAPIServer(mock, nil, "", "", "")
+	server := newOpenAPIServer(mock, nil, "", "")
 	req := openapi.AuthRequestObject{}
 	resp, err := server.Auth(ctx, req)
 	assert.NoError(t, err)
@@ -161,7 +152,7 @@ func TestOpenAPIServer_Auth_MakeCSRFCookie_Failed(t *testing.T) {
 			return nil, errors.New("error")
 		},
 	}
-	server := newOpenAPIServer(mock, nil, "", "", "")
+	server := newOpenAPIServer(mock, nil, "", "")
 	req := openapi.AuthRequestObject{}
 	resp, err := server.Auth(ctx, req)
 	assert.NoError(t, err)
@@ -182,7 +173,7 @@ func TestOpenAPIServer_Auth_MakeAuthURI_Success(t *testing.T) {
 			return &http.Cookie{Name: "csrf-token", Value: csrfToken}, nil
 		},
 	}
-	server := newOpenAPIServer(mock, nil, "", "", "")
+	server := newOpenAPIServer(mock, nil, "", "")
 	req := openapi.AuthRequestObject{}
 	resp, err := server.Auth(ctx, req)
 	assert.NoError(t, err)
@@ -197,7 +188,7 @@ func TestOpenAPIServer_Auth_MakeAuthURI_Success(t *testing.T) {
 func TestOpenAPIServer_Callback_ContextCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	server := newOpenAPIServer(nil, nil, "", "", "")
+	server := newOpenAPIServer(nil, nil, "", "")
 	req := openapi.CallbackRequestObject{}
 	resp, err := server.Callback(ctx, req)
 	assert.NoError(t, err)
@@ -211,7 +202,7 @@ func TestOpenAPIServer_Callback_ContextCanceled(t *testing.T) {
 
 func TestOpenAPIServer_Callback_ExtractFingerprint_Failed(t *testing.T) {
 	t.Run("returns an error when response writer is not in the context", func(t *testing.T) {
-		server := newOpenAPIServer(nil, nil, "", "", "")
+		server := newOpenAPIServer(nil, nil, "", "")
 		ctx := t.Context()
 
 		callbackReq := openapi.CallbackRequestObject{
@@ -238,7 +229,7 @@ func TestOpenAPIServer_Callback_NoResponseWriter(t *testing.T) {
 	t.Run("returns an error when fingerprint is not in the context", func(t *testing.T) {
 		ctx := fingerprint.WithFingerprint(t.Context(), "fingerprint")
 
-		server := newOpenAPIServer(nil, nil, "", "", "")
+		server := newOpenAPIServer(nil, nil, "", "")
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
@@ -275,7 +266,7 @@ func TestOpenAPIServer_Callback_FinaliseOIDCLogin_Failed(t *testing.T) {
 			},
 		}
 
-		server := newOpenAPIServer(mock, csrfSecret, "", "", "LoginCSRF")
+		server := newOpenAPIServer(mock, csrfSecret, "", "")
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
@@ -320,7 +311,7 @@ func TestOpenAPIServer_Callback_MakeSessionCookie_Failed(t *testing.T) {
 			},
 		}
 
-		server := newOpenAPIServer(mock, csrfSecret, "", "", "")
+		server := newOpenAPIServer(mock, csrfSecret, "", "")
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
@@ -349,7 +340,7 @@ func TestOpenAPIServer_Callback_InvalidCsrfToken_Failed(t *testing.T) {
 
 		csrfSecret := []byte("test-secret")
 
-		server := newOpenAPIServer(nil, csrfSecret, "", "", "")
+		server := newOpenAPIServer(nil, csrfSecret, "", "")
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
@@ -398,7 +389,7 @@ func TestOpenAPIServer_Callback_MakeCSRFCookie_Failed(t *testing.T) {
 			},
 		}
 
-		server := newOpenAPIServer(mock, csrfSecret, "", "", "")
+		server := newOpenAPIServer(mock, csrfSecret, "", "")
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
@@ -447,7 +438,7 @@ func TestOpenAPIServer_Callback_Success(t *testing.T) {
 			},
 		}
 
-		server := newOpenAPIServer(mock, csrfSecret, "", "", "LoginCSRF")
+		server := newOpenAPIServer(mock, csrfSecret, "", "")
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
@@ -481,7 +472,7 @@ func TestOpenAPIServer_Callback_Success(t *testing.T) {
 
 func TestOpenAPIServer_Logout_NoResponseWriter(t *testing.T) {
 	t.Run("returns an error when response writer is not in context", func(t *testing.T) {
-		server := newOpenAPIServer(nil, nil, "", "", "")
+		server := newOpenAPIServer(nil, nil, "", "")
 		ctx := t.Context()
 
 		logoutReq := openapi.LogoutRequestObject{
@@ -505,7 +496,7 @@ func TestOpenAPIServer_Logout_NoResponseWriter(t *testing.T) {
 
 func TestOpenAPIServer_Logout_InvalidCookie(t *testing.T) {
 	t.Run("returns an error for invalid cookie header", func(t *testing.T) {
-		server := newOpenAPIServer(nil, nil, "", "", "")
+		server := newOpenAPIServer(nil, nil, "", "")
 
 		rw := httptest.NewRecorder()
 		ctx := context.WithValue(t.Context(), middleware.ResponseWriterKey, rw)
@@ -531,7 +522,7 @@ func TestOpenAPIServer_Logout_InvalidCookie(t *testing.T) {
 
 func TestOpenAPIServer_Logout_MissingSessionCookie(t *testing.T) {
 	t.Run("returns an error when session cookie is missing", func(t *testing.T) {
-		server := newOpenAPIServer(nil, []byte("secret"), "session-id", "csrf-token", "login-csrf-token")
+		server := newOpenAPIServer(nil, []byte("secret"), "session-id", "csrf-token")
 
 		rw := httptest.NewRecorder()
 		ctx := context.WithValue(t.Context(), middleware.ResponseWriterKey, rw)
@@ -558,7 +549,7 @@ func TestOpenAPIServer_Logout_MissingSessionCookie(t *testing.T) {
 
 func TestOpenAPIServer_Logout_MissingCSRFCookie(t *testing.T) {
 	t.Run("returns an error when CSRF cookie is missing", func(t *testing.T) {
-		server := newOpenAPIServer(nil, []byte("secret"), "session-id", "csrf-token", "login-csrf-token")
+		server := newOpenAPIServer(nil, []byte("secret"), "session-id", "csrf-token")
 
 		rw := httptest.NewRecorder()
 		ctx := context.WithValue(t.Context(), middleware.ResponseWriterKey, rw)
@@ -585,7 +576,7 @@ func TestOpenAPIServer_Logout_MissingCSRFCookie(t *testing.T) {
 
 func TestOpenAPIServer_Logout_InvalidCSRFToken(t *testing.T) {
 	t.Run("returns an error when CSRF token is invalid", func(t *testing.T) {
-		server := newOpenAPIServer(nil, []byte("test-secret-32-bytes-length!!"), "session-id", "csrf-token", "login-csrf-token")
+		server := newOpenAPIServer(nil, []byte("test-secret-32-bytes-length!!"), "session-id", "csrf-token")
 
 		rw := httptest.NewRecorder()
 		ctx := context.WithValue(t.Context(), middleware.ResponseWriterKey, rw)
@@ -618,7 +609,7 @@ func TestOpenAPIServer_Logout_Failed(t *testing.T) {
 			},
 		}
 
-		server := newOpenAPIServer(mock, []byte(tokenKey), "session-id", "csrf-token", "login-csrf-token")
+		server := newOpenAPIServer(mock, []byte(tokenKey), "session-id", "csrf-token")
 
 		rw := httptest.NewRecorder()
 		ctx := context.WithValue(t.Context(), middleware.ResponseWriterKey, rw)
@@ -643,7 +634,7 @@ func TestOpenAPIServer_Logout_Failed(t *testing.T) {
 }
 
 func TestOpenAPIServer_ToErrorModel(t *testing.T) {
-	server := newOpenAPIServer(nil, nil, "", "", "")
+	server := newOpenAPIServer(nil, nil, "", "")
 
 	t.Run("converts service error to error model", func(t *testing.T) {
 		err := serviceerr.ErrUnauthorized
@@ -732,7 +723,7 @@ func TestOpenAPIServer_Bclogout_Success(t *testing.T) {
 				return nil
 			},
 		}
-		server := newOpenAPIServer(mock, nil, "", "", "")
+		server := newOpenAPIServer(mock, nil, "", "")
 
 		bclogoutReq := openapi.BclogoutRequestObject{
 			Body: &openapi.BclogoutFormdataRequestBody{
@@ -754,7 +745,7 @@ func TestOpenAPIServer_Bclogout_Error(t *testing.T) {
 				return serviceerr.ErrInvalidCSRFToken
 			},
 		}
-		server := newOpenAPIServer(mock, nil, "", "", "")
+		server := newOpenAPIServer(mock, nil, "", "")
 
 		bclogoutReq := openapi.BclogoutRequestObject{
 			Body: &openapi.BclogoutFormdataRequestBody{
@@ -788,7 +779,7 @@ func TestOpenAPIServer_Logout_Success(t *testing.T) {
 				return expectedURL, nil
 			},
 		}
-		server := newOpenAPIServer(mock, csrfSecret, "session-id", "csrf-token", "login-csrf-token")
+		server := newOpenAPIServer(mock, csrfSecret, "session-id", "csrf-token")
 
 		rw := httptest.NewRecorder()
 		ctx := context.WithValue(context.Background(), middleware.ResponseWriterKey, rw)

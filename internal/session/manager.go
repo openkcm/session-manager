@@ -32,7 +32,6 @@ import (
 
 const (
 	LoginCSRFCookieName = "LoginCSRF"
-	CSRFCookieName      = "CSRF"
 )
 
 type Manager struct {
@@ -530,7 +529,7 @@ func (m *Manager) MakeCSRFCookie(ctx context.Context, tenantID, value string) (*
 	csrfCookie := m.csrfCookieTemplate.ToCookie(value)
 
 	if tenantID != "" {
-		csrfCookie.Name = CSRFCookieName + "-" + tenantID
+		csrfCookie.Name = csrfCookie.Name + "-" + tenantID
 	}
 
 	err := csrfCookie.Valid()

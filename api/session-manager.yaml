@@ -40,7 +40,7 @@ paths:
                             schema:
                                 type: string
                         Set-Cookie:
-                            description: Sets the login CSRF token cookie (LoginCSRFToken).
+                            description: Sets the login CSRF token cookie (LoginCSRF).
                             schema:
                                 type: string
                 default:
