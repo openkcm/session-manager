@@ -39,8 +39,7 @@ type openAPIServer struct {
 	csrfSecret []byte
 
 	sessionIDCookieName,
-	csrfTokenCookieName,
-	loginCsrfTokenCookieName string
+	csrfTokenCookieName string
 }
 
 // Ensure openAPIServer implements [openapi.StrictServerInterface]
