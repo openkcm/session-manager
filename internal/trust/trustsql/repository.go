@@ -7,20 +7,24 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel"
 
 	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/internal/trust"
+	"github.com/openkcm/session-manager/internal/trust/trustsql/internal/queries"
 )
 
 type Repository struct {
-	db *pgxpool.Pool
+	db      *pgxpool.Pool
+	queries *queries.Queries
 }
 
 func NewRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{
-		db: db,
+		db:      db,
+		queries: queries.New(db),
 	}
 }
 
@@ -29,51 +33,32 @@ func (r *Repository) Get(ctx context.Context, tenantID string) (trust.OIDCMappin
 	ctx, span := tracer.Tracer("").Start(ctx, "get_oidc_mapping_sql")
 	defer span.End()
 
-	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
+	row, err := r.queries.GetOIDCMapping(ctx, tenantID)
 	if err != nil {
 		span.RecordError(err)
-		return trust.OIDCMapping{}, fmt.Errorf("starting transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return trust.OIDCMapping{}, serviceerr.ErrNotFound
+		}
 
-	row := tx.QueryRow(ctx, `SELECT issuer, blocked, jwks_uri, audiences, properties, COALESCE(client_id, '') FROM trust WHERE tenant_id = $1;`, tenantID)
-	mapping, err := r.get(ctx, tx, row)
-	if err != nil {
-		span.RecordError(err)
 		return trust.OIDCMapping{}, err
 	}
 
-	return mapping, nil
-}
-
-func (r *Repository) get(ctx context.Context, tx pgx.Tx, row pgx.Row) (trust.OIDCMapping, error) {
-	var propsBytes []byte
-	var mapping trust.OIDCMapping
-
-	err := row.Scan(&mapping.IssuerURL, &mapping.Blocked, &mapping.JWKSURI, &mapping.Audiences, &propsBytes, &mapping.ClientID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return trust.OIDCMapping{}, serviceerr.ErrNotFound
-		} else {
-			return trust.OIDCMapping{}, fmt.Errorf("scanning rows: %w", err)
-		}
-	}
-
-	err = tx.Commit(ctx)
-	if err != nil {
-		return trust.OIDCMapping{}, fmt.Errorf("committing tx: %w", err)
-	}
-
-	if len(propsBytes) > 0 {
-		err := json.Unmarshal(propsBytes, &mapping.Properties)
+	properties := make(map[string]string)
+	if len(row.Properties) > 0 {
+		err := json.Unmarshal(row.Properties, &properties)
 		if err != nil {
 			return trust.OIDCMapping{}, fmt.Errorf("unmarshalling properties: %w", err)
 		}
-	} else {
-		mapping.Properties = make(map[string]string)
 	}
 
-	return mapping, nil
+	return trust.OIDCMapping{
+		IssuerURL:  row.Issuer,
+		Blocked:    row.Blocked,
+		JWKSURI:    row.JwksUri,
+		Audiences:  row.Audiences,
+		Properties: properties,
+		ClientID:   row.ClientID.String,
+	}, nil
 }
 
 func (r *Repository) Create(ctx context.Context, tenantID string, mapping trust.OIDCMapping) error {
@@ -81,38 +66,26 @@ func (r *Repository) Create(ctx context.Context, tenantID string, mapping trust.
 	ctx, span := tracer.Tracer("").Start(ctx, "create_oidc_mapping_sql")
 	defer span.End()
 
-	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		span.RecordError(err)
-		return fmt.Errorf("starting transaction: %w", err)
-	}
-
-	defer tx.Rollback(ctx)
-
-	propsBytes, err := r.marshalProperties(mapping)
+	properties, err := r.marshalProperties(mapping)
 	if err != nil {
 		return fmt.Errorf("marshaling properties: %w", err)
 	}
 
-	// The audiences value is optional, so we use COALESCE to default to an empty array if it's nil
-	_, err = tx.Exec(ctx,
-		`INSERT INTO trust (tenant_id, blocked, issuer, jwks_uri, audiences, properties, client_id)
-			 VALUES ($1, $2, $3, $4, COALESCE($5, '{}'::text[]), $6, NULLIF($7, ''));`,
-		tenantID, mapping.Blocked, mapping.IssuerURL, mapping.JWKSURI, mapping.Audiences, propsBytes, mapping.ClientID,
-	)
-	if err != nil {
+	if err := r.queries.CreateOIDCMapping(ctx, queries.CreateOIDCMappingParams{
+		TenantID:   tenantID,
+		Blocked:    mapping.Blocked,
+		Issuer:     mapping.IssuerURL,
+		JwksUri:    mapping.JWKSURI,
+		Audiences:  mapping.Audiences,
+		Properties: properties,
+		ClientID:   pgTextOrNull(mapping.ClientID),
+	}); err != nil {
 		span.RecordError(err)
 		if err, ok := handlePgError(err); ok {
 			return err
 		}
 
 		return fmt.Errorf("inserting into trust: %w", err)
-	}
-
-	err = tx.Commit(ctx)
-	if err != nil {
-		span.RecordError(err)
-		return fmt.Errorf("committing transaction: %w", err)
 	}
 
 	return nil
@@ -123,27 +96,14 @@ func (r *Repository) Delete(ctx context.Context, tenantID string) error {
 	ctx, span := tracer.Tracer("").Start(ctx, "delete_oidc_mapping_sql")
 	defer span.End()
 
-	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		span.RecordError(err)
-		return fmt.Errorf("starting transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	ct, err := tx.Exec(ctx, `DELETE FROM trust WHERE tenant_id = $1;`, tenantID)
+	affected, err := r.queries.DeleteOIDCMapping(ctx, tenantID)
 	if err != nil {
 		span.RecordError(err)
 		return fmt.Errorf("executing sql query: %w", err)
 	}
 
-	if ct.RowsAffected() == 0 {
+	if affected == 0 {
 		return serviceerr.ErrNotFound
-	}
-
-	err = tx.Commit(ctx)
-	if err != nil {
-		span.RecordError(err)
-		return fmt.Errorf("committing tx: %w", err)
 	}
 
 	return nil
@@ -154,38 +114,28 @@ func (r *Repository) Update(ctx context.Context, tenantID string, mapping trust.
 	ctx, span := tracer.Tracer("").Start(ctx, "update_oidc_mapping_sql")
 	defer span.End()
 
-	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		span.RecordError(err)
-		return fmt.Errorf("starting transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	propsBytes, err := r.marshalProperties(mapping)
+	properties, err := r.marshalProperties(mapping)
 	if err != nil {
 		span.RecordError(err)
 		return err
 	}
 
-	// The audiences value is optional, so we use COALESCE to default to an empty array if it's nil
-	ct, err := tx.Exec(ctx,
-		`UPDATE trust
-			 SET blocked = $1, issuer = $2, jwks_uri = $3, audiences = COALESCE($4, '{}'::text[]), properties = $5, client_id = NULLIF($6, '')
-			 WHERE tenant_id = $7;`,
-		mapping.Blocked, mapping.IssuerURL, mapping.JWKSURI, mapping.Audiences, propsBytes, mapping.ClientID, tenantID)
+	affected, err := r.queries.UpdateOIDCMapping(ctx, queries.UpdateOIDCMappingParams{
+		Blocked:    mapping.Blocked,
+		Issuer:     mapping.IssuerURL,
+		JwksUri:    mapping.JWKSURI,
+		Audiences:  mapping.Audiences,
+		Properties: properties,
+		ClientID:   pgTextOrNull(mapping.ClientID),
+		TenantID:   tenantID,
+	})
 	if err != nil {
 		span.RecordError(err)
 		return fmt.Errorf("updating trust: %w", err)
 	}
 
-	if ct.RowsAffected() == 0 {
+	if affected == 0 {
 		return serviceerr.ErrNotFound
-	}
-
-	err = tx.Commit(ctx)
-	if err != nil {
-		span.RecordError(err)
-		return fmt.Errorf("committing tx: %w", err)
 	}
 
 	return nil
@@ -197,4 +147,11 @@ func (r *Repository) marshalProperties(mapping trust.OIDCMapping) ([]byte, error
 		return nil, fmt.Errorf("marshaling json: %w", err)
 	}
 	return propsBytes, nil
+}
+
+func pgTextOrNull(s string) pgtype.Text {
+	return pgtype.Text{
+		String: s,
+		Valid:  s != "",
+	}
 }

@@ -1,0 +1,13 @@
+version: "2"
+sql:
+    - engine: postgresql
+      queries: ./internal/trust/trustsql/queries.sql
+      schema: ./sql
+      gen:
+          go:
+              package: queries
+              out: ./internal/trust/trustsql/internal/queries
+              sql_package: pgx/v5
+              sql_driver: github.com/jackc/pgx/v5
+              emit_db_tags: true
+              emit_prepared_queries: true
