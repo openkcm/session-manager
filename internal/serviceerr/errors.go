@@ -37,6 +37,7 @@ const (
 	CodeStateExpired           Code = "state_expired"
 	CodeInvalidOIDCProvider    Code = "invalid_oidc_provider"
 	CodeInvalidCSRFToken       Code = "invalid_csrf_token"
+	CodeInvalidLoginCSRFToken  Code = "invalid_login_csrf_token"
 	CodeInvalidAtHashToken     Code = "invalid_at_hash_token"
 	CodeEndSessionNotSupported Code = "end_session_not_supported"
 )
@@ -74,6 +75,7 @@ var (
 	ErrUnauthorized           = newErr("unauthorized", CodeUnauthorizedClient)
 	ErrInvalidAtHash          = newErr("invalid atHash token", CodeInvalidAtHashToken)
 	ErrEndSessionNotSupported = newErr("the provider does not support end session", CodeEndSessionNotSupported)
+	ErrInvalidLoginCSRFToken  = newErr("invalid login CSRF token", CodeInvalidLoginCSRFToken)
 )
 
 //nolint:recvcheck

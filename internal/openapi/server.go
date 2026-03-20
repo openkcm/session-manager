@@ -35,8 +35,9 @@ type BclogoutFormdataBody struct {
 
 // CallbackParams defines parameters for Callback.
 type CallbackParams struct {
-	Code  string `form:"code" json:"code"`
-	State string `form:"state" json:"state"`
+	Code      string `form:"code" json:"code"`
+	State     string `form:"state" json:"state"`
+	LoginCSRF string `form:"LoginCSRF" json:"LoginCSRF"`
 }
 
 // LogoutParams defines parameters for Logout.
@@ -172,6 +173,24 @@ func (siw *ServerInterfaceWrapper) Callback(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
 		return
+	}
+
+	{
+		var cookie *http.Cookie
+
+		if cookie, err = r.Cookie("LoginCSRF"); err == nil {
+			var value string
+			err = runtime.BindStyledParameterWithOptions("simple", "LoginCSRF", cookie.Value, &value, runtime.BindStyledParameterOptions{Explode: true, Required: true})
+			if err != nil {
+				siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "LoginCSRF", Err: err})
+				return
+			}
+			params.LoginCSRF = value
+
+		} else {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "LoginCSRF"})
+			return
+		}
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -389,7 +408,8 @@ type AuthResponseObject interface {
 }
 
 type Auth302ResponseHeaders struct {
-	Location string
+	Location  string
+	SetCookie string
 }
 
 type Auth302Response struct {
@@ -398,6 +418,7 @@ type Auth302Response struct {
 
 func (response Auth302Response) VisitAuthResponse(w http.ResponseWriter) error {
 	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
 	w.WriteHeader(302)
 	return nil
 }

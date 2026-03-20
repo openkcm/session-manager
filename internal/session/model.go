@@ -6,12 +6,13 @@ import "time"
 // It is used to align the auth request with the callback and to store necessary
 // information for completing the authentication process.
 type State struct {
-	ID           string    // State ID to align the auth request with the callback
-	TenantID     string    // Tenant ID for which the login is done
-	Fingerprint  string    // Fingerprint to bind the login to a specific client
-	PKCEVerifier string    // PKCE verifier to validate the PKCE challenge
-	RequestURI   string    // Request URI for the eventual redirect
-	Expiry       time.Time // Expiry time of the login process
+	ID             string    // State ID to align the auth request with the callback
+	TenantID       string    // Tenant ID for which the login is done
+	Fingerprint    string    // Fingerprint to bind the login to a specific client
+	PKCEVerifier   string    // PKCE verifier to validate the PKCE challenge
+	RequestURI     string    // Request URI for the eventual redirect
+	Expiry         time.Time // Expiry time of the login process
+	LoginCSRFToken string    // CSRF token to prevent CSRF attacks
 }
 
 // Session represents a user session in our system.

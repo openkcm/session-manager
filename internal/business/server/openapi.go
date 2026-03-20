@@ -23,10 +23,11 @@ import (
 // sessionManager defines the interface for session management operations
 // used by the OpenAPI server.
 type sessionManager interface {
-	MakeAuthURI(ctx context.Context, tenantID, fingerprint, requestURI string) (string, error)
+	MakeAuthURI(ctx context.Context, tenantID, fingerprint, requestURI string) (string, string, error)
 	FinaliseOIDCLogin(ctx context.Context, state, code, fingerprint string) (session.OIDCSessionData, error)
 	MakeSessionCookie(ctx context.Context, tenantID, sessionID string) (*http.Cookie, error)
 	MakeCSRFCookie(ctx context.Context, tenantID, csrfToken string) (*http.Cookie, error)
+	MakeLoginCSRFCookie(ctx context.Context, csrfToken string) (*http.Cookie, error)
 	Logout(ctx context.Context, sessionID string) (string, error)
 	BCLogout(ctx context.Context, logoutToken string) error
 }
@@ -81,7 +82,7 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 		}, nil
 	}
 
-	url, err := s.sManager.MakeAuthURI(ctx, request.Params.TenantID, fingerprint, request.Params.RequestURI)
+	url, csrfToken, err := s.sManager.MakeAuthURI(ctx, request.Params.TenantID, fingerprint, request.Params.RequestURI)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to build auth URI")
@@ -93,11 +94,22 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 			StatusCode: status,
 		}, nil
 	}
+	loginCsrfCookie, err := s.sManager.MakeLoginCSRFCookie(ctx, csrfToken)
+	if err != nil {
+		span.RecordError(err)
+		slogctx.Error(ctx, "Failed to make CSRF cookie", "error", err)
+		body, status := s.toErrorModel(err)
+		return openapi.AuthdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
 
 	span.SetStatus(codes.Ok, "")
 	return openapi.Auth302Response{
 		Headers: openapi.Auth302ResponseHeaders{
-			Location: url,
+			Location:  url,
+			SetCookie: loginCsrfCookie.String(),
 		},
 	}, nil
 }
@@ -137,7 +149,16 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 			StatusCode: status,
 		}, nil
 	}
-
+	if !csrf.Validate(req.Params.LoginCSRF, req.Params.State, s.csrfSecret) {
+		err := serviceerr.ErrInvalidLoginCSRFToken
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		body, status := newBadRequest(err.Error())
+		return openapi.CallbackdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
 	result, err := s.sManager.FinaliseOIDCLogin(ctx, req.Params.State, req.Params.Code, currentFingerprint)
 	if err != nil {
 		span.RecordError(err)

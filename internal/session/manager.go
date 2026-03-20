@@ -30,6 +30,10 @@ import (
 	"github.com/openkcm/session-manager/internal/trust"
 )
 
+const (
+	LoginCSRFCookieName = "LoginCSRF"
+)
+
 type Manager struct {
 	trustRepo trust.OIDCMappingRepository
 	sessions  Repository
@@ -47,8 +51,9 @@ type Manager struct {
 	queryParametersLogout []string
 	postLogoutRedirectURL string
 
-	sessionCookieTemplate config.CookieTemplate
-	csrfCookieTemplate    config.CookieTemplate
+	sessionCookieTemplate   config.CookieTemplate
+	csrfCookieTemplate      config.CookieTemplate
+	loginCSRFCookieTemplate config.CookieTemplate
 
 	csrfSecret []byte
 
@@ -70,23 +75,24 @@ func NewManager(
 	}
 
 	m := &Manager{
-		trustRepo:             trustRepo,
-		sessions:              sessionsRepo,
-		audit:                 auditLogger,
-		sessionDuration:       cfg.SessionDuration,
-		idleSessionTimeout:    cfg.IdleSessionTimeout,
-		queryParametersAuth:   cfg.AdditionalQueryParametersAuthorize,
-		queryParametersToken:  cfg.AdditionalQueryParametersToken,
-		authContextKeys:       cfg.AdditionalAuthContextKeys,
-		queryParametersLogout: cfg.AdditionalQueryParametersLogout,
-		postLogoutRedirectURL: cfg.PostLogoutRedirectURL,
-		sessionCookieTemplate: cfg.SessionCookieTemplate,
-		csrfCookieTemplate:    cfg.CSRFCookieTemplate,
-		callbackURL:           callbackURL,
-		clientID:              cfg.ClientAuth.ClientID,
-		newCreds:              func(_ string) credentials.TransportCredentials { return credentials.NewDefault() },
-		csrfSecret:            cfg.CSRFSecretParsed,
-		cache:                 cache.New(2*time.Minute, 10*time.Minute),
+		trustRepo:               trustRepo,
+		sessions:                sessionsRepo,
+		audit:                   auditLogger,
+		sessionDuration:         cfg.SessionDuration,
+		idleSessionTimeout:      cfg.IdleSessionTimeout,
+		queryParametersAuth:     cfg.AdditionalQueryParametersAuthorize,
+		queryParametersToken:    cfg.AdditionalQueryParametersToken,
+		authContextKeys:         cfg.AdditionalAuthContextKeys,
+		queryParametersLogout:   cfg.AdditionalQueryParametersLogout,
+		postLogoutRedirectURL:   cfg.PostLogoutRedirectURL,
+		sessionCookieTemplate:   cfg.SessionCookieTemplate,
+		csrfCookieTemplate:      cfg.CSRFCookieTemplate,
+		loginCSRFCookieTemplate: cfg.LoginCSRFCookieTemplate,
+		callbackURL:             callbackURL,
+		clientID:                cfg.ClientAuth.ClientID,
+		newCreds:                func(_ string) credentials.TransportCredentials { return credentials.NewDefault() },
+		csrfSecret:              cfg.CSRFSecretParsed,
+		cache:                   cache.New(2*time.Minute, 10*time.Minute),
 	}
 
 	for _, opt := range opts {
@@ -99,40 +105,46 @@ func NewManager(
 }
 
 // MakeAuthURI returns an OIDC authentication URI.
-func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, requestURI string) (string, error) {
+func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, requestURI string) (string, string, error) {
 	mapping, err := m.trustRepo.Get(ctx, tenantID)
 	if err != nil {
-		return "", fmt.Errorf("getting trust mapping: %w", err)
+		return "", "", fmt.Errorf("getting trust mapping: %w", err)
 	}
 
 	openidConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL)
 	if err != nil {
-		return "", fmt.Errorf("getting an openid config: %w", err)
+		return "", "", fmt.Errorf("getting an openid config: %w", err)
 	}
 
 	stateID := m.pkce.State()
 	pkce := m.pkce.PKCE()
+	csrfToken := csrf.NewToken(stateID, m.csrfSecret)
 
 	state := State{
-		ID:           stateID,
-		TenantID:     tenantID,
-		Fingerprint:  fingerprint,
-		PKCEVerifier: pkce.Verifier,
-		RequestURI:   requestURI,
-		Expiry:       time.Now().Add(m.sessionDuration),
+		ID:             stateID,
+		TenantID:       tenantID,
+		Fingerprint:    fingerprint,
+		PKCEVerifier:   pkce.Verifier,
+		RequestURI:     requestURI,
+		Expiry:         time.Now().Add(m.sessionDuration),
+		LoginCSRFToken: csrfToken,
 	}
 
 	err = m.sessions.StoreState(ctx, state)
 	if err != nil {
-		return "", fmt.Errorf("storing session: %w", err)
+		return "", "", fmt.Errorf("storing session: %w", err)
 	}
 
 	u, err := m.authURI(openidConf, state, pkce, mapping)
 	if err != nil {
-		return "", fmt.Errorf("generating auth uri: %w", err)
+		return "", "", fmt.Errorf("generating auth uri: %w", err)
 	}
 
-	return u, nil
+	return u, csrfToken, nil
+}
+
+func (m *Manager) LoadState(ctx context.Context, stateID string) (State, error) {
+	return m.sessions.LoadState(ctx, stateID)
 }
 
 func (m *Manager) authURI(openidConf *oidc.Configuration, state State, pkce pkce.PKCE, mapping trust.OIDCMapping) (string, error) {
@@ -515,6 +527,7 @@ func (m *Manager) MakeSessionCookie(ctx context.Context, tenantID, value string)
 
 func (m *Manager) MakeCSRFCookie(ctx context.Context, tenantID, value string) (*http.Cookie, error) {
 	csrfCookie := m.csrfCookieTemplate.ToCookie(value)
+
 	if tenantID != "" {
 		csrfCookie.Name = csrfCookie.Name + "-" + tenantID
 	}
@@ -524,6 +537,25 @@ func (m *Manager) MakeCSRFCookie(ctx context.Context, tenantID, value string) (*
 		return nil, fmt.Errorf("invalid CSRF cookie: %w", err)
 	}
 
+	checkCookie(ctx, csrfCookie)
+
+	return csrfCookie, nil
+}
+
+func (m *Manager) MakeLoginCSRFCookie(ctx context.Context, value string) (*http.Cookie, error) {
+	loginCSRFCookie := m.loginCSRFCookieTemplate.ToCookie(value)
+	loginCSRFCookie.Name = LoginCSRFCookieName
+	err := loginCSRFCookie.Valid()
+	if err != nil {
+		return nil, fmt.Errorf("invalid CSRF cookie: %w", err)
+	}
+
+	checkCookie(ctx, loginCSRFCookie)
+
+	return loginCSRFCookie, nil
+}
+
+func checkCookie(ctx context.Context, csrfCookie *http.Cookie) {
 	if !csrfCookie.Secure {
 		slogctx.Warn(ctx, "CSRF cookie is not marked as Secure; this is not recommended in production environments")
 	}
@@ -533,8 +565,6 @@ func (m *Manager) MakeCSRFCookie(ctx context.Context, tenantID, value string) (*
 	if csrfCookie.SameSite != http.SameSiteStrictMode {
 		slogctx.Warn(ctx, "CSRF cookie is not marked as SameSite=Strict; this is not recommended in production environments")
 	}
-
-	return csrfCookie, nil
 }
 
 // sendUserLoginFailureAudit creates the user-login-failure audit event and sends it.
