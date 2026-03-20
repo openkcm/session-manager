@@ -4,12 +4,24 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
+	"net/http"
+	"net/url"
 
-	"github.com/openkcm/common-sdk/pkg/oidc"
+	"github.com/zitadel/oidc/v3/pkg/client"
+	"github.com/zitadel/oidc/v3/pkg/oidc"
 )
 
-func (m *Manager) getOpenIDConfig(ctx context.Context, issuerURL string) (*oidc.Configuration, error) {
+func (m *Manager) getOpenIDConfig(ctx context.Context, issuerURL string) (*oidc.DiscoveryConfiguration, error) {
 	const wkocPrefix = "wkoc_"
+
+	issuer, err := url.Parse(issuerURL)
+	if err != nil {
+		return nil, fmt.Errorf("parsing issuer url: %w", err)
+	}
+	if issuer.Scheme == "http" && !m.allowHttpScheme {
+		return nil, fmt.Errorf("insecure http issuer url is not allowed")
+	}
 
 	// first check the cache for a recent WKOC configuration for this issuer
 	hashedSuffix := sha256.Sum256([]byte(issuerURL))
@@ -17,7 +29,7 @@ func (m *Manager) getOpenIDConfig(ctx context.Context, issuerURL string) (*oidc.
 
 	cache, ok := m.cache.Get(cacheKey)
 	if ok {
-		value, ok := cache.(*oidc.Configuration)
+		value, ok := cache.(*oidc.DiscoveryConfiguration)
 		if ok {
 			return value, nil
 		}
@@ -25,15 +37,14 @@ func (m *Manager) getOpenIDConfig(ctx context.Context, issuerURL string) (*oidc.
 	}
 
 	// otherwise, fetch the configuration and cache it
-	provider, err := oidc.NewProvider(issuerURL, []string{},
-		oidc.WithAllowHttpScheme(m.allowHttpScheme),
-	)
-	if err != nil {
-		return nil, err
+	httpClient := m.secureClient
+	if httpClient == nil {
+		httpClient = http.DefaultClient
 	}
-	cfg, err := provider.GetConfiguration(ctx)
+
+	cfg, err := client.Discover(ctx, issuerURL, httpClient)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("discovering openid configuration: %w", err)
 	}
 	m.cache.Set(cacheKey, cfg, 0)
 
