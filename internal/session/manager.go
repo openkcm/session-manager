@@ -135,7 +135,7 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 	return u, nil
 }
 
-func (m *Manager) authURI(openidConf **zitadeloidc.DiscoveryConfiguration, state State, pkce pkce.PKCE, mapping trust.OIDCMapping) (string, error) {
+func (m *Manager) authURI(openidConf *zitadeloidc.DiscoveryConfiguration, state State, pkce pkce.PKCE, mapping trust.OIDCMapping) (string, error) {
 	u, err := url.Parse(openidConf.AuthorizationEndpoint)
 	if err != nil {
 		return "", fmt.Errorf("parsing authorisation endpoint url: %w", err)
@@ -597,7 +597,7 @@ func (m *Manager) getClientID(mapping trust.OIDCMapping) string {
 	return m.clientID
 }
 
-func (m *Manager) exchangeCode(ctx context.Context, openidConf **zitadeloidc.DiscoveryConfiguration, code, codeVerifier string, mapping trust.OIDCMapping) (tokenResponse, error) {
+func (m *Manager) exchangeCode(ctx context.Context, openidConf *zitadeloidc.DiscoveryConfiguration, code, codeVerifier string, mapping trust.OIDCMapping) (tokenResponse, error) {
 	data := url.Values{}
 	data.Set("grant_type", "authorization_code")
 	data.Set("code", code)
