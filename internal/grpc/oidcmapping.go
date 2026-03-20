@@ -35,6 +35,7 @@ func (srv *OIDCMappingServer) ApplyOIDCMapping(ctx context.Context, req *oidcmap
 		"jwksUri", req.GetJwksUri(),
 		"audiences", req.GetAudiences(),
 		"properties", req.GetProperties(),
+		"client_id", req.GetClientId(),
 	)
 	slogctx.Debug(ctx, "ApplyOIDCMapping called")
 
@@ -46,6 +47,7 @@ func (srv *OIDCMappingServer) ApplyOIDCMapping(ctx context.Context, req *oidcmap
 		JWKSURI:    req.GetJwksUri(),
 		Audiences:  req.GetAudiences(),
 		Properties: req.GetProperties(),
+		ClientID:   req.GetClientId(),
 	}
 	err := srv.oidc.ApplyMapping(ctx, req.GetTenantId(), mapping)
 	if err != nil {

@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"net/http"
 	"testing"
 	"time"
 
@@ -328,7 +327,7 @@ func startServer(t *testing.T, port int) (*stdgrpc.Server, *trust.Service, func(
 
 	srv := stdgrpc.NewServer()
 	oidcmappingv1.RegisterServiceServer(srv, grpc.NewOIDCMappingServer(service))
-	sessionv1.RegisterServiceServer(srv, grpc.NewSessionServer(nil, trustRepo, http.DefaultClient, time.Hour))
+	sessionv1.RegisterServiceServer(srv, grpc.NewSessionServer(nil, trustRepo, time.Hour))
 
 	// start
 	go func() {
