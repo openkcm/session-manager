@@ -17,7 +17,6 @@ import (
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/google/uuid"
 	"github.com/openkcm/common-sdk/pkg/csrf"
-	"github.com/openkcm/common-sdk/pkg/oidc"
 	"github.com/patrickmn/go-cache"
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
@@ -28,6 +27,7 @@ import (
 	"github.com/openkcm/session-manager/internal/pkce"
 	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/internal/trust"
+	zitadeloidc "github.com/zitadel/oidc/v3/pkg/oidc"
 )
 
 type Manager struct {
@@ -135,7 +135,7 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 	return u, nil
 }
 
-func (m *Manager) authURI(openidConf *oidc.Configuration, state State, pkce pkce.PKCE, mapping trust.OIDCMapping) (string, error) {
+func (m *Manager) authURI(openidConf *zitadeloidc.DiscoveryConfiguration, state State, pkce pkce.PKCE, mapping trust.OIDCMapping) (string, error) {
 	u, err := url.Parse(openidConf.AuthorizationEndpoint)
 	if err != nil {
 		return "", fmt.Errorf("parsing authorisation endpoint url: %w", err)
@@ -162,7 +162,7 @@ func (m *Manager) authURI(openidConf *oidc.Configuration, state State, pkce pkce
 	return u.String(), nil
 }
 
-func (m *Manager) getProviderKeySet(ctx context.Context, oidcConf *oidc.Configuration) (*jose.JSONWebKeySet, error) {
+func (m *Manager) getProviderKeySet(ctx context.Context, oidcConf *zitadeloidc.DiscoveryConfiguration) (*jose.JSONWebKeySet, error) {
 	var keySet jose.JSONWebKeySet
 	uri := oidcConf.JwksURI
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
@@ -597,7 +597,7 @@ func (m *Manager) getClientID(mapping trust.OIDCMapping) string {
 	return m.clientID
 }
 
-func (m *Manager) exchangeCode(ctx context.Context, openidConf *oidc.Configuration, code, codeVerifier string, mapping trust.OIDCMapping) (tokenResponse, error) {
+func (m *Manager) exchangeCode(ctx context.Context, openidConf *zitadeloidc.DiscoveryConfiguration, code, codeVerifier string, mapping trust.OIDCMapping) (tokenResponse, error) {
 	data := url.Values{}
 	data.Set("grant_type", "authorization_code")
 	data.Set("code", code)
