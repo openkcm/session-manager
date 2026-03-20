@@ -36,11 +36,9 @@ func (m *Manager) getOpenIDConfig(ctx context.Context, issuerURL string) (*oidc.
 		m.cache.Delete(cacheKey)
 	}
 
-	// otherwise, fetch the configuration and cache it
-	httpClient := m.secureClient
-	if httpClient == nil {
-		httpClient = http.DefaultClient
-	}
+	// Build an HTTP client using the default transport credentials (no per-mapping
+	// client ID is needed for the unauthenticated discovery endpoint).
+	httpClient := &http.Client{Transport: m.newCreds("").Transport()}
 
 	cfg, err := client.Discover(ctx, issuerURL, httpClient)
 	if err != nil {
