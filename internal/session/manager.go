@@ -163,10 +163,9 @@ func (m *Manager) authURI(openidConf *oidc.Configuration, state State, pkce pkce
 	q.Set("redirect_uri", m.callbackURL.String())
 	for _, parameter := range m.queryParametersAuth {
 		value, ok := mapping.Properties[parameter]
-		if !ok {
-			return "", fmt.Errorf("missing auth parameter: %s", parameter)
+		if ok {
+			q.Set(parameter, value)
 		}
-		q.Set(parameter, value)
 	}
 
 	u.RawQuery = q.Encode()
@@ -294,10 +293,9 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 	}
 	for _, parameter := range m.authContextKeys {
 		value, ok := mapping.Properties[parameter]
-		if !ok {
-			return OIDCSessionData{}, fmt.Errorf("missing auth context parameter: %s", parameter)
+		if ok {
+			authContext[parameter] = value
 		}
-		authContext[parameter] = value
 	}
 
 	session := Session{
@@ -409,13 +407,11 @@ func (m *Manager) Logout(ctx context.Context, sessionID string) (string, error) 
 		vals.Set("post_logout_redirect_uri", m.postLogoutRedirectURL)
 	}
 
-	for _, p := range m.queryParametersLogout {
-		v, ok := mapping.Properties[p]
-		if !ok {
-			return "", fmt.Errorf("missing auth parameter: %s", p)
+	for _, parameter := range m.queryParametersLogout {
+		value, ok := mapping.Properties[parameter]
+		if ok {
+			vals.Set(parameter, value)
 		}
-
-		vals.Set(p, v)
 	}
 
 	redirectURL.RawQuery = vals.Encode()
@@ -636,10 +632,9 @@ func (m *Manager) exchangeCode(ctx context.Context, openidConf *oidc.Configurati
 	data.Set("client_id", m.getClientID(mapping))
 	for _, parameter := range m.queryParametersToken {
 		value, ok := mapping.Properties[parameter]
-		if !ok {
-			return tokenResponse{}, fmt.Errorf("missing token parameter: %s", parameter)
+		if ok {
+			data.Set(parameter, value)
 		}
-		data.Set(parameter, value)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, openidConf.TokenEndpoint, strings.NewReader(data.Encode()))

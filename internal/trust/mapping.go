@@ -1,11 +1,5 @@
 package trust
 
-import (
-	"context"
-
-	slogctx "github.com/veqryn/slog-context"
-)
-
 type OIDCMapping struct {
 	IssuerURL  string
 	Blocked    bool
@@ -23,11 +17,9 @@ func (p *OIDCMapping) GetIntrospectParameters(keys []string) map[string]string {
 	params := make(map[string]string, len(keys))
 	for _, parameter := range keys {
 		value, ok := p.Properties[parameter]
-		if !ok {
-			slogctx.Error(context.Background(), "Missing introspect parameter", "parameter", parameter)
-			continue
+		if ok {
+			params[parameter] = value
 		}
-		params[parameter] = value
 	}
 	return params
 }

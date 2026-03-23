@@ -19,6 +19,7 @@ func (l localRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 }
 
 func Test_clientAuthRoundTripper_RoundTrip(t *testing.T) {
+	ctx := t.Context()
 	tests := []struct {
 		name         string
 		clientID     string
@@ -31,7 +32,7 @@ func Test_clientAuthRoundTripper_RoundTrip(t *testing.T) {
 			name:         "Round trip",
 			clientID:     "client-id",
 			clientSecret: "secret",
-			req:          httptest.NewRequest(http.MethodGet, "https://example.com", nil),
+			req:          httptest.NewRequestWithContext(ctx, http.MethodGet, "https://example.com", nil),
 			next: localRoundTripper{
 				handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(http.StatusNoContent)
