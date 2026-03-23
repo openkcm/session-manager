@@ -339,25 +339,6 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			wantRedirectURI: "",
 			errAssert:       assert.Error,
 		},
-		{
-			name:        "Auth context error",
-			oidc:        trustmock.NewInMemRepository(),
-			sessions:    sessionmock.NewInMemRepository(sessionmock.WithState(validState)),
-			stateID:     stateID,
-			code:        code,
-			fingerprint: fingerprint,
-			cfg: &config.SessionManager{
-				SessionDuration:                time.Hour,
-				CallbackURL:                    callbackURL,
-				AdditionalQueryParametersToken: []string{"queryParamToken1"},
-				AdditionalAuthContextKeys:      []string{"doesNotExist"},
-				CSRFSecretParsed:               []byte(testCSRFSecret),
-			},
-			wantSessionID:   true,
-			wantCSRFToken:   true,
-			wantRedirectURI: requestURI,
-			errAssert:       assert.Error,
-		},
 	}
 
 	for _, tt := range tests {

@@ -31,6 +31,7 @@ func TestInitMeters(t *testing.T) {
 }
 
 func TestNewTraceMiddleware(t *testing.T) {
+	ctx := t.Context()
 	t.Run("creates trace middleware", func(t *testing.T) {
 		cfg := &config.Config{
 			BaseConfig: commoncfg.BaseConfig{
@@ -76,12 +77,12 @@ func TestNewTraceMiddleware(t *testing.T) {
 		assert.NotNil(t, wrappedHandler)
 
 		// Create test request
-		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
 		req.Header.Set("User-Agent", "test-agent")
 		w := httptest.NewRecorder()
 
 		// Execute wrapped handler
-		response, err := wrappedHandler(context.Background(), w, req, nil)
+		response, err := wrappedHandler(ctx, w, req, nil)
 
 		require.NoError(t, err)
 		assert.True(t, handlerCalled)
@@ -111,10 +112,10 @@ func TestNewTraceMiddleware(t *testing.T) {
 
 		wrappedHandler := middleware(mockHandler, "ErrorOperation")
 
-		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
 		w := httptest.NewRecorder()
 
-		response, err := wrappedHandler(context.Background(), w, req, nil)
+		response, err := wrappedHandler(ctx, w, req, nil)
 
 		assert.Error(t, err)
 		assert.Equal(t, expectedError, err)
@@ -144,11 +145,11 @@ func TestNewTraceMiddleware(t *testing.T) {
 
 		wrappedHandler := middleware(mockHandler, "MetricsOperation")
 
-		req := httptest.NewRequest(http.MethodPost, "/metrics-test", nil)
+		req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/metrics-test", nil)
 		req.Header.Set("User-Agent", "metrics-test-agent")
 		w := httptest.NewRecorder()
 
-		response, err := wrappedHandler(context.Background(), w, req, map[string]string{"key": "value"})
+		response, err := wrappedHandler(ctx, w, req, map[string]string{"key": "value"})
 
 		require.NoError(t, err)
 		assert.Equal(t, "success", response)
@@ -179,12 +180,12 @@ func TestNewTraceMiddleware(t *testing.T) {
 
 		wrappedHandler := middleware(mockHandler, "TraceOperation")
 
-		req := httptest.NewRequest(http.MethodGet, "/trace-test", nil)
+		req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/trace-test", nil)
 		// Add trace headers
 		req.Header.Set("Traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
 		w := httptest.NewRecorder()
 
-		_, err = wrappedHandler(context.Background(), w, req, nil)
+		_, err = wrappedHandler(ctx, w, req, nil)
 
 		require.NoError(t, err)
 		assert.True(t, contextChecked)
@@ -215,10 +216,10 @@ func TestNewTraceMiddleware(t *testing.T) {
 
 		// Make multiple requests
 		for i := 1; i <= 3; i++ {
-			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
 			w := httptest.NewRecorder()
 
-			response, err := wrappedHandler(context.Background(), w, req, nil)
+			response, err := wrappedHandler(ctx, w, req, nil)
 
 			require.NoError(t, err)
 			assert.Equal(t, i, response)

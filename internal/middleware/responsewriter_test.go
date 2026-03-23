@@ -13,6 +13,7 @@ import (
 )
 
 func TestResponseWriterMiddleware(t *testing.T) {
+	ctx := t.Context()
 	// A flag to ensure the next handler was executed
 	var calledNextHandler bool
 
@@ -20,7 +21,7 @@ func TestResponseWriterMiddleware(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	// A standard request object
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
 
 	// 1. Define the next handler that verifies context injection
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

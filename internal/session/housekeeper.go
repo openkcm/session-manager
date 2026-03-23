@@ -112,10 +112,9 @@ func (m *Manager) refreshAccessToken(ctx context.Context, s Session) error {
 	data.Set("client_id", m.getClientID(mapping))
 	for _, parameter := range m.queryParametersToken {
 		value, ok := mapping.Properties[parameter]
-		if !ok {
-			return fmt.Errorf("missing token parameter: %s", parameter)
+		if ok {
+			data.Set(parameter, value)
 		}
-		data.Set(parameter, value)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, openidConf.TokenEndpoint, bytes.NewBufferString(data.Encode()))
