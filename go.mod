@@ -1,12 +1,13 @@
 module github.com/openkcm/session-manager
 
-go 1.25.6
+go 1.26.0
 
 toolchain go1.26.1
 
-tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
-
-tool github.com/sqlc-dev/sqlc/cmd/sqlc
+tool (
+	github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
+	github.com/sqlc-dev/sqlc/cmd/sqlc
+)
 
 require (
 	github.com/XSAM/otelsql v0.41.0

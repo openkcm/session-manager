@@ -11,7 +11,10 @@ import (
 	"github.com/openkcm/common-sdk/pkg/oidc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
+	rpcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/rpc/v1"
 	sessionv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/session/v1"
 
 	"github.com/openkcm/session-manager/internal/grpc"
@@ -401,9 +404,21 @@ func TestGetSession(t *testing.T) {
 
 		resp, err := server.GetSession(ctx, req)
 
-		require.NoError(t, err)
-		assert.NotNil(t, resp)
-		assert.False(t, resp.GetValid())
+		require.Error(t, err)
+		st, ok := status.FromError(err)
+		require.True(t, ok)
+
+		require.Equal(t, codes.FailedPrecondition, st.Code())
+
+		details := st.Details()
+		require.Len(t, details, 1)
+
+		pf, ok := details[0].(*rpcv1.PreconditionFailure)
+		require.True(t, ok)
+
+		require.Equal(t, "tenant_blocked", pf.GetViolations()[0].GetType())
+
+		assert.Nil(t, resp)
 	})
 
 	t.Run("invalid - fingerprint mismatch", func(t *testing.T) {
