@@ -204,7 +204,9 @@ func startSessionServer(t *testing.T, port int) (*stdgrpc.Server, session.Reposi
 	// start
 	go func() {
 		err = srv.Serve(lis)
-		slogctx.Error(ctx, "error while starting session server", "error", err)
+		if err != nil {
+			slogctx.Error(ctx, "error while starting session server", "error", err)
+		}
 	}()
 
 	return srv, sessionRepo, terminateFn, nil

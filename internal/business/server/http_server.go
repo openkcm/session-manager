@@ -70,6 +70,7 @@ func StartHTTPServer(ctx context.Context, cfg *config.Config, sManager *session.
 
 	listener, err := new(net.ListenConfig).Listen(ctx, network, server.Addr)
 	if err != nil {
+		slogctx.Error(ctx, "failed to create a listener", "error", err, "network", network, "address", server.Addr)
 		return oops.In("HTTP Server").
 			WithContext(ctx).
 			Wrapf(err, "Failed to create a listener")

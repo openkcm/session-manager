@@ -409,6 +409,7 @@ func TestInternalMain_InvalidValkeyConfig(t *testing.T) {
 
 	err := internalMain(t.Context(), cfg)
 	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to create valkey client")
 	// Could fail on OIDC (DB connection) or valkey
 	// Error details depend on which step fails
 }
@@ -421,9 +422,7 @@ func TestMain_InvalidCSRFSecret(t *testing.T) {
 	}
 
 	err := Main(t.Context(), cfg)
-	// Main returns nil but publicMain will fail with CSRF error
-	// The error is logged but Main itself returns nil as designed
-	assert.NoError(t, err)
+	assert.Error(t, err)
 }
 
 func TestMain_PublicServerInvalidCSRF(t *testing.T) {
@@ -441,8 +440,7 @@ func TestMain_PublicServerInvalidCSRF(t *testing.T) {
 	}
 
 	err := Main(t.Context(), cfg)
-	// Main captures error and shuts down, returning nil
-	assert.NoError(t, err)
+	assert.Error(t, err)
 }
 
 func TestMain_InternalServerInvalidDatabase(t *testing.T) {
@@ -468,6 +466,5 @@ func TestMain_InternalServerInvalidDatabase(t *testing.T) {
 	}
 
 	err := Main(t.Context(), cfg)
-	// Main captures error and shuts down, returning nil
-	assert.NoError(t, err)
+	assert.Error(t, err)
 }

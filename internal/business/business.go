@@ -55,7 +55,7 @@ func Main(ctx context.Context, cfg *config.Config) error {
 	// wait for all servers to shutdown
 	wg.Wait()
 
-	return nil
+	return err
 }
 
 // publicMain starts the HTTP REST public API server.

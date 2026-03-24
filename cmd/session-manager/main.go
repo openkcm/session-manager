@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -69,13 +68,11 @@ func execute() error {
 	err := rootCmd().ExecuteContext(ctx)
 	if err != nil {
 		slogctx.Error(ctx, "failed to start the application", "error", err)
-		_, _ = fmt.Fprintln(os.Stderr, err)
-
 		return err
 	}
 
 	if !isVersionCmd {
-		_, _ = fmt.Fprintf(os.Stderr, "Graceful shutdown in %s\n", gracefulShutdown)
+		slogctx.Info(ctx, "Graceful shutdown", "duration", gracefulShutdown)
 		time.Sleep(gracefulShutdown)
 	}
 

@@ -20,7 +20,7 @@ func TestHousekeeper(t *testing.T) {
 
 	ctx := t.Context()
 
-	istat := initInfra(t, cmdName)
+	istat := initInfra(t)
 	defer istat.Close(ctx)
 
 	istat.PreparePostgres(t)
