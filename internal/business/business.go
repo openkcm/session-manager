@@ -97,12 +97,21 @@ func internalMain(ctx context.Context, cfg *config.Config) error {
 	defer valkeyClient.Close()
 	sessionRepo := sessionvalkey.NewRepository(valkeyClient, cfg.ValKey.Prefix)
 
+	credsBuilder, err := newCredsBuilder(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to load http client: %w", err)
+	}
+
 	// Initialize the gRPC servers.
 	oidcmappingsrv := grpc.NewOIDCMappingServer(trustService)
-	opts := []grpc.SessionServerOption{
+	sessionsrv := grpc.NewSessionServer(
+		sessionRepo,
+		trustRepo,
+		cfg.SessionManager.IdleSessionTimeout,
+		cfg.SessionManager.ClientAuth.ClientID,
 		grpc.WithQueryParametersIntrospect(cfg.SessionManager.AdditionalQueryParametersIntrospect),
-	}
-	sessionsrv := grpc.NewSessionServer(sessionRepo, trustRepo, cfg.SessionManager.IdleSessionTimeout, opts...)
+		grpc.WithTransportCredentials(credsBuilder),
+	)
 	return server.StartGRPCServer(ctx, cfg, oidcmappingsrv, sessionsrv)
 }
 
@@ -207,7 +216,7 @@ func valkeyClientFromConfig(cfg *config.Config) (valkey.Client, error) {
 	return valkeyClient, nil
 }
 
-func newCredsBuilder(cfg *config.Config) (session.CredentialsBuilder, error) {
+func newCredsBuilder(cfg *config.Config) (credentials.Builder, error) {
 	switch cfg.SessionManager.ClientAuth.Type {
 	case "mtls":
 		tlsConfig, err := commoncfg.LoadMTLSConfig(cfg.SessionManager.ClientAuth.MTLS)

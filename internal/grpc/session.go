@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/openkcm/common-sdk/pkg/oidc"
@@ -20,33 +21,22 @@ import (
 	slogctx "github.com/veqryn/slog-context"
 	grpccodes "google.golang.org/grpc/codes"
 
+	"github.com/openkcm/session-manager/internal/credentials"
 	"github.com/openkcm/session-manager/internal/session"
 	"github.com/openkcm/session-manager/internal/trust"
 )
-
-type SessionServerOption func(*SessionServer)
-
-func WithQueryParametersIntrospect(params []string) SessionServerOption {
-	return func(s *SessionServer) {
-		s.queryParametersIntrospect = params
-	}
-}
-
-func WithAllowHttpScheme(allow bool) SessionServerOption {
-	return func(s *SessionServer) {
-		s.allowHttpScheme = allow
-	}
-}
 
 type SessionServer struct {
 	sessionv1.UnimplementedServiceServer
 
 	sessionRepo session.Repository
 	trustRepo   trust.OIDCMappingRepository
+	newCreds    credentials.Builder
 
 	queryParametersIntrospect []string
 	idleSessionTimeout        time.Duration
 	allowHttpScheme           bool
+	clientID                  string
 
 	cache *cache.Cache
 }
@@ -55,6 +45,7 @@ func NewSessionServer(
 	sessionRepo session.Repository,
 	trustRepo trust.OIDCMappingRepository,
 	idleSessionTimeout time.Duration,
+	clientID string,
 	opts ...SessionServerOption,
 ) *SessionServer {
 	s := &SessionServer{
@@ -62,6 +53,8 @@ func NewSessionServer(
 		trustRepo:          trustRepo,
 		idleSessionTimeout: idleSessionTimeout,
 		cache:              cache.New(2*time.Minute, 10*time.Minute),
+		newCreds:           func(_ string) credentials.TransportCredentials { return credentials.NewDefault() },
+		clientID:           clientID,
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -208,6 +201,21 @@ func (s *SessionServer) GetOIDCProvider(ctx context.Context, req *sessionv1.GetO
 	}, nil
 }
 
+func (s *SessionServer) getClientID(mapping *trust.OIDCMapping) string {
+	if mapping.ClientID != "" {
+		return mapping.ClientID
+	}
+
+	return s.clientID
+}
+
+func (s *SessionServer) httpClient(mapping *trust.OIDCMapping) *http.Client {
+	creds := s.newCreds(s.getClientID(mapping))
+	return &http.Client{
+		Transport: creds.Transport(),
+	}
+}
+
 func (s *SessionServer) introspectToken(ctx context.Context, token string, oidcTrust *trust.OIDCMapping) (oidc.Introspection, error) {
 	const introspectPrefix = "introspect_"
 
@@ -224,10 +232,13 @@ func (s *SessionServer) introspectToken(ctx context.Context, token string, oidcT
 		s.cache.Delete(cacheKey)
 	}
 
+	httpClient := s.httpClient(oidcTrust)
+
 	// create the provider for the given issuer
 	provider, err := oidc.NewProvider(oidcTrust.IssuerURL, oidcTrust.Audiences,
 		oidc.WithIntrospectQueryParameters(oidcTrust.GetIntrospectParameters(s.queryParametersIntrospect)),
 		oidc.WithAllowHttpScheme(s.allowHttpScheme),
+		oidc.WithSecureHTTPClient(httpClient),
 	)
 	if err != nil {
 		slogctx.Error(ctx, "Could not create OpenID provider", "issuer", oidcTrust.IssuerURL, "error", err)

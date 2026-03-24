@@ -767,7 +767,7 @@ func (tc transportCredentials) Transport() http.RoundTripper {
 	return tc.rt
 }
 
-func newTCBuilder(rt localRoundTripper) session.CredentialsBuilder {
+func newTCBuilder(rt localRoundTripper) credentials.Builder {
 	return func(clientID string) credentials.TransportCredentials {
 		return transportCredentials{
 			rt: rt,
