@@ -32,19 +32,16 @@ type infraStat struct {
 	closeFuncs []closeFunc
 }
 
-func initInfra(t *testing.T, cmdName string) (istat infraStat) {
+func initInfra(t *testing.T) (istat infraStat) {
 	t.Helper()
 
 	// Since the config is read from the file $PWD/config.yaml,
-	// we're running a process in a subdirectory so that we aren't interfering with the other tests.
-	wd, err := os.Getwd()
-	require.NoError(t, err, "failed to get wd")
-	istat.Procdir = filepath.Join(wd, cmdName+"-test")
-	istat.ConfigFilePath = filepath.Join(istat.Procdir, "config.yaml")
-
-	// Prepare a directory for the test
-	err = os.MkdirAll(istat.Procdir, fs.ModePerm)
-	require.NoError(t, err, "failed to create a dir for the process")
+	// we're running a process in a temporary subdirectory
+	// so that we aren't interfering with the other tests.
+	procDir, err := os.MkdirTemp("", "*")
+	require.NoError(t, err, "failed to create a temp dir")
+	istat.Procdir = procDir
+	istat.ConfigFilePath = filepath.Join(procDir, "config.yaml")
 
 	err = os.WriteFile(istat.ConfigFilePath, []byte(validConfig), fs.ModePerm)
 	require.NoError(t, err, "failed to write config file")
@@ -53,8 +50,14 @@ func initInfra(t *testing.T, cmdName string) (istat infraStat) {
 	require.NoError(t, err, "failed to load config")
 
 	// Let OS choose a free port
-	istat.Cfg.HTTP.Address = "unix://" + filepath.Join(istat.Procdir, cmdName+".sock")
+	istat.Cfg.HTTP.Address = "unix://" + filepath.Join(procDir, "unix.sock")
 	istat.Cfg.GRPC.Address = ":0"
+	istat.Cfg.Logger.Format = commoncfg.TextLoggerFormat
+
+	// There's a hard limit of 108 symbols on a unix socket filepath on Linux/macOS.
+	if len(istat.Cfg.HTTP.Address) > 108 {
+		t.Fatal("Unix socket path is too long")
+	}
 
 	return istat
 }

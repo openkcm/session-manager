@@ -30,9 +30,10 @@ func CobraCommand(
 	businesFunc func(context.Context, *config.Config) error,
 ) *cobra.Command {
 	return &cobra.Command{
-		Use:   use,
-		Short: short,
-		Long:  long,
+		Use:          use,
+		Short:        short,
+		Long:         long,
+		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := loadConfig(buildInfo)
 			if err != nil {

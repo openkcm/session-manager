@@ -95,11 +95,13 @@ func (srv *OIDCMappingServer) RemoveOIDCMapping(ctx context.Context, req *oidcma
 	resp := &oidcmappingv1.RemoveOIDCMappingResponse{}
 	err := srv.oidc.RemoveMapping(ctx, req.GetTenantId())
 	if err != nil {
-		slogctx.Error(ctx, "Could not remove OIDC mapping", "error", err)
 		if !errors.Is(err, serviceerr.ErrNotFound) {
+			slogctx.Error(ctx, "Could not remove OIDC mapping", "error", err)
 			msg := err.Error()
 			resp.Message = &msg
 			return resp, status.Error(codes.Internal, "failed to remove OIDC mapping: "+msg)
+		} else {
+			slogctx.Warn(ctx, "RemoveOIDCMapping is called but the tenant does not exist", "error", err)
 		}
 	}
 

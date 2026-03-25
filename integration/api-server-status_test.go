@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,7 +23,7 @@ func TestStatusServer(t *testing.T) {
 
 	ctx := t.Context()
 
-	istat := initInfra(t, cmdName)
+	istat := initInfra(t)
 	defer istat.Close(ctx)
 
 	istat.PreparePostgres(t)
@@ -81,11 +82,11 @@ func TestStatusServer(t *testing.T) {
 	}
 
 	// give the server some time to start before running the test
-	for i := 100; i > 0; i-- {
+	for i := 100; i >= 0; i-- {
 		if i < 1 {
 			t.Fatalf("could not connect to server: %s", err)
 		}
-		if _, err := http.Get("http://localhost:8888/"); err == nil {
+		if _, err := http.Get("http://localhost:8888"); err == nil {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -95,7 +96,12 @@ func TestStatusServer(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Act
-			resp, err := http.Get("http://localhost:8888/" + tc.endpoint)
+			u, err := url.JoinPath("http://localhost:8888", tc.endpoint)
+			if err != nil {
+				t.Fatalf("could not construct a request url: %s", err)
+			}
+
+			resp, err := http.Get(u)
 			if err != nil {
 				t.Fatalf("could not send request: %s", err)
 			}

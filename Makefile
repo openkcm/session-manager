@@ -127,7 +127,7 @@ test: clean install-gotestsum
 	@go clean -testcache
 
 	gotestsum --junitfile="${CURDIR}/junit-unit.xml" --format=testname -- -count=1 -race -cover ./... -args -test.gocoverdir="${CURDIR}/cover/unit"
-	GOCOVERDIR="${CURDIR}/cover/integration" gotestsum --junitfile="${CURDIR}/junit-integration.xml" --format=testname -- -v -count=1 -race --tags=integration ./integration
+	GOCOVERDIR="${CURDIR}/cover/integration" gotestsum --junitfile="${CURDIR}/junit-integration.xml" --format=testname -- -v -count=1 -race -tags=integration ./integration
 
 	@go tool covdata textfmt -i=./cover/unit,./cover/integration -o cover.out
 	@grep -v 'github.com/openkcm/session-manager/internal/openapi/'         cover.out > cover.tmp && mv cover.tmp cover.out

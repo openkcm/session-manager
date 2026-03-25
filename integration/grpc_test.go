@@ -332,7 +332,9 @@ func startServer(t *testing.T, port int) (*stdgrpc.Server, *trust.Service, func(
 	// start
 	go func() {
 		err = srv.Serve(lis)
-		slogctx.Error(ctx, "error while starting server", "error", err)
+		if err != nil {
+			slogctx.Error(ctx, "error while starting server", "error", err)
+		}
 	}()
 
 	return srv, service, terminateFn, nil
