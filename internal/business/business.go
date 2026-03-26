@@ -99,7 +99,7 @@ func internalMain(ctx context.Context, cfg *config.Config) error {
 
 	credsBuilder, err := newCredsBuilder(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to load http client: %w", err)
+		return fmt.Errorf("failed to create a credentials builder: %w", err)
 	}
 
 	// Initialize the gRPC servers.
