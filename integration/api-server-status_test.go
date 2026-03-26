@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"syscall"
 	"testing"
 	"time"
 
@@ -56,7 +55,7 @@ func TestStatusServer(t *testing.T) {
 	}
 	// defer the graceful stop of the service so that coverprofiles are written
 	defer func() {
-		syscall.Kill(cmd.Process.Pid, syscall.SIGTERM)
+		cmd.Process.Signal(os.Interrupt)
 		cmd.Wait()
 	}()
 
