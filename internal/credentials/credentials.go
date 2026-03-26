@@ -25,3 +25,5 @@ func (rt *clientAuthRoundTripper) RoundTrip(req *http.Request) (*http.Response, 
 
 	return rt.next.RoundTrip(req)
 }
+
+type Builder func(clientID string) TransportCredentials

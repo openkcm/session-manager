@@ -36,6 +36,8 @@ func TestHousekeeper(t *testing.T) {
 	defer cancelCommand()
 
 	cmd := exec.CommandContext(commandCtx, filepath.Join(currdir, "./session-manager"), cmdName)
+	cmd.WaitDelay = 5 * time.Second
+	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 
 	cmdOutPath := filepath.Join(currdir, cmdName+".log")
 	cmdOut, err := os.Create(cmdOutPath)
@@ -49,8 +51,7 @@ func TestHousekeeper(t *testing.T) {
 	t.Logf("starting housekeeper process. Logs will be saved into %s", cmdOutPath)
 	err = cmd.Run()
 	if err != nil && !errors.Is(err, context.Canceled) {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			if ws, ok := exitErr.Sys().(syscall.WaitStatus); ok && !ws.Signaled() {
 				t.Fatalf("process exited abnormally: %s", err)
 			}

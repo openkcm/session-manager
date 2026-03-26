@@ -39,7 +39,7 @@ type Manager struct {
 	sessions  Repository
 	pkce      pkce.Source
 	audit     *otlpaudit.AuditLogger
-	newCreds  CredentialsBuilder
+	newCreds  credentials.Builder
 
 	sessionDuration       time.Duration
 	idleSessionTimeout    time.Duration
