@@ -25,10 +25,13 @@ import (
 
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/credentials"
+	"github.com/openkcm/session-manager/internal/debugtools"
 	"github.com/openkcm/session-manager/internal/pkce"
 	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/internal/trust"
 )
+
+var debugSettingSMDumpTransport = debugtools.NewSetting("smdumptransport")
 
 const (
 	LoginCSRFCookieName = "LoginCSRF"
@@ -610,8 +613,13 @@ func (m *Manager) verifyAccessToken(accessToken, atHash string, idToken *jwt.JSO
 
 func (m *Manager) httpClient(mapping trust.OIDCMapping) *http.Client {
 	creds := m.newCreds(m.getClientID(mapping))
+	transport := creds.Transport()
+	if debugSettingSMDumpTransport.Value() == "1" {
+		transport = debugtools.NewTransport(transport)
+	}
+
 	return &http.Client{
-		Transport: creds.Transport(),
+		Transport: transport,
 	}
 }
 
