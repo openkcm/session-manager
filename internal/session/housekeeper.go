@@ -101,7 +101,7 @@ func (m *Manager) refreshAccessToken(ctx context.Context, s Session) error {
 		return fmt.Errorf("could not get trust mapping: %w", err)
 	}
 
-	openidConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL)
+	openidConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL, mapping)
 	if err != nil {
 		return fmt.Errorf("could not get OpenID configuration: %w", err)
 	}

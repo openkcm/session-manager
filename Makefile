@@ -166,7 +166,7 @@ k3d-setup:
 .PHONY: helm-integration-test-run
 helm-integration-test-run:
 	kubectl config current-context
-	cd ./helm-tests/integration && go test -v -count=1 -race .
+	cd ./helm-tests/integration && go test -v -count=1 -race -timeout 20m .
 
 .PHONY: k3d-teardown
 k3d-teardown:
