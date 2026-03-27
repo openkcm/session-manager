@@ -22,9 +22,12 @@ import (
 	grpccodes "google.golang.org/grpc/codes"
 
 	"github.com/openkcm/session-manager/internal/credentials"
+	"github.com/openkcm/session-manager/internal/debugtools"
 	"github.com/openkcm/session-manager/internal/session"
 	"github.com/openkcm/session-manager/internal/trust"
 )
+
+var debugSettingSMDumpTransport = debugtools.NewSetting("smdumptransport")
 
 type SessionServer struct {
 	sessionv1.UnimplementedServiceServer
@@ -211,8 +214,13 @@ func (s *SessionServer) getClientID(mapping *trust.OIDCMapping) string {
 
 func (s *SessionServer) httpClient(mapping *trust.OIDCMapping) *http.Client {
 	creds := s.newCreds(s.getClientID(mapping))
+	transport := creds.Transport()
+	if debugSettingSMDumpTransport.Value() == "1" {
+		transport = debugtools.NewTransport(transport)
+	}
+
 	return &http.Client{
-		Transport: creds.Transport(),
+		Transport: transport,
 	}
 }
 
