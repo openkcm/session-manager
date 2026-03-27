@@ -18,7 +18,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.1
-	github.com/oapi-codegen/runtime v1.3.0
+	github.com/oapi-codegen/runtime v1.3.1
 	github.com/openkcm/api-sdk v0.16.0
 	github.com/openkcm/common-sdk v1.14.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
