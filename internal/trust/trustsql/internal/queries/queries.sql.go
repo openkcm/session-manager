@@ -25,7 +25,7 @@ VALUES (
     $2,
     $3,
     $4,
-    $5,
+    COALESCE($5::text[], '{}'::text[]),
     $6,
     $7)
 `
@@ -107,7 +107,7 @@ SET
     blocked = $1,
     issuer = $2,
     jwks_uri = $3,
-    audiences = $4,
+    audiences = COALESCE($4::text[], '{}'::text[]),
     properties = $5,
     client_id = $6
 WHERE
