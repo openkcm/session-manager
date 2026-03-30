@@ -6,18 +6,18 @@ import (
 	"testing"
 )
 
-func TestNewClientSecret(t *testing.T) {
+func TestNewClientSecretPost(t *testing.T) {
 	tests := []struct {
 		name         string
 		clientID     string
 		clientSecret string
-		want         *ClientSecret
+		want         *ClientSecretPost
 	}{
 		{
 			name:         "Success",
 			clientID:     "client-id",
 			clientSecret: "secret",
-			want: &ClientSecret{
+			want: &ClientSecretPost{
 				ClientID:     "client-id",
 				ClientSecret: "secret",
 			},
@@ -25,14 +25,14 @@ func TestNewClientSecret(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := NewClientSecret(tt.clientID, tt.clientSecret); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("NewClientSecret() = %v, want %v", got, tt.want)
+			if got := NewClientSecretPost(tt.clientID, tt.clientSecret); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NewClientSecretPost() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestClientSecret_Transport(t *testing.T) {
+func TestClientSecretPost_Transport(t *testing.T) {
 	tests := []struct {
 		name         string
 		ClientID     string
@@ -52,7 +52,7 @@ func TestClientSecret_Transport(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := &ClientSecret{
+			c := &ClientSecretPost{
 				ClientID:     tt.ClientID,
 				ClientSecret: tt.ClientSecret,
 			}

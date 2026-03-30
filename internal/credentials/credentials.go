@@ -1,8 +1,14 @@
 package credentials
 
 import (
+	"fmt"
+	"io"
 	"net/http"
+	"strings"
 )
+
+const contentType = "Content-Type"
+const urlencoded = "application/x-www-form-urlencoded"
 
 type TransportCredentials interface {
 	Transport() http.RoundTripper
@@ -15,13 +21,34 @@ type clientAuthRoundTripper struct {
 }
 
 func (rt *clientAuthRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	q := req.URL.Query()
+	if req.Method == http.MethodPost && req.Header.Get(contentType) == urlencoded {
+		if req.Body == nil {
+			req.Body = http.NoBody
+		}
 
-	q.Set("client_id", rt.clientID)
-	if rt.clientSecret != "" {
-		q.Set("client_secret", rt.clientSecret)
+		if err := req.ParseForm(); err != nil {
+			return nil, fmt.Errorf("parsing form: %w", err)
+		}
+
+		q := req.PostForm
+		q.Set("client_id", rt.clientID)
+		if rt.clientSecret != "" {
+			q.Set("client_secret", rt.clientSecret)
+		}
+
+		req.Form = nil
+		req.PostForm = nil
+
+		s := strings.NewReader(q.Encode())
+		req.Body = io.NopCloser(s)
+		req.ContentLength = int64(s.Len())
+
+		snapshot := *s
+		req.GetBody = func() (io.ReadCloser, error) {
+			r := snapshot
+			return io.NopCloser(&r), nil
+		}
 	}
-	req.URL.RawQuery = q.Encode()
 
 	return rt.next.RoundTrip(req)
 }

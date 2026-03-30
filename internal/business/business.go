@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"github.com/exaring/otelpgx"
@@ -225,17 +226,18 @@ func newCredsBuilder(cfg *config.Config) (credentials.Builder, error) {
 		}
 
 		return func(clientID string) credentials.TransportCredentials { return credentials.NewTLS(clientID, tlsConfig) }, nil
-	case "client_secret":
+	case "client_secret", "client_secret_post":
 		secret, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.ClientAuth.ClientSecret)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load client secret: %w", err)
 		}
 
 		return func(clientID string) credentials.TransportCredentials {
-			return credentials.NewClientSecret(clientID, string(secret))
+			return credentials.NewClientSecretPost(clientID, string(secret))
 		}, nil
 	case "insecure":
-		return func(_ string) credentials.TransportCredentials { return credentials.NewDefault() }, nil
+		slog.Warn("insecure credentials are used. Do not use this in production")
+		return func(clientID string) credentials.TransportCredentials { return credentials.NewInsecure(clientID) }, nil
 	default:
 		return nil, errors.New("unknown Client Auth type")
 	}
