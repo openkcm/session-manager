@@ -23,7 +23,7 @@ VALUES (
     sqlc.arg(blocked),
     sqlc.arg(issuer),
     sqlc.arg(jwks_uri),
-    sqlc.arg(audiences),
+    COALESCE(sqlc.arg(audiences)::text[], '{}'::text[]),
     sqlc.arg(properties),
     sqlc.arg(client_id));
 
@@ -37,7 +37,7 @@ SET
     blocked = sqlc.arg(blocked),
     issuer = sqlc.arg(issuer),
     jwks_uri = sqlc.arg(jwks_uri),
-    audiences = sqlc.arg(audiences),
+    audiences = COALESCE(sqlc.arg(audiences)::text[], '{}'::text[]),
     properties = sqlc.arg(properties),
     client_id = sqlc.arg(client_id)
 WHERE
