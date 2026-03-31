@@ -1,9 +1,11 @@
 package business
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
@@ -52,7 +54,7 @@ func TestLoadHTTPClient_ClientSecret(t *testing.T) {
 
 	// Verify it's using our custom transport
 	creds := builder(cfg.SessionManager.ClientAuth.ClientID)
-	clientSecretCreds, ok := creds.(*credentials.ClientSecret)
+	clientSecretCreds, ok := creds.(*credentials.ClientSecretPost)
 	require.True(t, ok)
 
 	assert.Equal(t, "test-client", clientSecretCreds.ClientID)
@@ -71,7 +73,7 @@ func TestLoadHTTPClient_Insecure(t *testing.T) {
 
 	builder, err := newCredsBuilder(cfg)
 	require.NoError(t, err)
-	assert.IsType(t, &credentials.Default{}, builder(""))
+	assert.IsType(t, &credentials.Insecure{}, builder(""))
 }
 
 func TestLoadHTTPClient_UnknownType(t *testing.T) {
@@ -98,6 +100,7 @@ func TestClientAuthRoundTripper_RoundTrip(t *testing.T) {
 		expectedClientID  string
 		expectedHasSecret bool
 		expectedSecretVal string
+		body              io.Reader
 	}{
 		{
 			name:              "With client secret",
@@ -120,10 +123,11 @@ func TestClientAuthRoundTripper_RoundTrip(t *testing.T) {
 			name:              "With existing query params",
 			clientID:          "my-client",
 			clientSecret:      "my-secret",
-			requestURL:        "https://example.com/token?foo=bar",
+			requestURL:        "https://example.com/token",
 			expectedClientID:  "my-client",
 			expectedHasSecret: true,
 			expectedSecretVal: "my-secret",
+			body:              strings.NewReader("foo=bar"),
 		},
 	}
 
@@ -134,13 +138,14 @@ func TestClientAuthRoundTripper_RoundTrip(t *testing.T) {
 			// Create a test server that captures the request
 			var capturedReq *http.Request
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_ = r.ParseForm()
 				capturedReq = r
 				w.WriteHeader(http.StatusOK)
 			}))
 			defer server.Close()
 
 			// Create the round tripper
-			creds := credentials.NewClientSecret(tt.clientID, tt.clientSecret)
+			creds := credentials.NewClientSecretPost(tt.clientID, tt.clientSecret)
 
 			// Parse the test URL
 			reqURL, err := url.Parse(tt.requestURL)
@@ -151,7 +156,8 @@ func TestClientAuthRoundTripper_RoundTrip(t *testing.T) {
 			reqURL.Host = server.Listener.Addr().String()
 
 			// Create and execute request
-			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, reqURL.String(), nil)
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, reqURL.String(), tt.body)
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			require.NoError(t, err)
 
 			resp, err := creds.Transport().RoundTrip(req)
@@ -161,19 +167,23 @@ func TestClientAuthRoundTripper_RoundTrip(t *testing.T) {
 
 			// Verify the captured request has correct query params
 			require.NotNil(t, capturedReq)
-			query := capturedReq.URL.Query()
 
-			assert.Equal(t, tt.expectedClientID, query.Get("client_id"))
+			assert.Equal(t, tt.expectedClientID, capturedReq.FormValue("client_id"))
 
 			if tt.expectedHasSecret {
-				assert.Equal(t, tt.expectedSecretVal, query.Get("client_secret"))
+				assert.Equal(t, tt.expectedSecretVal, capturedReq.FormValue("client_secret"))
 			} else {
-				assert.Empty(t, query.Get("client_secret"))
+				assert.Empty(t, capturedReq.FormValue("client_secret"))
 			}
 
 			// Verify original query params are preserved
-			if tt.requestURL == "https://example.com/token?foo=bar" {
-				assert.Equal(t, "bar", query.Get("foo"))
+			if tt.body != nil {
+				b, _ := io.ReadAll(tt.body)
+				q, _ := url.ParseQuery(string(b))
+
+				for k, v := range q {
+					assert.Equal(t, v, capturedReq.FormValue(k))
+				}
 			}
 		})
 	}
@@ -181,19 +191,19 @@ func TestClientAuthRoundTripper_RoundTrip(t *testing.T) {
 
 func TestClientAuthRoundTripper_RoundTrip_PreservesExistingParams(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		query := r.URL.Query()
-		assert.Equal(t, "my-client", query.Get("client_id"))
-		assert.Equal(t, "my-secret", query.Get("client_secret"))
-		assert.Equal(t, "bar", query.Get("foo"))
-		assert.Equal(t, "baz", query.Get("param2"))
+		assert.Equal(t, "my-client", r.FormValue("client_id"))
+		assert.Equal(t, "my-secret", r.FormValue("client_secret"))
+		assert.Equal(t, "bar", r.FormValue("foo"))
+		assert.Equal(t, "baz", r.FormValue("param2"))
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
-	creds := credentials.NewClientSecret("my-client", "my-secret")
+	creds := credentials.NewClientSecretPost("my-client", "my-secret")
 
-	reqURL := server.URL + "?foo=bar&param2=baz"
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, reqURL, nil)
+	reqURL := server.URL
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, reqURL, strings.NewReader("foo=bar&param2=baz"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	require.NoError(t, err)
 
 	resp, err := creds.Transport().RoundTrip(req)

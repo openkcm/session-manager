@@ -93,7 +93,7 @@ func NewManager(
 		loginCSRFCookieTemplate: cfg.LoginCSRFCookieTemplate,
 		callbackURL:             callbackURL,
 		clientID:                cfg.ClientAuth.ClientID,
-		newCreds:                func(_ string) credentials.TransportCredentials { return credentials.NewDefault() },
+		newCreds:                func(clientID string) credentials.TransportCredentials { return credentials.NewInsecure(clientID) },
 		csrfSecret:              cfg.CSRFSecretParsed,
 		cache:                   cache.New(2*time.Minute, 10*time.Minute),
 	}
@@ -404,7 +404,7 @@ func (m *Manager) Logout(ctx context.Context, sessionID string) (string, error) 
 		return "", serviceerr.ErrInvalidOIDCProvider
 	}
 
-	vals := make(url.Values)
+	vals := make(url.Values, 2)
 	vals.Set("client_id", m.getClientID(mapping))
 	if m.postLogoutRedirectURL != "" {
 		vals.Set("post_logout_redirect_uri", m.postLogoutRedirectURL)
@@ -637,7 +637,6 @@ func (m *Manager) exchangeCode(ctx context.Context, openidConf *oidc.Configurati
 	data.Set("code", code)
 	data.Set("code_verifier", codeVerifier)
 	data.Set("redirect_uri", m.callbackURL.String())
-	data.Set("client_id", m.getClientID(mapping))
 	for _, parameter := range m.queryParametersToken {
 		value, ok := mapping.Properties[parameter]
 		if ok {

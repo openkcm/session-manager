@@ -1,8 +1,11 @@
 package credentials
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -25,6 +28,7 @@ func Test_clientAuthRoundTripper_RoundTrip(t *testing.T) {
 		clientID     string
 		clientSecret string
 		req          *http.Request
+		header       http.Header
 		next         http.RoundTripper
 		wantErr      bool
 	}{
@@ -32,7 +36,8 @@ func Test_clientAuthRoundTripper_RoundTrip(t *testing.T) {
 			name:         "Round trip",
 			clientID:     "client-id",
 			clientSecret: "secret",
-			req:          httptest.NewRequestWithContext(ctx, http.MethodGet, "https://example.com", nil),
+			req:          httptest.NewRequestWithContext(ctx, http.MethodPost, "https://example.com", strings.NewReader(url.Values{}.Encode())),
+			header:       http.Header{"Content-Type": []string{"application/x-www-form-urlencoded"}},
 			next: localRoundTripper{
 				handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(http.StatusNoContent)
@@ -47,15 +52,25 @@ func Test_clientAuthRoundTripper_RoundTrip(t *testing.T) {
 				clientSecret: tt.clientSecret,
 				next:         tt.next,
 			}
+			tt.req.Header = tt.header
 			_, err := rt.RoundTrip(tt.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("clientAuthRoundTripper.RoundTrip() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
-			q := tt.req.URL.Query()
-			clientID := q["client_id"][0]
-			clientSecret := q["client_secret"][0]
+			b, err := io.ReadAll(tt.req.Body)
+			if err != nil {
+				t.Fatal("failed to read body", err)
+			}
+
+			q, err := url.ParseQuery(string(b))
+			if err != nil {
+				t.Fatal("failed to parse query", err)
+			}
+
+			clientID := q.Get("client_id")
+			clientSecret := q.Get("client_secret")
 			if clientID != tt.clientID {
 				t.Errorf("clientAuthRoundTripper.RoundTrip() client_id = %s, want %s", clientID, tt.clientID)
 			}

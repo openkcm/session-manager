@@ -56,7 +56,7 @@ func NewSessionServer(
 		trustRepo:          trustRepo,
 		idleSessionTimeout: idleSessionTimeout,
 		cache:              cache.New(2*time.Minute, 10*time.Minute),
-		newCreds:           func(_ string) credentials.TransportCredentials { return credentials.NewDefault() },
+		newCreds:           func(clientID string) credentials.TransportCredentials { return credentials.NewInsecure(clientID) },
 		clientID:           clientID,
 	}
 	for _, opt := range opts {
@@ -64,6 +64,7 @@ func NewSessionServer(
 			opt(s)
 		}
 	}
+
 	return s
 }
 
