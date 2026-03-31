@@ -11,9 +11,9 @@ import (
 
 	"github.com/docker/go-connections/nat"
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/goccy/go-yaml"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"gopkg.in/yaml.v3"
 
 	"github.com/openkcm/session-manager/internal/config"
 )

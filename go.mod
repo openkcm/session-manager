@@ -15,6 +15,7 @@ require (
 	github.com/exaring/otelpgx v0.10.0
 	github.com/go-jose/go-jose/v4 v4.1.3
 	github.com/go-viper/mapstructure/v2 v2.5.0
+	github.com/goccy/go-yaml v1.19.2
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.1
@@ -34,7 +35,6 @@ require (
 	go.opentelemetry.io/otel/metric v1.42.0
 	go.opentelemetry.io/otel/trace v1.42.0
 	google.golang.org/grpc v1.79.3
-	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -198,6 +198,7 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	modernc.org/libc v1.68.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect

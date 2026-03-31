@@ -11,9 +11,9 @@ import (
 	"testing"
 
 	"github.com/docker/go-connections/nat"
+	"github.com/goccy/go-yaml"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/dbtest/postgrestest"
