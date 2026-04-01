@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -21,6 +22,14 @@ func (l localRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 	return w.Result(), nil
 }
 
+var noContentHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNoContent)
+})
+
+var noContentRT = localRoundTripper{
+	handler: noContentHandler,
+}
+
 func Test_clientAuthRoundTripper_RoundTrip(t *testing.T) {
 	ctx := t.Context()
 	tests := []struct {
@@ -30,7 +39,9 @@ func Test_clientAuthRoundTripper_RoundTrip(t *testing.T) {
 		req          *http.Request
 		header       http.Header
 		next         http.RoundTripper
+		wantQuery    url.Values
 		wantErr      bool
+		wantCt       string
 	}{
 		{
 			name:         "Round trip",
@@ -38,11 +49,60 @@ func Test_clientAuthRoundTripper_RoundTrip(t *testing.T) {
 			clientSecret: "secret",
 			req:          httptest.NewRequestWithContext(ctx, http.MethodPost, "https://example.com", strings.NewReader(url.Values{}.Encode())),
 			header:       http.Header{"Content-Type": []string{"application/x-www-form-urlencoded"}},
-			next: localRoundTripper{
-				handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					w.WriteHeader(http.StatusNoContent)
-				}),
+			next:         noContentRT,
+			wantQuery: url.Values{
+				"client_id":     []string{"client-id"},
+				"client_secret": []string{"secret"},
 			},
+			wantCt: urlencoded,
+		},
+		{
+			name:         "No body and no Content-Type",
+			clientID:     "client-id",
+			clientSecret: "secret",
+			req:          httptest.NewRequestWithContext(ctx, http.MethodPost, "https://example.com", nil),
+			next:         noContentRT,
+			wantQuery: url.Values{
+				"client_id":     []string{"client-id"},
+				"client_secret": []string{"secret"},
+			},
+			wantCt: urlencoded,
+		},
+		{
+			name:         "Preserve query values",
+			clientID:     "client-id",
+			clientSecret: "secret",
+			req: httptest.NewRequestWithContext(ctx, http.MethodPost, "https://example.com", strings.NewReader(url.Values{
+				"token": []string{"some_token"},
+			}.Encode())),
+			next: noContentRT,
+			wantQuery: url.Values{
+				"client_id":     []string{"client-id"},
+				"client_secret": []string{"secret"},
+				"token":         []string{"some_token"},
+			},
+			wantCt: urlencoded,
+		},
+		{
+			name:         "Ignore non-post method",
+			clientID:     "client-id",
+			clientSecret: "secret",
+			req:          httptest.NewRequestWithContext(ctx, http.MethodGet, "https://example.com", nil),
+			next:         noContentRT,
+			wantQuery:    url.Values{},
+		},
+		{
+			name:         "Preserve original Content-Type",
+			clientID:     "client-id",
+			clientSecret: "secret",
+			req:          httptest.NewRequestWithContext(ctx, http.MethodPost, "https://example.com", nil),
+			header:       http.Header{contentType: []string{"application/x-www-form-urlencoded; charset=UTF-8"}},
+			next:         noContentRT,
+			wantQuery: url.Values{
+				"client_id":     []string{"client-id"},
+				"client_secret": []string{"secret"},
+			},
+			wantCt: "application/x-www-form-urlencoded; charset=UTF-8",
 		},
 	}
 	for _, tt := range tests {
@@ -52,11 +112,17 @@ func Test_clientAuthRoundTripper_RoundTrip(t *testing.T) {
 				clientSecret: tt.clientSecret,
 				next:         tt.next,
 			}
-			tt.req.Header = tt.header
+			for k, vs := range tt.header {
+				tt.req.Header[k] = append(tt.req.Header[k], vs...)
+			}
 			_, err := rt.RoundTrip(tt.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("clientAuthRoundTripper.RoundTrip() error = %v, wantErr %v", err, tt.wantErr)
 				return
+			}
+
+			if ct := tt.req.Header.Get(contentType); ct != tt.wantCt {
+				t.Errorf("clientAuthRoundTripper.RoundTrip() contentType = %s, want %s", ct, tt.wantCt)
 			}
 
 			b, err := io.ReadAll(tt.req.Body)
@@ -69,13 +135,15 @@ func Test_clientAuthRoundTripper_RoundTrip(t *testing.T) {
 				t.Fatal("failed to parse query", err)
 			}
 
-			clientID := q.Get("client_id")
-			clientSecret := q.Get("client_secret")
-			if clientID != tt.clientID {
-				t.Errorf("clientAuthRoundTripper.RoundTrip() client_id = %s, want %s", clientID, tt.clientID)
+			if len(q) != len(tt.wantQuery) {
+				t.Errorf("clientAuthRoundTripper.RoundTrip() query = %s, want %s", q, tt.wantQuery)
 			}
-			if clientSecret != tt.clientSecret {
-				t.Errorf("clientAuthRoundTripper.RoundTrip() client_secret = %s, want %s", clientID, tt.clientSecret)
+
+			for k, wantVals := range tt.wantQuery {
+				gotVals := q[k]
+				if !slices.Equal(gotVals, wantVals) {
+					t.Errorf("clientAuthRoundTripper.RoundTrip() query[%s] = %s, want %s", k, gotVals, wantVals)
+				}
 			}
 		})
 	}
