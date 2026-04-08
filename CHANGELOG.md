@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.17.3](https://github.com/openkcm/session-manager/compare/v0.17.2...v0.17.3) (2026-04-08)
+
+
+### Bug Fixes
+
+* client_secret_post auth if no body ([#271](https://github.com/openkcm/session-manager/issues/271)) ([94d51e7](https://github.com/openkcm/session-manager/commit/94d51e786b57abe9270a158371e8293ff3f9d59d))
+* **deps:** bump the gomod-group group with 8 updates ([#272](https://github.com/openkcm/session-manager/issues/272)) ([7d4dbc7](https://github.com/openkcm/session-manager/commit/7d4dbc7910c7899d37b052904dd24fed1eaaa629))
+* provide client_secret_post auth if no content ([94d51e7](https://github.com/openkcm/session-manager/commit/94d51e786b57abe9270a158371e8293ff3f9d59d))
+
 ## [0.17.0](https://github.com/openkcm/session-manager/compare/v0.16.1...v0.17.0) (2026-02-04)
 
 
