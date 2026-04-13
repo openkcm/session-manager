@@ -4,7 +4,7 @@ import (
 	"context"
 	"net"
 
-	"github.com/docker/go-connections/nat"
+	"github.com/moby/moby/api/types/network"
 	"github.com/valkey-io/valkey-go"
 
 	valkeycontainer "github.com/testcontainers/testcontainers-go/modules/valkey"
@@ -12,14 +12,14 @@ import (
 )
 
 // Start initialises a ValKey instance and returns a client, database port, and termination function.
-func Start(ctx context.Context) (valkey.Client, nat.Port, func(ctx context.Context)) {
+func Start(ctx context.Context) (valkey.Client, network.Port, func(ctx context.Context)) {
 	valkeyContainer, err := valkeycontainer.Run(ctx, "valkey/valkey:8-alpine")
 	if err != nil {
 		slogctx.Error(ctx, "Failed to start ValKey container", "error", err)
 		panic(err)
 	}
 
-	port, err := valkeyContainer.MappedPort(ctx, nat.Port("6379"))
+	port, err := valkeyContainer.MappedPort(ctx, "6379")
 	if err != nil {
 		slogctx.Error(ctx, "Failed to map a port for the ValKey container", "error", err)
 		panic(err)

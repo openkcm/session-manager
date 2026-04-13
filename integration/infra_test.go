@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/docker/go-connections/nat"
 	"github.com/goccy/go-yaml"
+	"github.com/moby/moby/api/types/network"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/stretchr/testify/require"
 
@@ -23,8 +23,8 @@ import (
 type closeFunc func(ctx context.Context)
 
 type infraStat struct {
-	PostgresPort   nat.Port
-	ValKeyPort     nat.Port
+	PostgresPort   network.Port
+	ValKeyPort     network.Port
 	ConfigFilePath string
 	Procdir        string
 	Cfg            config.Config
