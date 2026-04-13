@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/docker/go-connections/nat"
+	"github.com/moby/moby/api/types/network"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pressly/goose/v3"
@@ -41,7 +41,7 @@ func init() {
 //
 // Database credentials are available as exported variables.
 // The database contains pre-defined test data. See INSERT statements in the prepareDB.
-func Start(ctx context.Context) (*pgxpool.Pool, nat.Port, func(ctx context.Context)) {
+func Start(ctx context.Context) (*pgxpool.Pool, network.Port, func(ctx context.Context)) {
 	pgContainer, err := postgres.Run(
 		ctx,
 		"postgres:17-alpine",
@@ -55,7 +55,7 @@ func Start(ctx context.Context) (*pgxpool.Pool, nat.Port, func(ctx context.Conte
 		panic(err)
 	}
 
-	port, err := pgContainer.MappedPort(ctx, nat.Port("5432"))
+	port, err := pgContainer.MappedPort(ctx, "5432")
 	if err != nil {
 		slogctx.Error(ctx, "Failed to get mapped port for the PosgtgreSQL container", slog.String("error", err.Error()))
 		panic(err)
@@ -75,11 +75,11 @@ func Start(ctx context.Context) (*pgxpool.Pool, nat.Port, func(ctx context.Conte
 	return dbPool, port, terminate
 }
 
-func connStr(port nat.Port) string {
+func connStr(port network.Port) string {
 	return fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s", DBHost, DBUser, DBPassword, DBName, port.Port(), DBSSLMode)
 }
 
-func makeDBConn(ctx context.Context, port nat.Port) *pgxpool.Pool {
+func makeDBConn(ctx context.Context, port network.Port) *pgxpool.Pool {
 	pool, err := pgxpool.New(ctx, connStr(port))
 	if err != nil {
 		panic(err)
@@ -88,7 +88,7 @@ func makeDBConn(ctx context.Context, port nat.Port) *pgxpool.Pool {
 	return pool
 }
 
-func migrateDB(ctx context.Context, port nat.Port) {
+func migrateDB(ctx context.Context, port network.Port) {
 	db, err := sql.Open("pgx", connStr(port))
 	if err != nil {
 		panic(err)
@@ -108,7 +108,7 @@ func migrateDB(ctx context.Context, port nat.Port) {
 	}
 }
 
-func prepareDB(ctx context.Context, dbPool *pgxpool.Pool, port nat.Port) {
+func prepareDB(ctx context.Context, dbPool *pgxpool.Pool, port network.Port) {
 	migrateDB(ctx, port)
 
 	b := new(pgx.Batch)

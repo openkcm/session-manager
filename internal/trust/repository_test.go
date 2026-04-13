@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/docker/go-connections/nat"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pressly/goose/v3"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -94,7 +93,7 @@ func createRepo(ctx context.Context) (trust.OIDCMappingRepository, error) {
 		return nil, err
 	}
 
-	port, err := pgContainer.MappedPort(ctx, nat.Port("5432"))
+	port, err := pgContainer.MappedPort(ctx, "5432")
 	if err != nil {
 		return nil, err
 	}
