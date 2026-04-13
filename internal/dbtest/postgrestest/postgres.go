@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/moby/moby/api/types/network"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/moby/moby/api/types/network"
 	"github.com/pressly/goose/v3"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 

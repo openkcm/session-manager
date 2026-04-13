@@ -18,6 +18,7 @@ func (rt dummyRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
 }
 
 func Test_transport_RoundTrip(t *testing.T) {
+	ctx := t.Context()
 	const url = "http://localhost"
 	resp := httptest.NewRecorder().Result()
 	tests := []struct {
@@ -30,14 +31,14 @@ func Test_transport_RoundTrip(t *testing.T) {
 		{
 			name:    "Round trip",
 			base:    dummyRoundTripper{resp: resp, err: nil},
-			req:     httptest.NewRequest(http.MethodGet, url, nil),
+			req:     httptest.NewRequestWithContext(ctx, http.MethodGet, url, nil),
 			want:    resp,
 			wantErr: false,
 		},
 		{
 			name:    "Return an error",
 			base:    dummyRoundTripper{resp: nil, err: errors.New("err")},
-			req:     httptest.NewRequest(http.MethodGet, url, nil),
+			req:     httptest.NewRequestWithContext(ctx, http.MethodGet, url, nil),
 			want:    nil,
 			wantErr: true,
 		},
