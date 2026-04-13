@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/docker/go-connections/nat"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/goccy/go-yaml"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
@@ -41,7 +40,7 @@ func TestMigrate(t *testing.T) {
 		t.Fatalf("failed to start PostgreSQL: %s", err)
 	}
 
-	port, err := pgContainer.MappedPort(ctx, nat.Port("5432"))
+	port, err := pgContainer.MappedPort(ctx, "5432")
 	if err != nil {
 		t.Fatalf("failed to get mapped port for the PostgreSQL container: %s", err)
 	}
@@ -140,7 +139,7 @@ func TestMigrateIdempotent(t *testing.T) {
 	}
 	defer func() { _ = pgContainer.Terminate(ctx) }()
 
-	port, err := pgContainer.MappedPort(ctx, nat.Port("5432"))
+	port, err := pgContainer.MappedPort(ctx, "5432")
 	if err != nil {
 		t.Fatalf("failed to get mapped port for the PostgreSQL container: %s", err)
 	}
