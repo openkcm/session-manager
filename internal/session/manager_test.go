@@ -154,10 +154,8 @@ func TestManager_Auth(t *testing.T) {
 				return
 			}
 
-			// Validate that the data has been inserted into the repository
 			assert.Equal(t, oidcMapping, tt.oidc.TGet(tt.tenantID), "Trust mapping has not been inserted")
 
-			// Check the returned URL
 			u, err := url.Parse(got)
 			require.NoError(t, err, "parsing location")
 
@@ -178,13 +176,9 @@ func TestManager_Auth(t *testing.T) {
 			assert.Equal(t, wantQ.Get(kRedirectURI), q.Get(kRedirectURI), "Unexpected redirect URI")
 			assert.Equal(t, wantQ.Get(kParamAuth1), q.Get(kParamAuth1), "Unexpected auth url")
 
-			// Check the scopes on the URL string to ensure we don't have
-			// something like scope=openid&scope=profile...
-			// but rather scope=openid profile email groups
 			scopeValues := url.Values{kScope: {"openid profile email groups"}}
 			assert.Contains(t, got, scopeValues.Encode())
 
-			// These values are generated randomly. So check if they aren't empty
 			assert.NotEmpty(t, q.Get(kState), "State is zero")
 			assert.NotEmpty(t, q.Get(kCodeChallenge), "Code challenge is zero")
 		})
@@ -421,15 +415,16 @@ func TestManager_BCLogout(t *testing.T) {
 		panic(err)
 	}
 
+	const keyID = "kid1"
 	jwks := jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{
 		Key:       key,
-		KeyID:     "kid1",
+		KeyID:     keyID,
 		Algorithm: string(jose.RS256),
 	}}}
 	signer, err := jose.NewSigner(jose.SigningKey{
 		Algorithm: jose.RS256,
 		Key:       jwks.Keys[0],
-	}, nil)
+	}, (&jose.SignerOptions{}).WithType("JWT"))
 	if err != nil {
 		panic(err)
 	}
@@ -443,21 +438,29 @@ func TestManager_BCLogout(t *testing.T) {
 		return token
 	}
 
-	jwksSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		publicJwks := jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{
-			Key:       &key.PublicKey,
-			KeyID:     "kid1",
-			Algorithm: string(jose.RS256),
-		}}}
-		b, err := json.Marshal(publicJwks)
-		if err != nil {
-			panic(err)
-		}
+	publicJwks := jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{
+		Key:       &key.PublicKey,
+		KeyID:     keyID,
+		Algorithm: string(jose.RS256),
+		Use:       "sig",
+	}}}
 
-		if _, err := w.Write(b); err != nil {
-			panic(err)
+	var jwksSrv *httptest.Server
+	jwksSrv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/.well-known/openid-configuration":
+			_ = json.NewEncoder(w).Encode(oidc.Configuration{
+				Issuer:  jwksSrv.URL,
+				JwksURI: jwksSrv.URL + "/jwks",
+			})
+		case "/jwks":
+			_ = json.NewEncoder(w).Encode(publicJwks)
+		default:
+			http.NotFound(w, r)
 		}
 	}))
+	defer jwksSrv.Close()
 
 	tests := []struct {
 		name      string
@@ -469,19 +472,15 @@ func TestManager_BCLogout(t *testing.T) {
 		{
 			name: "Success",
 			cfg:  &config.SessionManager{},
-			jwt: newJwt(struct {
-				Events    map[string]struct{} `json:"events"`
-				SessionID string              `json:"sid"`
-				KeyID     string              `json:"kid"`
-			}{
-				Events:    map[string]struct{}{"http://schemas.openid.net/event/backchannel-logout": {}},
-				SessionID: "sid-1",
-			}),
 			setupMock: func(oidcs *trustmock.Repository, sessions *sessionmock.Repository) {
 				_ = oidcs.Create(context.Background(), "tid-1", trust.OIDCMapping{
 					IssuerURL: jwksSrv.URL,
 				})
-				_ = sessions.StoreSession(context.Background(), session.Session{ID: "sid-1", TenantID: "tid-1"})
+				_ = sessions.StoreSession(context.Background(), session.Session{
+					ID:         "session-1",
+					ProviderID: "sid-1",
+					TenantID:   "tid-1",
+				})
 			},
 			errAssert: assert.NoError,
 		},
@@ -489,8 +488,6 @@ func TestManager_BCLogout(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := t.Context()
-			oidcServer := StartOIDCServer(t, false)
-			defer oidcServer.Close()
 
 			auditServer := StartAuditServer(t)
 			defer auditServer.Close()
@@ -501,30 +498,29 @@ func TestManager_BCLogout(t *testing.T) {
 			oidcMock := trustmock.NewInMemRepository()
 			sessionMock := sessionmock.NewInMemRepository()
 
-			rt := localRoundTripper{
-				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					b, err := json.Marshal(oidc.Configuration{
-						JwksURI: jwksSrv.URL,
-						Issuer:  jwksSrv.URL,
-					})
-					if err != nil {
-						panic(err)
-					}
-
-					if _, err := w.Write(b); err != nil {
-						panic(err)
-					}
-				}),
-			}
-
 			tt.setupMock(oidcMock, sessionMock)
+
+			now := time.Now()
+			logoutJWT := newJwt(map[string]any{
+				"iss":    jwksSrv.URL,
+				"sub":    "user-1",
+				"aud":    []string{""},
+				"exp":    now.Add(time.Hour).Unix(),
+				"iat":    now.Unix(),
+				"sid":    "sid-1",
+				"events": map[string]any{"http://schemas.openid.net/event/backchannel-logout": map[string]any{}},
+			})
+
+			if tt.jwt == "" {
+				tt.jwt = logoutJWT
+			}
 
 			m, err := session.NewManager(
 				tt.cfg,
 				oidcMock,
 				sessionMock,
 				auditLogger,
-				session.WithTransportCredentials(newTCBuilder(rt)),
+				session.WithAllowHttpScheme(true),
 			)
 			require.NoError(t, err)
 
@@ -532,6 +528,9 @@ func TestManager_BCLogout(t *testing.T) {
 			if !tt.errAssert(t, err, fmt.Sprintf("Manager.BCLogout() error = %v", err)) {
 				return
 			}
+
+			_, loadErr := sessionMock.LoadSession(ctx, "session-1")
+			assert.Error(t, loadErr, "session should have been deleted after BCLogout")
 		})
 	}
 }
@@ -599,6 +598,173 @@ func TestManager_LogoutEdgeCases(t *testing.T) {
 
 			_, err = m.Logout(ctx, tt.sessionID)
 			tt.errAssert(t, err)
+		})
+	}
+}
+
+func TestManager_Logout_RedirectURL(t *testing.T) {
+	const (
+		tenantID  = "tenant-id"
+		sessionID = "session-id"
+	)
+
+	newOIDCDiscoveryServer := func(endSessionEndpoint string) *httptest.Server {
+		var srv *httptest.Server
+		srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(oidc.Configuration{
+				Issuer:             srv.URL,
+				JwksURI:            srv.URL + "/jwks",
+				EndSessionEndpoint: endSessionEndpoint,
+			})
+		}))
+		return srv
+	}
+
+	tests := []struct {
+		name              string
+		endSessionURL     string
+		postLogoutURL     string
+		queryParamsLogout []string
+		mappingProps      map[string]string
+		deleteSessionErr  error
+		wantURL           string
+		wantContains      []string
+		errAssert         assert.ErrorAssertionFunc
+		errContains       string
+	}{
+		{
+			name:          "Success with end session endpoint and post logout redirect",
+			endSessionURL: "https://idp.example.com/logout",
+			postLogoutURL: "https://app.example.com/landing",
+			wantContains: []string{
+				"https://idp.example.com/logout",
+				"client_id=" + testClientID,
+				"post_logout_redirect_uri=" + url.QueryEscape("https://app.example.com/landing"),
+			},
+			errAssert: assert.NoError,
+		},
+		{
+			name:          "Success with end session endpoint without post logout redirect",
+			endSessionURL: "https://idp.example.com/logout",
+			postLogoutURL: "",
+			wantContains: []string{
+				"https://idp.example.com/logout",
+				"client_id=" + testClientID,
+			},
+			errAssert: assert.NoError,
+		},
+		{
+			name:              "Success with additional logout query parameters",
+			endSessionURL:     "https://idp.example.com/logout",
+			postLogoutURL:     "",
+			queryParamsLogout: []string{"logoutParam1"},
+			mappingProps:      map[string]string{"logoutParam1": "logoutValue1"},
+			wantContains: []string{
+				"client_id=" + testClientID,
+				"logoutParam1=logoutValue1",
+			},
+			errAssert: assert.NoError,
+		},
+		{
+			name:          "No end session endpoint with post logout redirect URL",
+			endSessionURL: "",
+			postLogoutURL: "https://app.example.com/landing",
+			wantURL:       "https://app.example.com/landing",
+			errAssert:     assert.NoError,
+		},
+		{
+			name:          "No end session endpoint and no post logout redirect URL",
+			endSessionURL: "",
+			postLogoutURL: "",
+			errAssert:     assert.Error,
+			errContains:   "end_session_not_supported",
+		},
+		{
+			name:              "Missing logout query parameter in mapping properties",
+			endSessionURL:     "https://idp.example.com/logout",
+			postLogoutURL:     "",
+			queryParamsLogout: []string{"missingParam"},
+			mappingProps:      map[string]string{},
+			wantContains: []string{
+				"client_id=" + testClientID,
+			},
+			errAssert: assert.NoError,
+		},
+		{
+			name:             "Delete session error",
+			endSessionURL:    "https://idp.example.com/logout",
+			deleteSessionErr: errors.New("storage failure"),
+			errAssert:        assert.Error,
+			errContains:      "deleting session",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			oidcSrv := newOIDCDiscoveryServer(tt.endSessionURL)
+			defer oidcSrv.Close()
+
+			auditServer := StartAuditServer(t)
+			defer auditServer.Close()
+
+			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+			require.NoError(t, err)
+
+			props := tt.mappingProps
+			if props == nil {
+				props = map[string]string{}
+			}
+
+			oidcMock := trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, trust.OIDCMapping{
+				IssuerURL:  oidcSrv.URL,
+				Properties: props,
+			}))
+
+			var sessionOpts []sessionmock.RepositoryOption
+			sessionOpts = append(sessionOpts, sessionmock.WithSession(session.Session{
+				ID:       sessionID,
+				TenantID: tenantID,
+			}))
+			if tt.deleteSessionErr != nil {
+				sessionOpts = append(sessionOpts, sessionmock.WithDeleteSessionError(tt.deleteSessionErr))
+			}
+			sessMock := sessionmock.NewInMemRepository(sessionOpts...)
+
+			cfg := &config.SessionManager{
+				CSRFSecretParsed:                []byte(testCSRFSecret),
+				PostLogoutRedirectURL:           tt.postLogoutURL,
+				AdditionalQueryParametersLogout: tt.queryParamsLogout,
+				ClientAuth: config.ClientAuth{
+					ClientID: testClientID,
+				},
+			}
+
+			m, err := session.NewManager(cfg, oidcMock, sessMock, auditLogger, session.WithAllowHttpScheme(true))
+			require.NoError(t, err)
+
+			got, err := m.Logout(ctx, sessionID)
+
+			if !tt.errAssert(t, err, fmt.Sprintf("Manager.Logout() error = %v", err)) {
+				return
+			}
+
+			if err != nil {
+				if tt.errContains != "" {
+					assert.Contains(t, err.Error(), tt.errContains)
+				}
+				return
+			}
+
+			if tt.wantURL != "" {
+				assert.Equal(t, tt.wantURL, got)
+			}
+
+			for _, substr := range tt.wantContains {
+				assert.Contains(t, got, substr)
+			}
 		})
 	}
 }
@@ -747,8 +913,400 @@ func TestManager_NewManager_Error(t *testing.T) {
 	assert.Contains(t, err.Error(), "parsing callback URL")
 }
 
-// localRoundTripper is an http.RoundTripper that executes HTTP transactions by
-// using handler directly, instead of going over an HTTP connection.
+func TestManager_LoadState(t *testing.T) {
+	const stateID = "test-state-id"
+
+	state := session.State{
+		ID:       stateID,
+		TenantID: "tenant-id",
+		Expiry:   time.Now().Add(time.Hour),
+	}
+
+	t.Run("Success", func(t *testing.T) {
+		repo := sessionmock.NewInMemRepository(sessionmock.WithState(state))
+		m, err := session.NewManager(&config.SessionManager{CSRFSecretParsed: []byte(testCSRFSecret)}, nil, repo, nil)
+		require.NoError(t, err)
+
+		got, err := m.LoadState(t.Context(), stateID)
+		require.NoError(t, err)
+		assert.Equal(t, stateID, got.ID)
+	})
+
+	t.Run("Not found", func(t *testing.T) {
+		repo := sessionmock.NewInMemRepository()
+		m, err := session.NewManager(&config.SessionManager{CSRFSecretParsed: []byte(testCSRFSecret)}, nil, repo, nil)
+		require.NoError(t, err)
+
+		_, err = m.LoadState(t.Context(), "non-existent")
+		assert.Error(t, err)
+	})
+}
+
+func TestManager_FinaliseOIDCLogin_StoreSessionError(t *testing.T) {
+	const (
+		callbackURL  = "http://sm.example.com/sm/callback"
+		tenantID     = "tenant-id"
+		stateID      = "test-state-id"
+		code         = "auth-code"
+		fingerprint  = "test-fingerprint"
+		pkceVerifier = "test-verifier"
+	)
+
+	validState := session.State{
+		ID:           stateID,
+		TenantID:     tenantID,
+		Fingerprint:  fingerprint,
+		PKCEVerifier: pkceVerifier,
+		RequestURI:   "http://app.example.com/ui",
+		Expiry:       time.Now().Add(time.Hour),
+	}
+
+	oidcServer := StartOIDCServer(t, false)
+	defer oidcServer.Close()
+
+	auditServer := StartAuditServer(t)
+	defer auditServer.Close()
+
+	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	require.NoError(t, err)
+
+	jwksURI, err := url.JoinPath(oidcServer.URL, "/.well-known/jwks.json")
+	require.NoError(t, err)
+
+	mapping := trust.OIDCMapping{
+		IssuerURL:  oidcServer.URL,
+		JWKSURI:    jwksURI,
+		Properties: map[string]string{},
+	}
+
+	cfg := &config.SessionManager{
+		SessionDuration:  time.Hour,
+		CallbackURL:      callbackURL,
+		CSRFSecretParsed: []byte(testCSRFSecret),
+	}
+
+	t.Run("Store session error", func(t *testing.T) {
+		oidcMock := trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, mapping))
+		sessMock := sessionmock.NewInMemRepository(
+			sessionmock.WithState(validState),
+			sessionmock.WithStoreSessionError(errors.New("store failed")),
+		)
+
+		m, err := session.NewManager(cfg, oidcMock, sessMock, auditLogger, session.WithAllowHttpScheme(true))
+		require.NoError(t, err)
+
+		_, err = m.FinaliseOIDCLogin(context.Background(), stateID, code, fingerprint)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "storing session")
+	})
+
+	t.Run("Bump active error", func(t *testing.T) {
+		oidcMock := trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, mapping))
+		sessMock := sessionmock.NewInMemRepository(
+			sessionmock.WithState(validState),
+			sessionmock.WithBumpActiveError(errors.New("bump failed")),
+		)
+
+		m, err := session.NewManager(cfg, oidcMock, sessMock, auditLogger, session.WithAllowHttpScheme(true))
+		require.NoError(t, err)
+
+		_, err = m.FinaliseOIDCLogin(context.Background(), stateID, code, fingerprint)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "bumping session active status")
+	})
+
+	t.Run("Delete state error", func(t *testing.T) {
+		oidcMock := trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, mapping))
+		sessMock := sessionmock.NewInMemRepository(
+			sessionmock.WithState(validState),
+			sessionmock.WithDeleteStateError(errors.New("delete state failed")),
+		)
+
+		m, err := session.NewManager(cfg, oidcMock, sessMock, auditLogger, session.WithAllowHttpScheme(true))
+		require.NoError(t, err)
+
+		_, err = m.FinaliseOIDCLogin(context.Background(), stateID, code, fingerprint)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "deleting state")
+	})
+
+	t.Run("Missing auth context parameter", func(t *testing.T) {
+		oidcMock := trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, mapping))
+		sessMock := sessionmock.NewInMemRepository(sessionmock.WithState(validState))
+
+		cfgWithAuthCtx := &config.SessionManager{
+			SessionDuration:           time.Hour,
+			CallbackURL:               callbackURL,
+			CSRFSecretParsed:          []byte(testCSRFSecret),
+			AdditionalAuthContextKeys: []string{"nonExistentKey"},
+		}
+
+		m, err := session.NewManager(cfgWithAuthCtx, oidcMock, sessMock, auditLogger, session.WithAllowHttpScheme(true))
+		require.NoError(t, err)
+
+		result, err := m.FinaliseOIDCLogin(context.Background(), stateID, code, fingerprint)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, result.SessionID)
+	})
+}
+
+func TestManager_BCLogout_TrustAndVerifyErrors(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	const keyID = "kid1"
+	signer, err := jose.NewSigner(jose.SigningKey{
+		Algorithm: jose.RS256,
+		Key: jose.JSONWebKey{
+			Key:       key,
+			KeyID:     keyID,
+			Algorithm: string(jose.RS256),
+		},
+	}, (&jose.SignerOptions{}).WithType("JWT"))
+	require.NoError(t, err)
+
+	newJwt := func(claims any) string {
+		token, err := jwt.Signed(signer).Claims(claims).Serialize()
+		require.NoError(t, err)
+		return token
+	}
+
+	publicJwks := jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{
+		Key:       &key.PublicKey,
+		KeyID:     keyID,
+		Algorithm: string(jose.RS256),
+		Use:       "sig",
+	}}}
+
+	var jwksSrv *httptest.Server
+	jwksSrv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/.well-known/openid-configuration":
+			_ = json.NewEncoder(w).Encode(oidc.Configuration{
+				Issuer:  jwksSrv.URL,
+				JwksURI: jwksSrv.URL + "/jwks",
+			})
+		case "/jwks":
+			_ = json.NewEncoder(w).Encode(publicJwks)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer jwksSrv.Close()
+
+	now := time.Now()
+	validLogoutClaims := map[string]any{
+		"iss":    jwksSrv.URL,
+		"sub":    "user-1",
+		"aud":    []string{""},
+		"exp":    now.Add(time.Hour).Unix(),
+		"iat":    now.Unix(),
+		"sid":    "sid-1",
+		"events": map[string]any{"http://schemas.openid.net/event/backchannel-logout": map[string]any{}},
+	}
+
+	auditServer := StartAuditServer(t)
+	defer auditServer.Close()
+
+	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	require.NoError(t, err)
+
+	t.Run("Trust mapping get error", func(t *testing.T) {
+		oidcMock := trustmock.NewInMemRepository(trustmock.WithGetError(errors.New("trust error")))
+		sessMock := sessionmock.NewInMemRepository()
+		_ = sessMock.StoreSession(context.Background(), session.Session{
+			ID: "s1", ProviderID: "sid-1", TenantID: "tid-1",
+		})
+
+		m, err := session.NewManager(&config.SessionManager{}, oidcMock, sessMock, auditLogger, session.WithAllowHttpScheme(true))
+		require.NoError(t, err)
+
+		err = m.BCLogout(t.Context(), newJwt(validLogoutClaims))
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "getting trust mapping")
+	})
+
+	t.Run("Verify logout token error - wrong issuer", func(t *testing.T) {
+		oidcMock := trustmock.NewInMemRepository()
+		_ = oidcMock.Create(context.Background(), "tid-1", trust.OIDCMapping{IssuerURL: jwksSrv.URL})
+		sessMock := sessionmock.NewInMemRepository()
+		_ = sessMock.StoreSession(context.Background(), session.Session{
+			ID: "s1", ProviderID: "sid-1", TenantID: "tid-1",
+		})
+
+		wrongIssClaims := map[string]any{
+			"iss":    "https://wrong-issuer.example.com",
+			"sub":    "user-1",
+			"aud":    []string{""},
+			"exp":    now.Add(time.Hour).Unix(),
+			"iat":    now.Unix(),
+			"sid":    "sid-1",
+			"events": map[string]any{"http://schemas.openid.net/event/backchannel-logout": map[string]any{}},
+		}
+
+		m, err := session.NewManager(&config.SessionManager{}, oidcMock, sessMock, auditLogger, session.WithAllowHttpScheme(true))
+		require.NoError(t, err)
+
+		err = m.BCLogout(t.Context(), newJwt(wrongIssClaims))
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "verifying logout token")
+	})
+
+	t.Run("Delete session error after verify", func(t *testing.T) {
+		oidcMock := trustmock.NewInMemRepository()
+		_ = oidcMock.Create(context.Background(), "tid-1", trust.OIDCMapping{IssuerURL: jwksSrv.URL})
+		sessMock := sessionmock.NewInMemRepository(
+			sessionmock.WithDeleteSessionError(errors.New("delete failed")),
+		)
+		_ = sessMock.StoreSession(context.Background(), session.Session{
+			ID: "s1", ProviderID: "sid-1", TenantID: "tid-1",
+		})
+
+		m, err := session.NewManager(&config.SessionManager{}, oidcMock, sessMock, auditLogger, session.WithAllowHttpScheme(true))
+		require.NoError(t, err)
+
+		err = m.BCLogout(t.Context(), newJwt(validLogoutClaims))
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "deleting session")
+	})
+}
+
+func TestManager_MakeAuthURI_MissingAuthParameter(t *testing.T) {
+	oidcServer := StartOIDCServer(t, false)
+	defer oidcServer.Close()
+
+	oidcMock := trustmock.NewInMemRepository(trustmock.WithTrust("tid", trust.OIDCMapping{
+		IssuerURL:  oidcServer.URL,
+		Properties: map[string]string{},
+	}))
+
+	cfg := &config.SessionManager{
+		SessionDuration:                    time.Hour,
+		CallbackURL:                        "http://localhost/callback",
+		CSRFSecretParsed:                   []byte(testCSRFSecret),
+		AdditionalQueryParametersAuthorize: []string{"missingParam"},
+	}
+
+	m, err := session.NewManager(cfg, oidcMock, sessionmock.NewInMemRepository(), nil, session.WithAllowHttpScheme(true))
+	require.NoError(t, err)
+
+	got, _, err := m.MakeAuthURI(t.Context(), "tid", "fp", "http://app/ui")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, got)
+
+	u, err := url.Parse(got)
+	require.NoError(t, err)
+	assert.Empty(t, u.Query().Get("missingParam"), "missing param should not appear in URL")
+}
+
+func TestManager_GetClientID_FromMapping(t *testing.T) {
+	oidcServer := StartOIDCServer(t, false)
+	defer oidcServer.Close()
+
+	mappingClientID := "mapping-specific-client-id"
+	oidcMock := trustmock.NewInMemRepository(trustmock.WithTrust("tid", trust.OIDCMapping{
+		IssuerURL:  oidcServer.URL,
+		ClientID:   mappingClientID,
+		Properties: map[string]string{},
+	}))
+
+	cfg := &config.SessionManager{
+		SessionDuration:  time.Hour,
+		CallbackURL:      "http://localhost/callback",
+		CSRFSecretParsed: []byte(testCSRFSecret),
+		ClientAuth:       config.ClientAuth{ClientID: "global-client-id"},
+	}
+
+	m, err := session.NewManager(cfg, oidcMock, sessionmock.NewInMemRepository(), nil, session.WithAllowHttpScheme(true))
+	require.NoError(t, err)
+
+	got, _, err := m.MakeAuthURI(t.Context(), "tid", "fp", "http://app/ui")
+	require.NoError(t, err)
+
+	u, err := url.Parse(got)
+	require.NoError(t, err)
+	assert.Equal(t, mappingClientID, u.Query().Get("client_id"))
+}
+
+func TestAppIDTokenClaims_UnmarshalJSON_Error(t *testing.T) {
+	var claims session.AppIDTokenClaims
+	err := claims.UnmarshalJSON([]byte(`{invalid json`))
+	require.Error(t, err)
+}
+
+func TestAppIDTokenClaims_UnmarshalJSON_NoCustomClaims(t *testing.T) {
+	payload := `{"iss":"https://example.com","sub":"user1","aud":["client"],"exp":9999999999,"iat":1700000000}`
+	var claims session.AppIDTokenClaims
+	err := claims.UnmarshalJSON([]byte(payload))
+	require.NoError(t, err)
+	assert.Empty(t, claims.UserUUID)
+	assert.Empty(t, claims.Groups)
+}
+
+func TestManager_FinaliseOIDCLogin_NilAuditLogger(t *testing.T) {
+	const (
+		stateID     = "test-state-id"
+		tenantID    = "tenant-id"
+		fingerprint = "test-fingerprint"
+	)
+
+	expiredState := session.State{
+		ID:          stateID,
+		TenantID:    tenantID,
+		Fingerprint: fingerprint,
+		Expiry:      time.Now().Add(-time.Hour),
+	}
+
+	sessMock := sessionmock.NewInMemRepository(sessionmock.WithState(expiredState))
+	oidcMock := trustmock.NewInMemRepository()
+
+	cfg := &config.SessionManager{
+		CSRFSecretParsed: []byte(testCSRFSecret),
+	}
+
+	m, err := session.NewManager(cfg, oidcMock, sessMock, nil)
+	require.NoError(t, err)
+
+	_, err = m.FinaliseOIDCLogin(context.Background(), stateID, "code", fingerprint)
+	assert.Error(t, err)
+}
+
+func TestManager_FinaliseOIDCLogin_AuditSendSuccess(t *testing.T) {
+	const (
+		stateID     = "test-state-id"
+		tenantID    = "tenant-id"
+		fingerprint = "test-fingerprint"
+	)
+
+	validState := session.State{
+		ID:           stateID,
+		TenantID:     tenantID,
+		Fingerprint:  "wrong-fingerprint",
+		PKCEVerifier: "test-verifier",
+		Expiry:       time.Now().Add(time.Hour),
+	}
+
+	auditServer := StartAuditServer(t)
+	defer auditServer.Close()
+
+	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	require.NoError(t, err)
+
+	sessMock := sessionmock.NewInMemRepository(sessionmock.WithState(validState))
+	oidcMock := trustmock.NewInMemRepository()
+
+	cfg := &config.SessionManager{
+		CSRFSecretParsed: []byte(testCSRFSecret),
+	}
+
+	m, err := session.NewManager(cfg, oidcMock, sessMock, auditLogger)
+	require.NoError(t, err)
+
+	_, err = m.FinaliseOIDCLogin(context.Background(), stateID, "code", fingerprint)
+	assert.Error(t, err)
+}
+
 type localRoundTripper struct {
 	handler http.Handler
 }

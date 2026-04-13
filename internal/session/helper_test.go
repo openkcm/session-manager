@@ -1,18 +1,41 @@
 package session_test
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/openkcm/common-sdk/pkg/oidc"
+	"github.com/stretchr/testify/require"
 
 	"github.com/openkcm/session-manager/internal/session"
 )
 
+// StartOIDCServer creates a test OIDC server with signed ID tokens for testing.
 func StartOIDCServer(t *testing.T, fail bool, algs ...string) *httptest.Server {
 	t.Helper()
+
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err, "generating RSA key for OIDC test server")
+
+	const keyID = "test-kid"
+	signingKey := jose.SigningKey{
+		Algorithm: jose.RS256,
+		Key: jose.JSONWebKey{
+			Key:       privateKey,
+			KeyID:     keyID,
+			Algorithm: string(jose.RS256),
+		},
+	}
+	signer, err := jose.NewSigner(signingKey, (&jose.SignerOptions{}).WithType("JWT"))
+	require.NoError(t, err, "creating JWT signer")
+
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if fail {
@@ -21,7 +44,6 @@ func StartOIDCServer(t *testing.T, fail bool, algs ...string) *httptest.Server {
 			_, _ = w.Write([]byte(`{"error": "invalid_request", "error_description": "Token exchange failed"}`))
 			return
 		}
-		// Determine supported algorithms by passed arguments or set to default value
 		var algList []string
 		if len(algs) == 0 {
 			algList = []string{"RS256"}
@@ -38,15 +60,47 @@ func StartOIDCServer(t *testing.T, fail bool, algs ...string) *httptest.Server {
 				JwksURI:                          server.URL + "/.well-known/jwks.json",
 				IDTokenSigningAlgValuesSupported: algList,
 			})
+
 		case "/.well-known/jwks.json":
-			_, _ = w.Write([]byte(`{"keys":[{"kty": "RSA", "e": "AQAB", "use": "sig", "kid": "MwK4iAYDIILiA_ymyjAwMGAaLlW84jOAqR0V-oojuIk", "alg": "RS256", "n": "nD89GVZMXuv_MSbH_SqDnU5oQgLlcH6yGe5LkXSdP_UzBXt49wPRoVHE-W981oylw9vhzfNBE8JY0PSkxVvYCWwYP86YWVtJix23iONYpXeAH9M1ep4Gzo1y0XnjAKURi-sN5T5nUBZ-fkODvyr6ALIUG3AXzaRow1RMmhUOx1spKGS34DJPv0D3E6aVcGkwgUwZcBhObYxGQdMAYi-OYDDS3uAkFciO3G1Bpz4nyW_JaV7i4zkMOH6-2wYFt1fjMsyc0lt1eRqdUVdANy0kDtmIXnjgjKN0Isr16flzfRDXfOQmaBPp14hQPiAgVFaqvTIvXucXOkiWcAQWhas2Aw"}]}`))
+			publicJWKS := jose.JSONWebKeySet{
+				Keys: []jose.JSONWebKey{{
+					Key:       &privateKey.PublicKey,
+					KeyID:     keyID,
+					Algorithm: string(jose.RS256),
+					Use:       "sig",
+				}},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(publicJWKS)
+
 		case "/oauth2/token":
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
+
+			now := time.Now()
+			claims := map[string]any{
+				"iss":         server.URL,
+				"sub":         "jwt-test",
+				"aud":         []string{""},
+				"exp":         now.Add(time.Hour).Unix(),
+				"iat":         now.Unix(),
+				"sid":         "test-sid",
+				"user_uuid":   "test-uuid",
+				"given_name":  "John",
+				"family_name": "Doe",
+				"email":       "john.doe@example.com",
+				"groups":      []string{"admin"},
+			}
+
+			idToken, signErr := jwt.Signed(signer).Claims(claims).Serialize()
+			if signErr != nil {
+				http.Error(w, "id_token sign error", http.StatusInternalServerError)
+				return
+			}
+
 			tokenResponse := session.TokenResponse{
-				AccessToken:  "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.m3RtvePjRxhO0-O2FOzJvYWUNZqxdQ5p4wI5YTjC8BmFzCH-2gMjk1RSG00-_q0PkcKqoD_hZFVub88298nhF7WpEj2pEWvDhWeG4g3H4JxcFw-a2Pwam80qdrOOA8NkmDtTewC90yshYcGktGMHk5jjfh4sKRaZz9FmkBpc2G9I1NyxcCyj9yatMu64yFDNa0-CbaSsWyCFgsKvNxM944nJkT7q3OLFz_Tgn4HSXExEDE_Xkwhz6zykg12tcU9-5Fk40yEfOEaBCTmuv3AMguBOlEBD1X2IsPcz03My5bpECEFIuRbqu-xvny1vEhzjNB565uk4Es9PdLwi_6frWA",
-				RefreshToken: "refresh-token",
-				IDToken:      "eyJhbGciOiJSUzI1NiIsImtpZCI6Ik13SzRpQVlESUlMaUFfeW15akF3TUdBYUxsVzg0ak9BcVIwVi1vb2p1SWsiLCJ0eXAiOiJKV1QifQ.eyJzdWIiOiJqd3QtdGVzdCIsImp0aSI6IjIzNDE0MzUiLCJhdF9oYXNoIjoicVJiNThaanpTZFByYnpGQ3hielJFZyIsIm5iZiI6MTc2NDExNDM3MSwiZXhwIjoxNzY0MTI1MTcxLCJpYXQiOjE3NjQxMTQzNzEsImlzcyI6InNhcCIsImF1ZCI6Imh0dHBzOi8vZXhhbXBsZS5jb20ifQ.JhC2oGYRHTL4NVaz1CZKWop_Iq54fxQOQL2pJap1LIMFKRz9RqgZr_WMulBLjNxppS3v5KFaMMp28YirzhzJQVbIlrEuUQZQCeODmLYSVkyeQKGb9WTSirzZInZbICjfocgppSzZ_Z8_P0GSS_h4IEFgcK0jnfb-2O_Xef1dYSoxA-sOFCxvn48jnjBLNjRQh2uYY61unJRzAbchXTBCtTSKNL1SEM4rCvV9b9dfYKBSlaQ11DKzzC1Zd5xG4JNkrbDXYu6MAxYLz_getXsQh6rVqOnMjUOMQLjUcuMuSva1Fh9gCeJNWsy34bh6lfScBb67L3i5D1s8pciLYTNMDQ",
+				AccessToken:  "test-access-token",
+				RefreshToken: "test-refresh-token",
+				IDToken:      idToken,
 				TokenType:    "Bearer",
 				ExpiresIn:    3600,
 			}

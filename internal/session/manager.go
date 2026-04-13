@@ -2,12 +2,8 @@ package session
 
 import (
 	"context"
-	"crypto/sha256"
-	"crypto/sha512"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"hash"
 	"net/http"
 	"net/url"
 	"strings"
@@ -17,11 +13,12 @@ import (
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/google/uuid"
 	"github.com/openkcm/common-sdk/pkg/csrf"
-	"github.com/openkcm/common-sdk/pkg/oidc"
 	"github.com/patrickmn/go-cache"
+	"github.com/zitadel/oidc/v3/pkg/client/rp"
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 	slogctx "github.com/veqryn/slog-context"
+	zitadeloidc "github.com/zitadel/oidc/v3/pkg/oidc"
 
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/credentials"
@@ -36,6 +33,38 @@ var debugSettingSMDumpTransport = debugtools.NewSetting("smdumptransport")
 const (
 	LoginCSRFCookieName = "LoginCSRF"
 )
+
+// AppIDTokenClaims extends IDTokenClaims with application-specific claims (user_uuid and groups).
+type AppIDTokenClaims struct {
+	zitadeloidc.IDTokenClaims
+
+	UserUUID string   `json:"user_uuid,omitempty"`
+	Groups   []string `json:"groups,omitempty"`
+}
+
+// UnmarshalJSON delegates to IDTokenClaims and extracts user_uuid and groups from the claims map.
+func (c *AppIDTokenClaims) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &c.IDTokenClaims); err != nil {
+		return err
+	}
+	if v, ok := c.Claims["user_uuid"]; ok {
+		if s, ok := v.(string); ok {
+			c.UserUUID = s
+		}
+	}
+	if v, ok := c.Claims["groups"]; ok {
+		if arr, ok := v.([]any); ok {
+			groups := make([]string, 0, len(arr))
+			for _, item := range arr {
+				if s, ok := item.(string); ok {
+					groups = append(groups, s)
+				}
+			}
+			c.Groups = groups
+		}
+	}
+	return nil
+}
 
 type Manager struct {
 	trustRepo trust.OIDCMappingRepository
@@ -114,7 +143,7 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 		return "", "", fmt.Errorf("getting trust mapping: %w", err)
 	}
 
-	openidConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL)
+	openidConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL, mapping)
 	if err != nil {
 		return "", "", fmt.Errorf("getting an openid config: %w", err)
 	}
@@ -150,7 +179,7 @@ func (m *Manager) LoadState(ctx context.Context, stateID string) (State, error) 
 	return m.sessions.LoadState(ctx, stateID)
 }
 
-func (m *Manager) authURI(openidConf *oidc.Configuration, state State, pkce pkce.PKCE, mapping trust.OIDCMapping) (string, error) {
+func (m *Manager) authURI(openidConf *zitadeloidc.DiscoveryConfiguration, state State, pkce pkce.PKCE, mapping trust.OIDCMapping) (string, error) {
 	u, err := url.Parse(openidConf.AuthorizationEndpoint)
 	if err != nil {
 		return "", fmt.Errorf("parsing authorisation endpoint url: %w", err)
@@ -176,25 +205,9 @@ func (m *Manager) authURI(openidConf *oidc.Configuration, state State, pkce pkce
 	return u.String(), nil
 }
 
-func (m *Manager) getProviderKeySet(ctx context.Context, oidcConf *oidc.Configuration) (*jose.JSONWebKeySet, error) {
-	var keySet jose.JSONWebKeySet
-	uri := oidcConf.JwksURI
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
-	if err != nil {
-		return nil, fmt.Errorf("creating a new HTTP request: %w", err)
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("executing an http request: %w", err)
-	}
-
-	err = json.NewDecoder(resp.Body).Decode(&keySet)
-	if err != nil {
-		return nil, fmt.Errorf("decoding keyset response: %w", err)
-	}
-
-	return &keySet, nil
+// newRemoteKeySet creates a remote key set for the given JWKS URI.
+func (m *Manager) newRemoteKeySet(oidcConf *zitadeloidc.DiscoveryConfiguration, mapping trust.OIDCMapping) zitadeloidc.KeySet {
+	return rp.NewRemoteKeySet(m.httpClient(mapping), oidcConf.JwksURI)
 }
 
 func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerprint string) (OIDCSessionData, error) {
@@ -203,7 +216,6 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("loading state from the storage: %w", err)
 	}
 
-	// audit log metadata
 	correlationId := uuid.NewString()
 	metadata, err := otlpaudit.NewEventMetadata("session manager", state.TenantID, correlationId)
 	if err != nil {
@@ -228,7 +240,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("getting trust mapping: %w", err)
 	}
 
-	openidConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL)
+	openidConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL, mapping)
 	if err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get openid configuration")
 		return OIDCSessionData{}, fmt.Errorf("getting openid configuration: %w", err)
@@ -244,52 +256,21 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 
 	sessionID := m.pkce.SessionID()
 	csrfToken := csrf.NewToken(sessionID, m.csrfSecret)
-	algs := make([]jose.SignatureAlgorithm, 0, len(openidConf.IDTokenSigningAlgValuesSupported))
-	for _, alg := range openidConf.IDTokenSigningAlgValuesSupported {
-		algs = append(algs, jose.SignatureAlgorithm(alg))
-	}
-	token, err := jwt.ParseSigned(tokens.IDToken, algs)
+
+	keySet := m.newRemoteKeySet(openidConf, mapping)
+	verifier := rp.NewIDTokenVerifier(
+		mapping.IssuerURL,
+		m.getClientID(mapping),
+		keySet,
+		rp.WithSupportedSigningAlgorithms(openidConf.IDTokenSigningAlgValuesSupported...),
+	)
+
+	idTokenClaims, err := rp.VerifyTokens[*AppIDTokenClaims](ctx, tokens.AccessToken, tokens.IDToken, verifier)
 	if err != nil {
-		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to parse id token")
-		return OIDCSessionData{}, fmt.Errorf("parsing id token: %w, %s", err, algs)
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "id token verification failed")
+		return OIDCSessionData{}, fmt.Errorf("verifying id token: %w", err)
 	}
 
-	keyset, err := m.getProviderKeySet(ctx, openidConf)
-	if err != nil {
-		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get jwks for provider")
-		return OIDCSessionData{}, fmt.Errorf("getting jwks for a provider: %w", err)
-	}
-
-	type CustomClaims struct {
-		SID        string   `json:"sid"`
-		UserUUID   string   `json:"user_uuid"`
-		GivenName  string   `json:"given_name"`
-		FamilyName string   `json:"family_name"`
-		Email      string   `json:"email"`
-		Groups     []string `json:"groups"`
-	}
-
-	type ExtraClaims struct {
-		AtHash string `json:"at_hash,omitempty"`
-	}
-
-	var standardClaims jwt.Claims
-	var customClaims CustomClaims
-	var extraClaims ExtraClaims
-	err = token.Claims(keyset, &standardClaims, &customClaims, &extraClaims)
-	if err != nil {
-		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get JWT claims")
-		return OIDCSessionData{}, fmt.Errorf("getting JWT claims: %w", err)
-	}
-
-	if extraClaims.AtHash != "" {
-		err := m.verifyAccessToken(tokens.AccessToken, extraClaims.AtHash, token)
-		if err != nil {
-			return OIDCSessionData{}, err
-		}
-	}
-
-	// prepare the auth context used by ExtAuthZ
 	authContext := map[string]string{
 		"issuer":    mapping.IssuerURL,
 		"client_id": m.getClientID(mapping),
@@ -304,17 +285,17 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 	session := Session{
 		ID:          sessionID,
 		TenantID:    state.TenantID,
-		ProviderID:  customClaims.SID,
+		ProviderID:  idTokenClaims.SessionID,
 		Fingerprint: fingerprint,
 		CSRFToken:   csrfToken,
 		Issuer:      mapping.IssuerURL,
 		Claims: Claims{
-			Subject:    standardClaims.Subject,
-			UserUUID:   customClaims.UserUUID,
-			GivenName:  customClaims.GivenName,
-			FamilyName: customClaims.FamilyName,
-			Email:      customClaims.Email,
-			Groups:     customClaims.Groups,
+			Subject:    idTokenClaims.GetSubject(),
+			UserUUID:   idTokenClaims.UserUUID,
+			GivenName:  idTokenClaims.GivenName,
+			FamilyName: idTokenClaims.FamilyName,
+			Email:      idTokenClaims.Email,
+			Groups:     idTokenClaims.Groups,
 		},
 		AccessToken:  tokens.AccessToken,
 		RefreshToken: tokens.RefreshToken,
@@ -339,7 +320,6 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		return OIDCSessionData{}, fmt.Errorf("deleting state: %w", err)
 	}
 
-	// audit userLoginSuccess
 	event, err := otlpaudit.NewUserLoginSuccessEvent(metadata, state.TenantID, otlpaudit.LOGINMETHOD_OPENIDCONNECT, otlpaudit.MFATYPE_NONE, otlpaudit.USERTYPE_BUSINESS, state.TenantID)
 	if err != nil {
 		return OIDCSessionData{}, fmt.Errorf("creating audit log: %w", err)
@@ -376,7 +356,7 @@ func (m *Manager) Logout(ctx context.Context, sessionID string) (string, error) 
 
 	ctx = slogctx.With(ctx, "issuerUrl", mapping.IssuerURL)
 
-	oidcConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL)
+	oidcConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL, mapping)
 	if err != nil {
 		slogctx.Warn(ctx, "failed to get oidc configuration", "error", err)
 		return "", fmt.Errorf("getting oidc configuration: %w", err)
@@ -390,7 +370,6 @@ func (m *Manager) Logout(ctx context.Context, sessionID string) (string, error) 
 	if oidcConf.EndSessionEndpoint == "" {
 		slogctx.Warn(ctx, "the provider does not support RP-Initiated Logout")
 
-		// Redirect to the landing page if possible
 		if m.postLogoutRedirectURL != "" {
 			return m.postLogoutRedirectURL, nil
 		}
@@ -442,11 +421,9 @@ func (m *Manager) BCLogout(ctx context.Context, logoutJWT string) error {
 		return fmt.Errorf("parsing jwt: %w", err)
 	}
 
-	// Logout token must contain either a sub or a sid Claim, and may contain both.
 	type logoutTokenClaims struct {
 		jwt.Claims
 
-		// Events is always "http://schemas.openid.net/event/backchannel-logout": {}
 		Events    map[string]json.RawMessage `json:"events,omitempty"`
 		SessionID string                     `json:"sid,omitempty"`
 	}
@@ -478,19 +455,18 @@ func (m *Manager) BCLogout(ctx context.Context, logoutJWT string) error {
 		return fmt.Errorf("getting trust mapping: %w", err)
 	}
 
-	oidcConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL)
+	oidcConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL, mapping)
 	if err != nil {
 		return fmt.Errorf("getting oidc config: %w", err)
 	}
 
-	keyset, err := m.getProviderKeySet(ctx, oidcConf)
-	if err != nil {
-		return fmt.Errorf("getting jwks for a provider: %w", err)
-	}
-
-	var claims logoutTokenClaims
-	if err := token.Claims(keyset, &claims); err != nil {
-		return fmt.Errorf("parsing claims: %w", err)
+	keyset := m.newRemoteKeySet(oidcConf, mapping)
+	if _, err := rp.VerifyIDToken[*zitadeloidc.IDTokenClaims](ctx, logoutJWT, rp.NewIDTokenVerifier(
+		mapping.IssuerURL,
+		m.getClientID(mapping),
+		keyset,
+	)); err != nil {
+		return fmt.Errorf("verifying logout token: %w", err)
 	}
 
 	if err := m.sessions.DeleteSession(ctx, session); err != nil {
@@ -526,7 +502,6 @@ func (m *Manager) MakeSessionCookie(ctx context.Context, tenantID, value string)
 
 func (m *Manager) MakeCSRFCookie(ctx context.Context, tenantID, value string) (*http.Cookie, error) {
 	csrfCookie := m.csrfCookieTemplate.ToCookie(value)
-
 	if tenantID != "" {
 		csrfCookie.Name = csrfCookie.Name + "-" + tenantID
 	}
@@ -566,9 +541,7 @@ func checkCookie(ctx context.Context, csrfCookie *http.Cookie) {
 	}
 }
 
-// sendUserLoginFailureAudit creates the user-login-failure audit event and sends it.
-// The function logs any errors encountered while creating or sending the event but
-// does not propagate them to the caller.
+// sendUserLoginFailureAudit sends a user-login-failure audit event, logging any errors without propagating them.
 func (m *Manager) sendUserLoginFailureAudit(ctx context.Context, metadata otlpaudit.EventMetadata, objectID, reason string) {
 	if m.audit == nil {
 		slogctx.Warn(ctx, "audit logger is nil; skipping user login failure event")
@@ -586,29 +559,6 @@ func (m *Manager) sendUserLoginFailureAudit(ctx context.Context, metadata otlpau
 		slogctx.Error(ctx, "Failed to send audit log for user login failure", "error", err)
 	}
 	slogctx.Debug(ctx, "sent audit log for user login failure")
-}
-
-func (m *Manager) verifyAccessToken(accessToken, atHash string, idToken *jwt.JSONWebToken) error {
-	var h hash.Hash
-	switch alg := idToken.Headers[0].Algorithm; alg {
-	case "RS256", "ES256", "PS256":
-		h = sha256.New()
-	case "RS384", "ES384", "PS384":
-		h = sha512.New384()
-	case "RS512", "ES512", "PS512", "EdDSA":
-		h = sha512.New()
-	default:
-		return fmt.Errorf("oidc: unsupported signing algorithm %q", alg)
-	}
-
-	h.Write([]byte(accessToken)) // NOSONAR
-	sum := h.Sum(nil)[:h.Size()/2]
-	actual := base64.RawURLEncoding.EncodeToString(sum)
-	if actual != atHash {
-		return serviceerr.ErrInvalidAtHash
-	}
-
-	return nil
 }
 
 func (m *Manager) httpClient(mapping trust.OIDCMapping) *http.Client {
@@ -631,7 +581,7 @@ func (m *Manager) getClientID(mapping trust.OIDCMapping) string {
 	return m.clientID
 }
 
-func (m *Manager) exchangeCode(ctx context.Context, openidConf *oidc.Configuration, code, codeVerifier string, mapping trust.OIDCMapping) (tokenResponse, error) {
+func (m *Manager) exchangeCode(ctx context.Context, openidConf *zitadeloidc.DiscoveryConfiguration, code, codeVerifier string, mapping trust.OIDCMapping) (tokenResponse, error) {
 	data := url.Values{}
 	data.Set("grant_type", "authorization_code")
 	data.Set("code", code)

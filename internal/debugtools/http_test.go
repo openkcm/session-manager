@@ -1,6 +1,7 @@
 package debugtools
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -23,29 +24,30 @@ func Test_transport_RoundTrip(t *testing.T) {
 	tests := []struct {
 		name    string
 		base    http.RoundTripper
-		req     *http.Request
 		want    *http.Response
 		wantErr bool
 	}{
 		{
 			name:    "Round trip",
 			base:    dummyRoundTripper{resp: resp, err: nil},
-			req:     httptest.NewRequest(http.MethodGet, url, nil),
 			want:    resp,
 			wantErr: false,
 		},
 		{
 			name:    "Return an error",
 			base:    dummyRoundTripper{resp: nil, err: errors.New("err")},
-			req:     httptest.NewRequest(http.MethodGet, url, nil),
 			want:    nil,
 			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+			if err != nil {
+				t.Fatalf("failed to create request: %v", err)
+			}
 			tr := NewTransport(tt.base)
-			got, err := tr.RoundTrip(tt.req)
+			got, err := tr.RoundTrip(req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("transport.RoundTrip() error = %v, wantErr %v", err, tt.wantErr)
 				return
