@@ -18,11 +18,11 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.1
+	github.com/jellydator/ttlcache/v3 v3.4.0
 	github.com/moby/moby/api v1.54.1
 	github.com/oapi-codegen/runtime v1.4.0
 	github.com/openkcm/api-sdk v0.17.0
 	github.com/openkcm/common-sdk v1.15.2
-	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pressly/goose/v3 v3.27.0
 	github.com/samber/oops v1.21.0
 	github.com/spf13/cobra v1.10.2
