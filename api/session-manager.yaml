@@ -1,4 +1,4 @@
-openapi: 3.1.1
+openapi: 3.0.4
 info:
     title: Session Manager
     description:
@@ -63,6 +63,11 @@ paths:
 
                 This allows the CMK UI to iniate the SLO.
             parameters:
+                - name: tenant_id
+                  in: query
+                  required: true
+                  schema:
+                      type: string
                 - name: "Cookie"
                   in: header
                   required: true

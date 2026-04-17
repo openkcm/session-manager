@@ -42,6 +42,7 @@ type CallbackParams struct {
 
 // LogoutParams defines parameters for Logout.
 type LogoutParams struct {
+	TenantID   string `form:"tenant_id" json:"tenant_id"`
 	Cookie     string `json:"Cookie"`
 	XCSRFToken string `json:"X-CSRF-Token"`
 }
@@ -211,6 +212,21 @@ func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params LogoutParams
+
+	// ------------- Required query parameter "tenant_id" -------------
+
+	if paramValue := r.URL.Query().Get("tenant_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "tenant_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "tenant_id", r.URL.Query(), &params.TenantID)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tenant_id", Err: err})
+		return
+	}
 
 	headers := r.Header
 

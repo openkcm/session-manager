@@ -38,8 +38,8 @@ type openAPIServer struct {
 
 	csrfSecret []byte
 
-	sessionIDCookieName,
-	csrfTokenCookieName string
+	sessionIDCookieNamePrefix string
+	csrfTokenCookieNamePrefix string
 }
 
 // Ensure openAPIServer implements [openapi.StrictServerInterface]
@@ -49,14 +49,14 @@ var _ openapi.StrictServerInterface = (*openAPIServer)(nil)
 func newOpenAPIServer(
 	sManager sessionManager,
 	csrfSecret []byte,
-	sessionIDCookieName,
-	csrfTokenCookieName string,
+	sessionIDCookieNamePrefix,
+	csrfTokenCookieNamePrefix string,
 ) *openAPIServer {
 	return &openAPIServer{
-		sManager:            sManager,
-		csrfSecret:          csrfSecret,
-		sessionIDCookieName: sessionIDCookieName,
-		csrfTokenCookieName: csrfTokenCookieName,
+		sManager:                  sManager,
+		csrfSecret:                csrfSecret,
+		sessionIDCookieNamePrefix: sessionIDCookieNamePrefix,
+		csrfTokenCookieNamePrefix: csrfTokenCookieNamePrefix,
 	}
 }
 
@@ -228,7 +228,7 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 	ctx, span := tracer.Tracer("").Start(ctx, "logout")
 	defer span.End()
 
-	slogctx.Debug(ctx, "Logout() called")
+	slogctx.Debug(ctx, "Logout() called", "tenantId", request.Params.TenantID)
 	defer slogctx.Debug(ctx, "Logout() completed")
 
 	rw, err := middleware.ResponseWriterFromContext(ctx)
@@ -257,6 +257,8 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 		}, nil
 	}
 
+	sessionCookieName := s.sessionIDCookieNamePrefix + "-" + request.Params.TenantID
+	csrfCookieName := s.csrfTokenCookieNamePrefix + "-" + request.Params.TenantID
 	var sessionCookie *http.Cookie
 	var csrfCookie *http.Cookie
 
@@ -265,9 +267,9 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 	// so we can safely iterate over the cookies.
 	for _, cookie := range cookies {
 		switch cookie.Name {
-		case s.csrfTokenCookieName:
+		case csrfCookieName:
 			csrfCookie = cookie
-		case s.sessionIDCookieName:
+		case sessionCookieName:
 			sessionCookie = cookie
 		}
 
@@ -278,6 +280,7 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 
 	if sessionCookie == nil || sessionCookie.Value == "" {
 		body, status := newBadRequest("missing session id in the cookies")
+		slogctx.Warn(ctx, "missing session id in the cookies")
 		return openapi.LogoutdefaultJSONResponse{
 			Body:       body,
 			StatusCode: status,
@@ -286,6 +289,7 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 
 	if csrfCookie == nil || csrfCookie.Value == "" {
 		body, status := newBadRequest("missing csrf token in the cookies")
+		slogctx.Warn(ctx, "missing csrf token in the cookies")
 		return openapi.LogoutdefaultJSONResponse{
 			Body:       body,
 			StatusCode: status,
