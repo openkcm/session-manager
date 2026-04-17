@@ -89,8 +89,8 @@ func TestNewOpenAPIServer(t *testing.T) {
 
 		assert.NotNil(t, server)
 		assert.Equal(t, csrfSecret, server.csrfSecret)
-		assert.Equal(t, sessionCookieName, server.sessionIDCookieName)
-		assert.Equal(t, csrfCookieName, server.csrfTokenCookieName)
+		assert.Equal(t, sessionCookieName, server.sessionIDCookieNamePrefix)
+		assert.Equal(t, csrfCookieName, server.csrfTokenCookieNamePrefix)
 	})
 }
 
@@ -549,6 +549,7 @@ func TestOpenAPIServer_Logout_MissingSessionCookie(t *testing.T) {
 
 func TestOpenAPIServer_Logout_MissingCSRFCookie(t *testing.T) {
 	t.Run("returns an error when CSRF cookie is missing", func(t *testing.T) {
+		const tenantID = "tenant-1"
 		server := newOpenAPIServer(nil, []byte("secret"), "session-id", "csrf-token")
 
 		rw := httptest.NewRecorder()
@@ -556,7 +557,8 @@ func TestOpenAPIServer_Logout_MissingCSRFCookie(t *testing.T) {
 
 		logoutReq := openapi.LogoutRequestObject{
 			Params: openapi.LogoutParams{
-				Cookie:     "session-id=session-123",
+				TenantID:   tenantID,
+				Cookie:     "session-id-" + tenantID + "=session-123",
 				XCSRFToken: "some-token",
 			},
 		}
@@ -576,6 +578,7 @@ func TestOpenAPIServer_Logout_MissingCSRFCookie(t *testing.T) {
 
 func TestOpenAPIServer_Logout_InvalidCSRFToken(t *testing.T) {
 	t.Run("returns an error when CSRF token is invalid", func(t *testing.T) {
+		const tenantID = "tenant-1"
 		server := newOpenAPIServer(nil, []byte("test-secret-32-bytes-length!!"), "session-id", "csrf-token")
 
 		rw := httptest.NewRecorder()
@@ -583,7 +586,8 @@ func TestOpenAPIServer_Logout_InvalidCSRFToken(t *testing.T) {
 
 		logoutReq := openapi.LogoutRequestObject{
 			Params: openapi.LogoutParams{
-				Cookie:     "session-id=session-123; csrf-token=csrf-123",
+				TenantID:   tenantID,
+				Cookie:     "session-id-" + tenantID + "=session-123; csrf-token-" + tenantID + "=csrf-123",
 				XCSRFToken: "wrong-csrf-token",
 			},
 		}
@@ -603,6 +607,7 @@ func TestOpenAPIServer_Logout_InvalidCSRFToken(t *testing.T) {
 func TestOpenAPIServer_Logout_Failed(t *testing.T) {
 	t.Run("returns an error Logout failed", func(t *testing.T) {
 		const tokenKey = "test-secret-32-bytes-length!!"
+		const tenantID = "tenant-1"
 		mock := &mockSessionManager{
 			logoutFunc: func(ctx context.Context, sessionID string) (string, error) {
 				return "", errors.New("error")
@@ -617,7 +622,8 @@ func TestOpenAPIServer_Logout_Failed(t *testing.T) {
 		token := csrf.NewToken("session-123", []byte(tokenKey))
 		logoutReq := openapi.LogoutRequestObject{
 			Params: openapi.LogoutParams{
-				Cookie:     "session-id=session-123; csrf-token=" + token,
+				TenantID:   tenantID,
+				Cookie:     "session-id-" + tenantID + "=session-123; csrf-token-" + tenantID + "=" + token,
 				XCSRFToken: token,
 			},
 		}
@@ -769,6 +775,7 @@ func TestOpenAPIServer_Logout_Success(t *testing.T) {
 		expectedURL := "https://idp.example.com/logout"
 		csrfSecret := []byte("secret-key-12345")
 		sessionID := "session-123"
+		tenantID := "tenant-1"
 
 		// Generate a valid CSRF token
 		validCSRFToken := csrf.NewToken(sessionID, csrfSecret)
@@ -786,7 +793,8 @@ func TestOpenAPIServer_Logout_Success(t *testing.T) {
 
 		logoutReq := openapi.LogoutRequestObject{
 			Params: openapi.LogoutParams{
-				Cookie:     "session-id=" + sessionID + "; csrf-token=" + validCSRFToken,
+				TenantID:   tenantID,
+				Cookie:     "session-id-" + tenantID + "=" + sessionID + "; csrf-token-" + tenantID + "=" + validCSRFToken,
 				XCSRFToken: validCSRFToken,
 			},
 		}
