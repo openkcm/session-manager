@@ -15,6 +15,7 @@ import (
 )
 
 func TestManager_MakeSessionCookie(t *testing.T) {
+	ctx := t.Context()
 	tests := []struct {
 		name        string
 		cfg         *config.SessionManager
@@ -139,7 +140,7 @@ func TestManager_MakeSessionCookie(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m, err := session.NewManager(
+			m, err := session.NewManager(ctx,
 				tt.cfg,
 				nil,
 				sessionmock.NewInMemRepository(),
@@ -165,6 +166,7 @@ func TestManager_MakeSessionCookie(t *testing.T) {
 }
 
 func TestManager_MakeCSRFCookie(t *testing.T) {
+	ctx := t.Context()
 	tests := []struct {
 		name        string
 		cfg         *config.SessionManager
@@ -289,7 +291,7 @@ func TestManager_MakeCSRFCookie(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m, err := session.NewManager(
+			m, err := session.NewManager(ctx,
 				tt.cfg,
 				nil,
 				sessionmock.NewInMemRepository(),
@@ -315,6 +317,7 @@ func TestManager_MakeCSRFCookie(t *testing.T) {
 }
 
 func TestManager_MakeLoginCSRFCookie(t *testing.T) {
+	ctx := t.Context()
 	cfg := &config.SessionManager{
 		CSRFSecretParsed: []byte(testCSRFSecret),
 		LoginCSRFCookieTemplate: config.CookieTemplate{
@@ -327,7 +330,7 @@ func TestManager_MakeLoginCSRFCookie(t *testing.T) {
 		},
 	}
 
-	m, err := session.NewManager(cfg, nil, sessionmock.NewInMemRepository(), nil)
+	m, err := session.NewManager(ctx, cfg, nil, sessionmock.NewInMemRepository(), nil)
 	require.NoError(t, err)
 
 	cookie, err := m.MakeLoginCSRFCookie(t.Context(), "csrf-456")
@@ -339,6 +342,7 @@ func TestManager_MakeLoginCSRFCookie(t *testing.T) {
 }
 
 func TestManager_ValidateCSRFToken(t *testing.T) {
+	ctx := t.Context()
 	csrfSecret := []byte(testCSRFSecret)
 
 	cfg := &config.SessionManager{
@@ -361,7 +365,7 @@ func TestManager_ValidateCSRFToken(t *testing.T) {
 		},
 	}
 
-	m, err := session.NewManager(
+	m, err := session.NewManager(ctx,
 		cfg,
 		nil,
 		sessionmock.NewInMemRepository(),
@@ -412,6 +416,7 @@ func TestManager_ValidateCSRFToken(t *testing.T) {
 }
 
 func TestManager_Logout(t *testing.T) {
+	ctx := t.Context()
 	const (
 		sessionID     = "session-123"
 		tenantID      = "tenant-1"
@@ -488,7 +493,7 @@ func TestManager_Logout(t *testing.T) {
 
 			oidcRepo := tt.setupOIDCRepo(t)
 
-			m, err := session.NewManager(
+			m, err := session.NewManager(ctx,
 				tt.cfg,
 				oidcRepo,
 				sessionRepo,

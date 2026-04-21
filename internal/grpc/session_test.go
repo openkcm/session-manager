@@ -25,12 +25,13 @@ import (
 )
 
 func TestNewSessionServer(t *testing.T) {
+	ctx := t.Context()
 	t.Run("creates server successfully", func(t *testing.T) {
 		sessionRepo := sessionmock.NewInMemRepository()
 		trustRepo := trustmock.NewInMemRepository()
 		idleSessionTimeout := 90 * time.Minute
 
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, idleSessionTimeout, "")
+		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, idleSessionTimeout, "")
 
 		assert.NotNil(t, server)
 	})
@@ -40,7 +41,7 @@ func TestNewSessionServer(t *testing.T) {
 		trustRepo := trustmock.NewInMemRepository()
 		idleSessionTimeout := 90 * time.Minute
 
-		server := grpc.NewSessionServer(
+		server := grpc.NewSessionServer(ctx,
 			sessionRepo,
 			trustRepo,
 			idleSessionTimeout,
@@ -56,7 +57,7 @@ func TestNewSessionServer(t *testing.T) {
 		trustRepo := trustmock.NewInMemRepository()
 		idleSessionTimeout := 90 * time.Minute
 
-		server := grpc.NewSessionServer(
+		server := grpc.NewSessionServer(ctx,
 			sessionRepo,
 			trustRepo,
 			idleSessionTimeout,
@@ -122,7 +123,7 @@ func TestGetSession(t *testing.T) {
 			trustmock.WithTrust(sess.TenantID, mapping),
 		)
 
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, 90*time.Minute, "",
+		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "",
 			grpc.WithAllowHttpScheme(true),
 		)
 
@@ -193,7 +194,7 @@ func TestGetSession(t *testing.T) {
 			trustmock.WithTrust(sess.TenantID, mapping),
 		)
 
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, 90*time.Minute, "",
+		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "",
 			grpc.WithAllowHttpScheme(true),
 		)
 
@@ -249,7 +250,7 @@ func TestGetSession(t *testing.T) {
 			trustmock.WithTrust(sess.TenantID, mapping),
 		)
 
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, 90*time.Minute, "",
+		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "",
 			grpc.WithAllowHttpScheme(true),
 		)
 
@@ -273,7 +274,7 @@ func TestGetSession(t *testing.T) {
 		)
 		trustRepo := trustmock.NewInMemRepository()
 
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, 90*time.Minute, "")
+		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "")
 
 		req := &sessionv1.GetSessionRequest{
 			SessionId:   "session-123",
@@ -302,7 +303,7 @@ func TestGetSession(t *testing.T) {
 
 		trustRepo := trustmock.NewInMemRepository()
 
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, 90*time.Minute, "")
+		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "")
 
 		req := &sessionv1.GetSessionRequest{
 			SessionId:   "session-789",
@@ -329,7 +330,7 @@ func TestGetSession(t *testing.T) {
 
 		trustRepo := trustmock.NewInMemRepository()
 
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, 90*time.Minute, "")
+		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "")
 
 		req := &sessionv1.GetSessionRequest{
 			SessionId:   "session-fail",
@@ -360,7 +361,7 @@ func TestGetSession(t *testing.T) {
 		// No mapping added to repo
 		trustRepo := trustmock.NewInMemRepository()
 
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, 90*time.Minute, "")
+		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "")
 
 		req := &sessionv1.GetSessionRequest{
 			SessionId:   "session-no-provider",
@@ -396,7 +397,7 @@ func TestGetSession(t *testing.T) {
 			trustmock.WithTrust(sess.TenantID, mapping),
 		)
 
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, 90*time.Minute, "")
+		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "")
 
 		req := &sessionv1.GetSessionRequest{
 			SessionId:   "session-blocked",
@@ -444,7 +445,7 @@ func TestGetSession(t *testing.T) {
 			trustmock.WithTrust(sess.TenantID, mapping),
 		)
 
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, 90*time.Minute, "")
+		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "")
 
 		req := &sessionv1.GetSessionRequest{
 			SessionId:   "session-fingerprint",
@@ -480,7 +481,7 @@ func TestGetSession(t *testing.T) {
 			trustmock.WithTrust("wrong-tenant", mapping),
 		)
 
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, 90*time.Minute, "")
+		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "")
 
 		req := &sessionv1.GetSessionRequest{
 			SessionId:   "session-tenant",
@@ -516,7 +517,7 @@ func TestGetSession(t *testing.T) {
 			trustmock.WithTrust(sess.TenantID, mapping),
 		)
 
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, 90*time.Minute, "")
+		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "")
 
 		req := &sessionv1.GetSessionRequest{
 			SessionId:   "session-config-fail",
@@ -568,7 +569,7 @@ func TestGetSession(t *testing.T) {
 			trustmock.WithTrust(sess.TenantID, mapping),
 		)
 
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, 90*time.Minute, "",
+		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "",
 			grpc.WithAllowHttpScheme(true),
 		)
 
@@ -624,7 +625,7 @@ func TestGetSession(t *testing.T) {
 			trustmock.WithTrust(sess.TenantID, mapping),
 		)
 
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, 90*time.Minute, "",
+		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "",
 			grpc.WithAllowHttpScheme(true),
 		)
 
@@ -673,7 +674,7 @@ func TestGetSession(t *testing.T) {
 			trustmock.WithTrust(sess.TenantID, mapping),
 		)
 
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, 90*time.Minute, "",
+		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "",
 			grpc.WithAllowHttpScheme(true),
 		)
 
@@ -692,6 +693,7 @@ func TestGetSession(t *testing.T) {
 }
 
 func TestWithQueryParametersIntrospect(t *testing.T) {
+	ctx := t.Context()
 	t.Run("sets query parameters correctly", func(t *testing.T) {
 		params := []string{"param1", "param2", "param3"}
 		opt := grpc.WithQueryParametersIntrospect(params)
@@ -702,7 +704,7 @@ func TestWithQueryParametersIntrospect(t *testing.T) {
 		sessionRepo := sessionmock.NewInMemRepository()
 		trustRepo := trustmock.NewInMemRepository()
 
-		server := grpc.NewSessionServer(
+		server := grpc.NewSessionServer(ctx,
 			sessionRepo,
 			trustRepo,
 			90*time.Minute,
@@ -729,7 +731,7 @@ func TestGetOIDCProvider(t *testing.T) {
 			trustmock.WithTrust("tenant-123", mapping),
 		)
 
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, 90*time.Minute, "")
+		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "")
 
 		req := &sessionv1.GetOIDCProviderRequest{
 			TenantId: "tenant-123",
@@ -749,7 +751,7 @@ func TestGetOIDCProvider(t *testing.T) {
 		sessionRepo := sessionmock.NewInMemRepository()
 		trustRepo := trustmock.NewInMemRepository()
 
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, 90*time.Minute, "")
+		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "")
 
 		req := &sessionv1.GetOIDCProviderRequest{
 			TenantId: "non-existent-tenant",
@@ -768,7 +770,7 @@ func TestGetOIDCProvider(t *testing.T) {
 			trustmock.WithGetError(errors.New("database connection error")),
 		)
 
-		server := grpc.NewSessionServer(sessionRepo, trustRepo, 90*time.Minute, "")
+		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "")
 
 		req := &sessionv1.GetOIDCProviderRequest{
 			TenantId: "tenant-123",

@@ -16,9 +16,9 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/google/uuid"
+	"github.com/jellydator/ttlcache/v3"
 	"github.com/openkcm/common-sdk/pkg/csrf"
 	"github.com/openkcm/common-sdk/pkg/oidc"
-	"github.com/patrickmn/go-cache"
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 	slogctx "github.com/veqryn/slog-context"
@@ -30,6 +30,8 @@ import (
 	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/internal/trust"
 )
+
+const defaultWKOCCacheExpiration = 30 * time.Minute
 
 var debugSettingSMDumpTransport = debugtools.NewSetting("smdumptransport")
 
@@ -60,12 +62,14 @@ type Manager struct {
 
 	csrfSecret []byte
 
-	cache *cache.Cache
-
 	allowHttpScheme bool
+
+	// cache well known OpenID configuration results
+	wkocCache *ttlcache.Cache[string, *oidc.Configuration]
 }
 
 func NewManager(
+	ctx context.Context,
 	cfg *config.SessionManager,
 	trustRepo trust.OIDCMappingRepository,
 	sessionsRepo Repository,
@@ -95,7 +99,6 @@ func NewManager(
 		clientID:                cfg.ClientAuth.ClientID,
 		newCreds:                func(clientID string) credentials.TransportCredentials { return credentials.NewInsecure(clientID) },
 		csrfSecret:              cfg.CSRFSecretParsed,
-		cache:                   cache.New(2*time.Minute, 10*time.Minute),
 	}
 
 	for _, opt := range opts {
@@ -103,6 +106,13 @@ func NewManager(
 			opt(m)
 		}
 	}
+
+	m.wkocCache = ttlcache.New(ttlcache.WithTTL[string, *oidc.Configuration](defaultWKOCCacheExpiration))
+	go m.wkocCache.Start()
+	go func(ctx context.Context) {
+		<-ctx.Done()
+		m.wkocCache.Stop()
+	}(ctx)
 
 	return m, nil
 }

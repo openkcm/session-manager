@@ -5,26 +5,19 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 
+	"github.com/jellydator/ttlcache/v3"
 	"github.com/openkcm/common-sdk/pkg/oidc"
 )
 
 func (m *Manager) getOpenIDConfig(ctx context.Context, issuerURL string) (*oidc.Configuration, error) {
-	const wkocPrefix = "wkoc_"
-
 	// first check the cache for a recent WKOC configuration for this issuer
 	hashedSuffix := sha256.Sum256([]byte(issuerURL))
-	cacheKey := wkocPrefix + base64.RawURLEncoding.EncodeToString(hashedSuffix[:])
-
-	cache, ok := m.cache.Get(cacheKey)
-	if ok {
-		value, ok := cache.(*oidc.Configuration)
-		if ok {
-			return value, nil
-		}
-		m.cache.Delete(cacheKey)
+	cacheKey := base64.RawURLEncoding.EncodeToString(hashedSuffix[:])
+	if item := m.wkocCache.Get(cacheKey); item != nil {
+		return item.Value(), nil
 	}
 
-	// otherwise, fetch the configuration and cache it
+	// otherwise, fetch the configuration
 	provider, err := oidc.NewProvider(issuerURL, []string{},
 		oidc.WithAllowHttpScheme(m.allowHttpScheme),
 	)
@@ -35,7 +28,9 @@ func (m *Manager) getOpenIDConfig(ctx context.Context, issuerURL string) (*oidc.
 	if err != nil {
 		return nil, err
 	}
-	m.cache.Set(cacheKey, cfg, 0)
+
+	// Cache the result with TTL
+	m.wkocCache.Set(cacheKey, cfg, ttlcache.DefaultTTL)
 
 	return cfg, nil
 }

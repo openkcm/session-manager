@@ -27,7 +27,7 @@ func TestStartGRPCServer_ContextCancellation(t *testing.T) {
 
 		// Create minimal server instances
 		oidcmappingsrv := grpc.NewOIDCMappingServer(nil)
-		sessionsrv := grpc.NewSessionServer(nil, nil, 0, "")
+		sessionsrv := grpc.NewSessionServer(ctx, nil, nil, 0, "")
 
 		// Start the server in a goroutine
 		errChan := make(chan error, 1)

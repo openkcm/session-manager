@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/jellydator/ttlcache/v3"
 	"github.com/openkcm/common-sdk/pkg/oidc"
-	"github.com/patrickmn/go-cache"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 	"google.golang.org/grpc/status"
@@ -27,6 +27,8 @@ import (
 	"github.com/openkcm/session-manager/internal/trust"
 )
 
+const defaultIntrospectionCacheExpiration = 30 * time.Second
+
 var debugSettingSMDumpTransport = debugtools.NewSetting("smdumptransport")
 
 type SessionServer struct {
@@ -41,10 +43,12 @@ type SessionServer struct {
 	allowHttpScheme           bool
 	clientID                  string
 
-	cache *cache.Cache
+	// cache introspection results
+	introspectionCache *ttlcache.Cache[string, oidc.Introspection]
 }
 
 func NewSessionServer(
+	ctx context.Context,
 	sessionRepo session.Repository,
 	trustRepo trust.OIDCMappingRepository,
 	idleSessionTimeout time.Duration,
@@ -55,7 +59,6 @@ func NewSessionServer(
 		sessionRepo:        sessionRepo,
 		trustRepo:          trustRepo,
 		idleSessionTimeout: idleSessionTimeout,
-		cache:              cache.New(2*time.Minute, 10*time.Minute),
 		newCreds:           func(clientID string) credentials.TransportCredentials { return credentials.NewInsecure(clientID) },
 		clientID:           clientID,
 	}
@@ -64,6 +67,13 @@ func NewSessionServer(
 			opt(s)
 		}
 	}
+
+	s.introspectionCache = ttlcache.New(ttlcache.WithTTL[string, oidc.Introspection](defaultIntrospectionCacheExpiration))
+	go s.introspectionCache.Start()
+	go func(ctx context.Context) {
+		<-ctx.Done()
+		s.introspectionCache.Stop()
+	}(ctx)
 
 	return s
 }
@@ -226,19 +236,11 @@ func (s *SessionServer) httpClient(mapping *trust.OIDCMapping) *http.Client {
 }
 
 func (s *SessionServer) introspectToken(ctx context.Context, token string, oidcTrust *trust.OIDCMapping) (oidc.Introspection, error) {
-	const introspectPrefix = "introspect_"
-
 	// first check the cache for a recent introspection result for this token
 	hashedSuffix := sha256.Sum256([]byte(token))
-	cacheKey := introspectPrefix + base64.RawURLEncoding.EncodeToString(hashedSuffix[:])
-
-	cache, ok := s.cache.Get(cacheKey)
-	if ok {
-		value, ok := cache.(oidc.Introspection)
-		if ok {
-			return value, nil
-		}
-		s.cache.Delete(cacheKey)
+	cacheKey := base64.RawURLEncoding.EncodeToString(hashedSuffix[:])
+	if item := s.introspectionCache.Get(cacheKey); item != nil {
+		return item.Value(), nil
 	}
 
 	httpClient := s.httpClient(oidcTrust)
@@ -254,7 +256,7 @@ func (s *SessionServer) introspectToken(ctx context.Context, token string, oidcT
 		return oidc.Introspection{Active: false}, err
 	}
 
-	// introspect the token and cache the result
+	// introspect the token
 	intr, err := provider.IntrospectToken(ctx, token)
 	if err != nil {
 		if errors.Is(err, oidc.ErrNoIntrospectionEndpoint) {
@@ -264,7 +266,9 @@ func (s *SessionServer) introspectToken(ctx context.Context, token string, oidcT
 		slogctx.Error(ctx, "Could not introspect access token", "error", err)
 		return oidc.Introspection{Active: false}, err
 	}
-	s.cache.Set(cacheKey, intr, 0)
+
+	// Cache the result with TTL
+	s.introspectionCache.Set(cacheKey, intr, ttlcache.DefaultTTL)
 
 	return intr, nil
 }

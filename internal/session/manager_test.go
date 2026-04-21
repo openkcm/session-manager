@@ -36,6 +36,7 @@ const (
 )
 
 func TestManager_Auth(t *testing.T) {
+	ctx := t.Context()
 	const (
 		requestURI  = "http://localhost/request.jwt"
 		callbackURL = "http://localhost/sm/callback"
@@ -140,7 +141,7 @@ func TestManager_Auth(t *testing.T) {
 			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
 			require.NoError(t, err)
 
-			m, err := session.NewManager(
+			m, err := session.NewManager(ctx,
 				tt.cfg,
 				tt.oidc,
 				tt.sessions,
@@ -369,7 +370,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 
 			tt.oidc.TAdd(tenantID, localOIDCMapping)
 
-			m, err := session.NewManager(
+			m, err := session.NewManager(ctx,
 				tt.cfg,
 				tt.oidc,
 				tt.sessions,
@@ -519,7 +520,7 @@ func TestManager_BCLogout(t *testing.T) {
 
 			tt.setupMock(oidcMock, sessionMock)
 
-			m, err := session.NewManager(
+			m, err := session.NewManager(ctx,
 				tt.cfg,
 				oidcMock,
 				sessionMock,
@@ -594,7 +595,7 @@ func TestManager_LogoutEdgeCases(t *testing.T) {
 				},
 			}
 
-			m, err := session.NewManager(cfg, oidcMock, sessionMock, auditLogger)
+			m, err := session.NewManager(ctx, cfg, oidcMock, sessionMock, auditLogger)
 			require.NoError(t, err)
 
 			_, err = m.Logout(ctx, tt.sessionID)
@@ -720,7 +721,7 @@ func TestManager_BCLogout_ErrorCases(t *testing.T) {
 				CSRFSecretParsed: []byte(testCSRFSecret),
 			}
 
-			m, err := session.NewManager(cfg, oidcMock, sessionMock, auditLogger, session.WithTransportCredentials(newTCBuilder(rt)))
+			m, err := session.NewManager(ctx, cfg, oidcMock, sessionMock, auditLogger, session.WithTransportCredentials(newTCBuilder(rt)))
 			require.NoError(t, err)
 
 			err = m.BCLogout(ctx, tt.jwt)
@@ -730,6 +731,7 @@ func TestManager_BCLogout_ErrorCases(t *testing.T) {
 }
 
 func TestManager_NewManager_Error(t *testing.T) {
+	ctx := t.Context()
 	auditServer := StartAuditServer(t)
 	defer auditServer.Close()
 
@@ -741,7 +743,7 @@ func TestManager_NewManager_Error(t *testing.T) {
 		CSRFSecretParsed: []byte(testCSRFSecret),
 	}
 
-	m, err := session.NewManager(cfg, trustmock.NewInMemRepository(), sessionmock.NewInMemRepository(), auditLogger)
+	m, err := session.NewManager(ctx, cfg, trustmock.NewInMemRepository(), sessionmock.NewInMemRepository(), auditLogger)
 	assert.Error(t, err)
 	assert.Nil(t, m)
 	assert.Contains(t, err.Error(), "parsing callback URL")

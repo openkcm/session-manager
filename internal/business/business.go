@@ -105,7 +105,7 @@ func internalMain(ctx context.Context, cfg *config.Config) error {
 
 	// Initialize the gRPC servers.
 	oidcmappingsrv := grpc.NewOIDCMappingServer(trustService)
-	sessionsrv := grpc.NewSessionServer(
+	sessionsrv := grpc.NewSessionServer(ctx,
 		sessionRepo,
 		trustRepo,
 		cfg.SessionManager.IdleSessionTimeout,
@@ -140,7 +140,7 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Man
 		return nil, nil, fmt.Errorf("failed to create audit logger: %w", err)
 	}
 
-	sessManager, err := session.NewManager(
+	sessManager, err := session.NewManager(ctx,
 		&cfg.SessionManager,
 		trustRepo,
 		sessionRepo,
