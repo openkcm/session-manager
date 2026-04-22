@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/openkcm/common-sdk/pkg/otlp"
@@ -69,7 +69,7 @@ func newTraceMiddleware(cfg *config.Config) nethttp.StrictHTTPMiddlewareFunc {
 
 		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error) {
 			ctx = slogctx.With(ctx,
-				commoncfg.AttrRequestID, uuid.NewString(),
+				commoncfg.AttrRequestID, uuid.Must(uuid.NewV4()).String(),
 				commoncfg.AttrOperation, operationID,
 			)
 
