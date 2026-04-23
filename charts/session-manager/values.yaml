@@ -322,7 +322,6 @@ config:
     idleSessionTimeout: 90m
     callbackURL: http://localhost:8080/sm/callback
     clientAuth:
-      clientID: "client-id"
       type: client_secret
       clientSecret:
         source: embedded

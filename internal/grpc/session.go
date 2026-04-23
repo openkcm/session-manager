@@ -41,7 +41,6 @@ type SessionServer struct {
 	queryParametersIntrospect []string
 	idleSessionTimeout        time.Duration
 	allowHttpScheme           bool
-	clientID                  string
 
 	// cache introspection results
 	introspectionCache *ttlcache.Cache[string, oidc.Introspection]
@@ -52,7 +51,6 @@ func NewSessionServer(
 	sessionRepo session.Repository,
 	trustRepo trust.OIDCMappingRepository,
 	idleSessionTimeout time.Duration,
-	clientID string,
 	opts ...SessionServerOption,
 ) *SessionServer {
 	s := &SessionServer{
@@ -60,7 +58,6 @@ func NewSessionServer(
 		trustRepo:          trustRepo,
 		idleSessionTimeout: idleSessionTimeout,
 		newCreds:           func(clientID string) credentials.TransportCredentials { return credentials.NewInsecure(clientID) },
-		clientID:           clientID,
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -220,7 +217,7 @@ func (s *SessionServer) getClientID(mapping *trust.OIDCMapping) string {
 		return mapping.ClientID
 	}
 
-	return s.clientID
+	return ""
 }
 
 func (s *SessionServer) httpClient(mapping *trust.OIDCMapping) *http.Client {

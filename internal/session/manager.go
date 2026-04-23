@@ -49,7 +49,6 @@ type Manager struct {
 	sessionDuration       time.Duration
 	idleSessionTimeout    time.Duration
 	callbackURL           *url.URL
-	clientID              string
 	queryParametersAuth   []string
 	queryParametersToken  []string
 	authContextKeys       []string
@@ -96,7 +95,6 @@ func NewManager(
 		csrfCookieTemplate:      cfg.CSRFCookieTemplate,
 		loginCSRFCookieTemplate: cfg.LoginCSRFCookieTemplate,
 		callbackURL:             callbackURL,
-		clientID:                cfg.ClientAuth.ClientID,
 		newCreds:                func(clientID string) credentials.TransportCredentials { return credentials.NewInsecure(clientID) },
 		csrfSecret:              cfg.CSRFSecretParsed,
 	}
@@ -638,7 +636,7 @@ func (m *Manager) getClientID(mapping trust.OIDCMapping) string {
 		return mapping.ClientID
 	}
 
-	return m.clientID
+	return ""
 }
 
 func (m *Manager) exchangeCode(ctx context.Context, openidConf *oidc.Configuration, code, codeVerifier string, mapping trust.OIDCMapping) (tokenResponse, error) {

@@ -20,8 +20,7 @@ func TestLoadHTTPClient_MTLS(t *testing.T) {
 	cfg := &config.Config{
 		SessionManager: config.SessionManager{
 			ClientAuth: config.ClientAuth{
-				Type:     "mtls",
-				ClientID: "test-client",
+				Type: "mtls",
 				MTLS: &commoncfg.MTLS{
 					Cert:    commoncfg.SourceRef{File: commoncfg.CredentialFile{Path: "/nonexistent/cert.pem"}},
 					CertKey: commoncfg.SourceRef{File: commoncfg.CredentialFile{Path: "/nonexistent/key.pem"}},
@@ -42,7 +41,6 @@ func TestLoadHTTPClient_ClientSecret(t *testing.T) {
 		SessionManager: config.SessionManager{
 			ClientAuth: config.ClientAuth{
 				Type:         "client_secret",
-				ClientID:     "test-client",
 				ClientSecret: commoncfg.SourceRef{Source: "embedded", Value: "test-secret"},
 			},
 		},
@@ -53,7 +51,7 @@ func TestLoadHTTPClient_ClientSecret(t *testing.T) {
 	require.NotNil(t, builder)
 
 	// Verify it's using our custom transport
-	creds := builder(cfg.SessionManager.ClientAuth.ClientID)
+	creds := builder("test-client")
 	clientSecretCreds, ok := creds.(*credentials.ClientSecretPost)
 	require.True(t, ok)
 
@@ -65,8 +63,7 @@ func TestLoadHTTPClient_Insecure(t *testing.T) {
 	cfg := &config.Config{
 		SessionManager: config.SessionManager{
 			ClientAuth: config.ClientAuth{
-				Type:     "insecure",
-				ClientID: "test-client",
+				Type: "insecure",
 			},
 		},
 	}
@@ -80,8 +77,7 @@ func TestLoadHTTPClient_UnknownType(t *testing.T) {
 	cfg := &config.Config{
 		SessionManager: config.SessionManager{
 			ClientAuth: config.ClientAuth{
-				Type:     "unknown",
-				ClientID: "test-client",
+				Type: "unknown",
 			},
 		},
 	}
