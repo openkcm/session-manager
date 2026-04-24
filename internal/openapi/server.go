@@ -42,9 +42,8 @@ type CallbackParams struct {
 
 // LogoutParams defines parameters for Logout.
 type LogoutParams struct {
-	TenantID   string `form:"tenant_id" json:"tenant_id"`
-	Cookie     string `json:"Cookie"`
-	XCSRFToken string `json:"X-CSRF-Token"`
+	TenantID string `form:"tenant_id" json:"tenant_id"`
+	Cookie   string `json:"Cookie"`
 }
 
 // BclogoutFormdataRequestBody defines body for Bclogout for application/x-www-form-urlencoded ContentType.
@@ -250,29 +249,6 @@ func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request
 	} else {
 		err := fmt.Errorf("Header parameter Cookie is required, but not found")
 		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Cookie", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken string
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
 		return
 	}
 

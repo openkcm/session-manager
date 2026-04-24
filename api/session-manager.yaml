@@ -53,7 +53,7 @@ paths:
         get:
             operationId: logout
             description: |
-                When the user clicks the logout button, the CMK UI calls this endpoint. Steps:
+                When the user clicks the logout button, the CMK UI redirects to this endpoint. Steps:
 
                 - lookup the session details using the given session ID
                 - lookup the end session endpoint of the related OIDC provider
@@ -69,11 +69,6 @@ paths:
                   schema:
                       type: string
                 - name: "Cookie"
-                  in: header
-                  required: true
-                  schema:
-                      type: string
-                - name: "X-CSRF-Token"
                   in: header
                   required: true
                   schema:

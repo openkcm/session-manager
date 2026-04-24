@@ -2,8 +2,6 @@ package server
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
 	"errors"
 	"net/http"
 
@@ -260,20 +258,20 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 	sessionCookieName := s.sessionIDCookieNamePrefix + "-" + request.Params.TenantID
 	csrfCookieName := s.csrfTokenCookieNamePrefix + "-" + request.Params.TenantID
 	var sessionCookie *http.Cookie
-	var csrfCookie *http.Cookie
+	var cookiesToClear []*http.Cookie
 
 	// http.ParseCookie limits the number of cookies to 3000
 	// (configurable with $GODEBUG environment variable, see httpcookiemaxnum),
 	// so we can safely iterate over the cookies.
 	for _, cookie := range cookies {
 		switch cookie.Name {
-		case csrfCookieName:
-			csrfCookie = cookie
 		case sessionCookieName:
 			sessionCookie = cookie
+			cookiesToClear = append(cookiesToClear, cookie)
+		case csrfCookieName:
+			cookiesToClear = append(cookiesToClear, cookie)
 		}
-
-		if sessionCookie != nil && sessionCookie.Value != "" && csrfCookie != nil && csrfCookie.Value != "" {
+		if len(cookiesToClear) == 2 {
 			break
 		}
 	}
@@ -281,38 +279,6 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 	if sessionCookie == nil || sessionCookie.Value == "" {
 		body, status := newBadRequest("missing session id in the cookies")
 		slogctx.Warn(ctx, "missing session id in the cookies")
-		return openapi.LogoutdefaultJSONResponse{
-			Body:       body,
-			StatusCode: status,
-		}, nil
-	}
-
-	if csrfCookie == nil || csrfCookie.Value == "" {
-		body, status := newBadRequest("missing csrf token in the cookies")
-		slogctx.Warn(ctx, "missing csrf token in the cookies")
-		return openapi.LogoutdefaultJSONResponse{
-			Body:       body,
-			StatusCode: status,
-		}, nil
-	}
-
-	if !csrf.Validate(request.Params.XCSRFToken, sessionCookie.Value, s.csrfSecret) {
-		csrfTokenHash := sha256.Sum256([]byte(csrfCookie.Value))
-		csrfSecretHash := sha256.Sum256(s.csrfSecret)
-		sessionIDHash := sha256.Sum256([]byte(sessionCookie.Value))
-
-		slogctx.Warn(
-			ctx,
-			"received invalid csrf token value",
-			"csrfTokenHash",
-			base64.RawStdEncoding.EncodeToString(csrfTokenHash[:5]),
-			"csrfSecretHash",
-			base64.RawStdEncoding.EncodeToString(csrfSecretHash[:5]),
-			"sessionIdHash",
-			base64.RawStdEncoding.EncodeToString(sessionIDHash[:5]),
-		)
-
-		body, status := s.toErrorModel(serviceerr.ErrInvalidCSRFToken)
 		return openapi.LogoutdefaultJSONResponse{
 			Body:       body,
 			StatusCode: status,
@@ -333,7 +299,7 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 	}
 
 	// Reset all cookies
-	for _, cookie := range []*http.Cookie{csrfCookie, sessionCookie} {
+	for _, cookie := range cookiesToClear {
 		cookie.MaxAge = -1
 		cookie.Value = ""
 		http.SetCookie(rw, cookie)

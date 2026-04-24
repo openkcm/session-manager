@@ -477,8 +477,7 @@ func TestOpenAPIServer_Logout_NoResponseWriter(t *testing.T) {
 
 		logoutReq := openapi.LogoutRequestObject{
 			Params: openapi.LogoutParams{
-				Cookie:     "session-id=123",
-				XCSRFToken: "token",
+				Cookie: "session-id=123",
 			},
 		}
 
@@ -503,8 +502,7 @@ func TestOpenAPIServer_Logout_InvalidCookie(t *testing.T) {
 
 		logoutReq := openapi.LogoutRequestObject{
 			Params: openapi.LogoutParams{
-				Cookie:     "invalid cookie format\n\n",
-				XCSRFToken: "token",
+				Cookie: "invalid cookie format\n\n",
 			},
 		}
 
@@ -529,8 +527,7 @@ func TestOpenAPIServer_Logout_MissingSessionCookie(t *testing.T) {
 
 		logoutReq := openapi.LogoutRequestObject{
 			Params: openapi.LogoutParams{
-				Cookie:     "csrf-token=some-token",
-				XCSRFToken: "some-token",
+				Cookie: "csrf-token=some-token",
 			},
 		}
 
@@ -544,63 +541,6 @@ func TestOpenAPIServer_Logout_MissingSessionCookie(t *testing.T) {
 		assert.Equal(t, string(serviceerr.CodeInvalidRequest), r.Body.Error)
 		assert.Equal(t, http.StatusBadRequest, r.StatusCode)
 		assert.Contains(t, *r.Body.ErrorDescription, "missing session id")
-	})
-}
-
-func TestOpenAPIServer_Logout_MissingCSRFCookie(t *testing.T) {
-	t.Run("returns an error when CSRF cookie is missing", func(t *testing.T) {
-		const tenantID = "tenant-1"
-		server := newOpenAPIServer(nil, []byte("secret"), "session-id", "csrf-token")
-
-		rw := httptest.NewRecorder()
-		ctx := context.WithValue(t.Context(), middleware.ResponseWriterKey, rw)
-
-		logoutReq := openapi.LogoutRequestObject{
-			Params: openapi.LogoutParams{
-				TenantID:   tenantID,
-				Cookie:     "session-id-" + tenantID + "=session-123",
-				XCSRFToken: "some-token",
-			},
-		}
-
-		resp, err := server.Logout(ctx, logoutReq)
-
-		require.NoError(t, err)
-		assert.IsType(t, openapi.LogoutdefaultJSONResponse{}, resp)
-
-		r, ok := resp.(openapi.LogoutdefaultJSONResponse)
-		require.True(t, ok)
-		assert.Equal(t, string(serviceerr.CodeInvalidRequest), r.Body.Error)
-		assert.Equal(t, http.StatusBadRequest, r.StatusCode)
-		assert.Contains(t, *r.Body.ErrorDescription, "missing csrf token")
-	})
-}
-
-func TestOpenAPIServer_Logout_InvalidCSRFToken(t *testing.T) {
-	t.Run("returns an error when CSRF token is invalid", func(t *testing.T) {
-		const tenantID = "tenant-1"
-		server := newOpenAPIServer(nil, []byte("test-secret-32-bytes-length!!"), "session-id", "csrf-token")
-
-		rw := httptest.NewRecorder()
-		ctx := context.WithValue(t.Context(), middleware.ResponseWriterKey, rw)
-
-		logoutReq := openapi.LogoutRequestObject{
-			Params: openapi.LogoutParams{
-				TenantID:   tenantID,
-				Cookie:     "session-id-" + tenantID + "=session-123; csrf-token-" + tenantID + "=csrf-123",
-				XCSRFToken: "wrong-csrf-token",
-			},
-		}
-
-		resp, err := server.Logout(ctx, logoutReq)
-
-		require.NoError(t, err)
-		assert.IsType(t, openapi.LogoutdefaultJSONResponse{}, resp)
-
-		r, ok := resp.(openapi.LogoutdefaultJSONResponse)
-		require.True(t, ok)
-		assert.Equal(t, string(serviceerr.CodeInvalidCSRFToken), r.Body.Error)
-		assert.Equal(t, http.StatusInternalServerError, r.StatusCode)
 	})
 }
 
@@ -622,9 +562,8 @@ func TestOpenAPIServer_Logout_Failed(t *testing.T) {
 		token := csrf.NewToken("session-123", []byte(tokenKey))
 		logoutReq := openapi.LogoutRequestObject{
 			Params: openapi.LogoutParams{
-				TenantID:   tenantID,
-				Cookie:     "session-id-" + tenantID + "=session-123; csrf-token-" + tenantID + "=" + token,
-				XCSRFToken: token,
+				TenantID: tenantID,
+				Cookie:   "session-id-" + tenantID + "=session-123; csrf-token-" + tenantID + "=" + token,
 			},
 		}
 
@@ -773,12 +712,8 @@ func TestOpenAPIServer_Bclogout_Error(t *testing.T) {
 func TestOpenAPIServer_Logout_Success(t *testing.T) {
 	t.Run("clears cookies and redirects on successful logout", func(t *testing.T) {
 		expectedURL := "https://idp.example.com/logout"
-		csrfSecret := []byte("secret-key-12345")
 		sessionID := "session-123"
 		tenantID := "tenant-1"
-
-		// Generate a valid CSRF token
-		validCSRFToken := csrf.NewToken(sessionID, csrfSecret)
 
 		mock := &mockSessionManager{
 			logoutFunc: func(ctx context.Context, sid string) (string, error) {
@@ -786,16 +721,15 @@ func TestOpenAPIServer_Logout_Success(t *testing.T) {
 				return expectedURL, nil
 			},
 		}
-		server := newOpenAPIServer(mock, csrfSecret, "session-id", "csrf-token")
+		server := newOpenAPIServer(mock, nil, "session-id", "csrf-token")
 
 		rw := httptest.NewRecorder()
 		ctx := context.WithValue(context.Background(), middleware.ResponseWriterKey, rw)
 
 		logoutReq := openapi.LogoutRequestObject{
 			Params: openapi.LogoutParams{
-				TenantID:   tenantID,
-				Cookie:     "session-id-" + tenantID + "=" + sessionID + "; csrf-token-" + tenantID + "=" + validCSRFToken,
-				XCSRFToken: validCSRFToken,
+				TenantID: tenantID,
+				Cookie:   "session-id-" + tenantID + "=" + sessionID + "; csrf-token-" + tenantID + "=csrf-token",
 			},
 		}
 
