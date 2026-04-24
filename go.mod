@@ -17,7 +17,7 @@ require (
 	github.com/goccy/go-yaml v1.19.2
 	github.com/gofrs/uuid/v5 v5.4.0
 	github.com/google/go-cmp v0.7.0
-	github.com/jackc/pgx/v5 v5.9.1
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/jellydator/ttlcache/v3 v3.4.0
 	github.com/moby/moby/api v1.54.1
 	github.com/oapi-codegen/runtime v1.4.0
