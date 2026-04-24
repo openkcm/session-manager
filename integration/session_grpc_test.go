@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -56,7 +56,7 @@ func TestSessionGRPC(t *testing.T) {
 	t.Run("GetSession - session not active", func(t *testing.T) {
 		// Create a session but don't mark it as active
 		sess := session.Session{
-			ID:          uuid.NewString(),
+			ID:          uuid.Must(uuid.NewV4()).String(),
 			TenantID:    "tenant-inactive",
 			Fingerprint: "fingerprint-inactive",
 			Issuer:      "https://issuer.example.com",
@@ -83,7 +83,7 @@ func TestSessionGRPC(t *testing.T) {
 	t.Run("GetSession - valid active session", func(t *testing.T) {
 		// Create and activate a session
 		sess := session.Session{
-			ID:          uuid.NewString(),
+			ID:          uuid.Must(uuid.NewV4()).String(),
 			TenantID:    "tenant-active",
 			Fingerprint: "fingerprint-active",
 			Issuer:      "https://issuer.example.com",
@@ -121,7 +121,7 @@ func TestSessionGRPC(t *testing.T) {
 
 	t.Run("GetSession - fingerprint mismatch", func(t *testing.T) {
 		sess := session.Session{
-			ID:          uuid.NewString(),
+			ID:          uuid.Must(uuid.NewV4()).String(),
 			TenantID:    "tenant-fingerprint",
 			Fingerprint: "correct-fingerprint",
 			Issuer:      "https://issuer.example.com",
@@ -147,7 +147,7 @@ func TestSessionGRPC(t *testing.T) {
 
 	t.Run("GetSession - tenant ID mismatch", func(t *testing.T) {
 		sess := session.Session{
-			ID:          uuid.NewString(),
+			ID:          uuid.Must(uuid.NewV4()).String(),
 			TenantID:    "correct-tenant",
 			Fingerprint: "fingerprint-tenant",
 			Issuer:      "https://issuer.example.com",

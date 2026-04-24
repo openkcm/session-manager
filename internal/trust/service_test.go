@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -39,9 +39,9 @@ func TestService_ApplyMapping(t *testing.T) {
 
 	t.Run("success if", func(t *testing.T) {
 		t.Run("the mapping does not exist", func(t *testing.T) {
-			expTenantID := uuid.NewString()
+			expTenantID := uuid.Must(uuid.NewV4()).String()
 			expMapping := trust.OIDCMapping{
-				IssuerURL: uuid.NewString(),
+				IssuerURL: uuid.Must(uuid.NewV4()).String(),
 				JWKSURI:   jwksURI,
 				Audiences: []string{requestURI},
 			}
@@ -58,9 +58,9 @@ func TestService_ApplyMapping(t *testing.T) {
 		})
 
 		t.Run("the mapping exists", func(t *testing.T) {
-			expTenantID := uuid.NewString()
+			expTenantID := uuid.Must(uuid.NewV4()).String()
 			expMapping := trust.OIDCMapping{
-				IssuerURL: uuid.NewString(),
+				IssuerURL: uuid.Must(uuid.NewV4()).String(),
 				JWKSURI:   jwksURI,
 				Audiences: []string{requestURI},
 			}
@@ -88,9 +88,9 @@ func TestService_ApplyMapping(t *testing.T) {
 
 	t.Run("should return error if", func(t *testing.T) {
 		t.Run("Create returns an error", func(t *testing.T) {
-			expTenantID := uuid.NewString()
+			expTenantID := uuid.Must(uuid.NewV4()).String()
 			expMapping := trust.OIDCMapping{
-				IssuerURL: uuid.NewString(),
+				IssuerURL: uuid.Must(uuid.NewV4()).String(),
 				JWKSURI:   jwksURI,
 				Audiences: []string{requestURI},
 			}
@@ -112,9 +112,9 @@ func TestService_ApplyMapping(t *testing.T) {
 		})
 
 		t.Run("Update returns an error", func(t *testing.T) {
-			expTenantID := uuid.NewString()
+			expTenantID := uuid.Must(uuid.NewV4()).String()
 			expMapping := trust.OIDCMapping{
-				IssuerURL: uuid.NewString(),
+				IssuerURL: uuid.Must(uuid.NewV4()).String(),
 				JWKSURI:   jwksURI,
 				Audiences: []string{requestURI},
 			}
@@ -145,9 +145,9 @@ func TestService_BlockMapping(t *testing.T) {
 	t.Run("success if ", func(t *testing.T) {
 		t.Run("the mapping is unblocked", func(t *testing.T) {
 			// given
-			expTenantID := uuid.NewString()
+			expTenantID := uuid.Must(uuid.NewV4()).String()
 			expUnblockedMapping := trust.OIDCMapping{
-				IssuerURL: uuid.NewString(),
+				IssuerURL: uuid.Must(uuid.NewV4()).String(),
 				Blocked:   false,
 				JWKSURI:   jwksURI,
 				Audiences: []string{requestURI},
@@ -174,9 +174,9 @@ func TestService_BlockMapping(t *testing.T) {
 
 		t.Run("the mapping is blocked then it should not call Update", func(t *testing.T) {
 			// given
-			expTenantID := uuid.NewString()
+			expTenantID := uuid.Must(uuid.NewV4()).String()
 			expBlockedMapping := trust.OIDCMapping{
-				IssuerURL: uuid.NewString(),
+				IssuerURL: uuid.Must(uuid.NewV4()).String(),
 				Blocked:   true,
 				JWKSURI:   jwksURI,
 				Audiences: []string{requestURI},
@@ -205,9 +205,9 @@ func TestService_BlockMapping(t *testing.T) {
 		})
 		t.Run("the mapping is not found during the Update", func(t *testing.T) {
 			// given
-			expTenantID := uuid.NewString()
+			expTenantID := uuid.Must(uuid.NewV4()).String()
 			expBlockedMapping := trust.OIDCMapping{
-				IssuerURL: uuid.NewString(),
+				IssuerURL: uuid.Must(uuid.NewV4()).String(),
 				Blocked:   false,
 				JWKSURI:   jwksURI,
 				Audiences: []string{requestURI},
@@ -235,7 +235,7 @@ func TestService_BlockMapping(t *testing.T) {
 		})
 		t.Run("the mapping is not found", func(t *testing.T) {
 			// given
-			expTenantID := uuid.NewString()
+			expTenantID := uuid.Must(uuid.NewV4()).String()
 			repoWrapper := &RepoWrapper{Repo: repo}
 
 			subj := trust.NewService(repoWrapper)
@@ -251,7 +251,7 @@ func TestService_BlockMapping(t *testing.T) {
 	t.Run("should return error", func(t *testing.T) {
 		t.Run("if Get returns an error", func(t *testing.T) {
 			// given
-			expTenantID := uuid.NewString()
+			expTenantID := uuid.Must(uuid.NewV4()).String()
 			repoWrapper := &RepoWrapper{Repo: repo}
 
 			noOfGetCalls := 0
@@ -272,9 +272,9 @@ func TestService_BlockMapping(t *testing.T) {
 
 		t.Run("if Update returns an error", func(t *testing.T) {
 			// given
-			expTenantID := uuid.NewString()
+			expTenantID := uuid.Must(uuid.NewV4()).String()
 			expMapping := trust.OIDCMapping{
-				IssuerURL: uuid.NewString(),
+				IssuerURL: uuid.Must(uuid.NewV4()).String(),
 				Blocked:   false,
 				JWKSURI:   jwksURI,
 				Audiences: []string{requestURI},
@@ -311,9 +311,9 @@ func TestService_UnblockMapping(t *testing.T) {
 	t.Run("success if ", func(t *testing.T) {
 		t.Run("the mapping is blocked", func(t *testing.T) {
 			// given
-			expTenantID := uuid.NewString()
+			expTenantID := uuid.Must(uuid.NewV4()).String()
 			expBlockedMapping := trust.OIDCMapping{
-				IssuerURL: uuid.NewString(),
+				IssuerURL: uuid.Must(uuid.NewV4()).String(),
 				Blocked:   true,
 				JWKSURI:   jwksURI,
 				Audiences: []string{requestURI},
@@ -340,9 +340,9 @@ func TestService_UnblockMapping(t *testing.T) {
 
 		t.Run("the mapping is unblocked then it should not call Update", func(t *testing.T) {
 			// given
-			expTenantID := uuid.NewString()
+			expTenantID := uuid.Must(uuid.NewV4()).String()
 			expUnblockedMapping := trust.OIDCMapping{
-				IssuerURL: uuid.NewString(),
+				IssuerURL: uuid.Must(uuid.NewV4()).String(),
 				Blocked:   false,
 				JWKSURI:   jwksURI,
 				Audiences: []string{requestURI},
@@ -371,9 +371,9 @@ func TestService_UnblockMapping(t *testing.T) {
 		})
 		t.Run("the mapping is not found during the Update", func(t *testing.T) {
 			// given
-			expTenantID := uuid.NewString()
+			expTenantID := uuid.Must(uuid.NewV4()).String()
 			expUnblockedMapping := trust.OIDCMapping{
-				IssuerURL: uuid.NewString(),
+				IssuerURL: uuid.Must(uuid.NewV4()).String(),
 				Blocked:   true,
 				JWKSURI:   jwksURI,
 				Audiences: []string{requestURI},
@@ -401,7 +401,7 @@ func TestService_UnblockMapping(t *testing.T) {
 		})
 		t.Run("the mapping is not found", func(t *testing.T) {
 			// given
-			expTenantID := uuid.NewString()
+			expTenantID := uuid.Must(uuid.NewV4()).String()
 			repoWrapper := &RepoWrapper{Repo: repo}
 
 			subj := trust.NewService(repoWrapper)
@@ -416,7 +416,7 @@ func TestService_UnblockMapping(t *testing.T) {
 	t.Run("should return error", func(t *testing.T) {
 		t.Run("if Get returns an error", func(t *testing.T) {
 			// given
-			expTenantID := uuid.NewString()
+			expTenantID := uuid.Must(uuid.NewV4()).String()
 			mockRepo := &RepoWrapper{Repo: repo}
 
 			noOfGetTenantCalls := 0
@@ -437,9 +437,9 @@ func TestService_UnblockMapping(t *testing.T) {
 
 		t.Run("if Update returns an error", func(t *testing.T) {
 			// given
-			expTenantIDtoUpdate := uuid.NewString()
+			expTenantIDtoUpdate := uuid.Must(uuid.NewV4()).String()
 			expBlockedMapping := trust.OIDCMapping{
-				IssuerURL: uuid.NewString(),
+				IssuerURL: uuid.Must(uuid.NewV4()).String(),
 				Blocked:   true,
 				JWKSURI:   jwksURI,
 				Audiences: []string{requestURI},
@@ -476,9 +476,9 @@ func TestService_RemoveMapping(t *testing.T) {
 	t.Run("success if", func(t *testing.T) {
 		t.Run("the mapping exists", func(t *testing.T) {
 			// given
-			expTenantID := uuid.NewString()
+			expTenantID := uuid.Must(uuid.NewV4()).String()
 			expMapping := trust.OIDCMapping{
-				IssuerURL: uuid.NewString(),
+				IssuerURL: uuid.Must(uuid.NewV4()).String(),
 				JWKSURI:   jwksURI,
 				Audiences: []string{requestURI},
 			}
@@ -504,7 +504,7 @@ func TestService_RemoveMapping(t *testing.T) {
 	t.Run("should return error if", func(t *testing.T) {
 		t.Run("the mapping does not exist", func(t *testing.T) {
 			// given
-			expTenantID := uuid.NewString()
+			expTenantID := uuid.Must(uuid.NewV4()).String()
 			wrapper := &RepoWrapper{Repo: repo}
 			subj := trust.NewService(wrapper)
 
@@ -517,7 +517,7 @@ func TestService_RemoveMapping(t *testing.T) {
 
 		t.Run("Delete returns an error", func(t *testing.T) {
 			// given
-			expTenantID := uuid.NewString()
+			expTenantID := uuid.Must(uuid.NewV4()).String()
 			wrapper := &RepoWrapper{Repo: repo}
 
 			noOfDeleteCalls := 0

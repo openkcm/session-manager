@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/credentials/insecure"
@@ -45,8 +45,8 @@ func TestGRPCServer(t *testing.T) {
 
 	t.Run("ApplyOIDCMapping", func(t *testing.T) {
 		expJwks := "jks"
-		expTenantID := uuid.NewString()
-		expIssuer := uuid.NewString()
+		expTenantID := uuid.Must(uuid.NewV4()).String()
+		expIssuer := uuid.Must(uuid.NewV4()).String()
 		applyResp, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
 			TenantId:  expTenantID,
 			Issuer:    expIssuer,
@@ -59,8 +59,8 @@ func TestGRPCServer(t *testing.T) {
 
 	t.Run("BlockOIDCMapping", func(t *testing.T) {
 		expJwks := "jks"
-		expTenantID := uuid.NewString()
-		expIssuer := uuid.NewString()
+		expTenantID := uuid.Must(uuid.NewV4()).String()
+		expIssuer := uuid.Must(uuid.NewV4()).String()
 		applyResp, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
 			TenantId:  expTenantID,
 			Issuer:    expIssuer,
@@ -79,8 +79,8 @@ func TestGRPCServer(t *testing.T) {
 
 	t.Run("UnblockOIDCMapping", func(t *testing.T) {
 		expJwks := "jks"
-		expTenantID := uuid.NewString()
-		expIssuer1 := uuid.NewString()
+		expTenantID := uuid.Must(uuid.NewV4()).String()
+		expIssuer1 := uuid.Must(uuid.NewV4()).String()
 		applyRes, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
 			TenantId:  expTenantID,
 			Issuer:    expIssuer1,
@@ -105,8 +105,8 @@ func TestGRPCServer(t *testing.T) {
 
 	t.Run("RemoveOIDCMapping", func(t *testing.T) {
 		expJwks := "jks"
-		expTenantID := uuid.NewString()
-		expIssuer := uuid.NewString()
+		expTenantID := uuid.Must(uuid.NewV4()).String()
+		expIssuer := uuid.Must(uuid.NewV4()).String()
 		applyRes, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
 			TenantId:  expTenantID,
 			Issuer:    expIssuer,
@@ -125,8 +125,8 @@ func TestGRPCServer(t *testing.T) {
 
 	t.Run("ApplyOIDCMapping with multiple audiences", func(t *testing.T) {
 		expJwks := "jks-multi"
-		expTenantID := uuid.NewString()
-		expIssuer := uuid.NewString()
+		expTenantID := uuid.Must(uuid.NewV4()).String()
+		expIssuer := uuid.Must(uuid.NewV4()).String()
 		audiences := []string{"aud1", "aud2", "aud3"}
 
 		applyResp, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
@@ -141,8 +141,8 @@ func TestGRPCServer(t *testing.T) {
 
 	t.Run("ApplyOIDCMapping idempotent - applying same mapping twice", func(t *testing.T) {
 		expJwks := "jks-idempotent"
-		expTenantID := uuid.NewString()
-		expIssuer := uuid.NewString()
+		expTenantID := uuid.Must(uuid.NewV4()).String()
+		expIssuer := uuid.Must(uuid.NewV4()).String()
 
 		// First application
 		applyResp1, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
@@ -167,8 +167,8 @@ func TestGRPCServer(t *testing.T) {
 
 	t.Run("BlockOIDCMapping idempotent - blocking twice", func(t *testing.T) {
 		expJwks := "jks-block-twice"
-		expTenantID := uuid.NewString()
-		expIssuer := uuid.NewString()
+		expTenantID := uuid.Must(uuid.NewV4()).String()
+		expIssuer := uuid.Must(uuid.NewV4()).String()
 
 		applyResp, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
 			TenantId:  expTenantID,
@@ -196,8 +196,8 @@ func TestGRPCServer(t *testing.T) {
 
 	t.Run("UnblockOIDCMapping idempotent - unblocking twice", func(t *testing.T) {
 		expJwks := "jks-unblock-twice"
-		expTenantID := uuid.NewString()
-		expIssuer := uuid.NewString()
+		expTenantID := uuid.Must(uuid.NewV4()).String()
+		expIssuer := uuid.Must(uuid.NewV4()).String()
 
 		applyRes, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
 			TenantId:  expTenantID,
@@ -231,8 +231,8 @@ func TestGRPCServer(t *testing.T) {
 
 	t.Run("Block and Unblock workflow", func(t *testing.T) {
 		expJwks := "jks-workflow"
-		expTenantID := uuid.NewString()
-		expIssuer := uuid.NewString()
+		expTenantID := uuid.Must(uuid.NewV4()).String()
+		expIssuer := uuid.Must(uuid.NewV4()).String()
 
 		// Apply mapping
 		applyRes, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
@@ -275,8 +275,8 @@ func TestGRPCServer(t *testing.T) {
 
 	t.Run("RemoveOIDCMapping idempotent - removing twice", func(t *testing.T) {
 		expJwks := "jks-remove-twice"
-		expTenantID := uuid.NewString()
-		expIssuer := uuid.NewString()
+		expTenantID := uuid.Must(uuid.NewV4()).String()
+		expIssuer := uuid.Must(uuid.NewV4()).String()
 
 		applyRes, err := mappingClient.ApplyOIDCMapping(ctx, &oidcmappingv1.ApplyOIDCMappingRequest{
 			TenantId:  expTenantID,
