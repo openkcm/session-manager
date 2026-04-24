@@ -76,7 +76,6 @@ func TestHelmInstall(t *testing.T) {
 			"config.valkey.host.value":                            "valkey.default.svc.cluster.local:6379",
 			"config.valkey.password.value":                        "",
 			"config.sessionManager.callbackURL":                   "http://localhost:8080/sm/callback",
-			"config.sessionManager.clientAuth.clientID":           "test-client",
 			"config.sessionManager.clientAuth.clientSecret.value": "test-secret",
 			"config.sessionManager.csrfSecret.value":              "test-csrf-secret-at-least-thirty-two-bits",
 		},

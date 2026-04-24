@@ -7,9 +7,7 @@ type OIDCMapping struct {
 	Audiences  []string
 	Properties map[string]string
 
-	// ClientID is a client_id property used for authentication.
-	// It is an optional value for the trust config. If the trust's client id is not specified,
-	// the application-global client id is used.
+	// ClientID is a mandatory property used for authentication.
 	ClientID string
 }
 

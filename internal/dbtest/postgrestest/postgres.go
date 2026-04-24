@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -89,6 +91,10 @@ func makeDBConn(ctx context.Context, port network.Port) *pgxpool.Pool {
 }
 
 func migrateDB(ctx context.Context, port network.Port) {
+	// Create a test config file for the migration
+	configCleanup := createTestConfig()
+	defer configCleanup()
+
 	db, err := sql.Open("pgx", connStr(port))
 	if err != nil {
 		panic(err)
@@ -120,5 +126,46 @@ func prepareDB(ctx context.Context, dbPool *pgxpool.Pool, port network.Port) {
 	err := res.Close()
 	if err != nil {
 		panic(err)
+	}
+}
+
+// createTestConfig creates a temporary config file for the migration tests.
+// It returns a cleanup function that should be called to remove the config file.
+func createTestConfig() func() {
+	// Create a temporary directory for the config
+	tmpDir, err := os.MkdirTemp("", "session-manager-test-*")
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create temp dir: %v", err))
+	}
+
+	// Create config.yaml with test client_id
+	configContent := `sessionManager:
+  clientAuth:
+    clientID: "test-client-id"
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	err = os.WriteFile(configPath, []byte(configContent), 0644)
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		panic(fmt.Sprintf("Failed to write config file: %v", err))
+	}
+
+	// Change to the temp directory so the config loader can find it
+	originalDir, err := os.Getwd()
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		panic(fmt.Sprintf("Failed to get current directory: %v", err))
+	}
+
+	err = os.Chdir(tmpDir)
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		panic(fmt.Sprintf("Failed to change directory: %v", err))
+	}
+
+	// Return cleanup function
+	return func() {
+		_ = os.Chdir(originalDir)
+		os.RemoveAll(tmpDir)
 	}
 }

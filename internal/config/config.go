@@ -107,7 +107,6 @@ type CookieTemplate struct {
 }
 
 type ClientAuth struct {
-	ClientID string `yaml:"clientID"`
 	// Type defines how to authenticate the client.
 	// Supported types are:
 	//   - mtls: Mutual TLS authentication
@@ -117,6 +116,11 @@ type ClientAuth struct {
 	MTLS *commoncfg.MTLS `yaml:"mTLS"`
 	// ClientSecret contains the client secret source reference when Type is set to "clientSecret".
 	ClientSecret commoncfg.SourceRef `yaml:"clientSecret"`
+
+	// Deprecated: ClientID is no longer used in the application code, but is still required in the config
+	// to backfill existing database entries during migration.
+	// It will be removed in a future release once the migration has been applied in all environments.
+	ClientID string `yaml:"clientID"`
 }
 
 type Migrate struct {

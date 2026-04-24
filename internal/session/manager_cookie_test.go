@@ -437,9 +437,7 @@ func TestManager_Logout(t *testing.T) {
 			cfg: &config.SessionManager{
 				CSRFSecretParsed:      []byte(testCSRFSecret),
 				PostLogoutRedirectURL: postLogoutURL,
-				ClientAuth: config.ClientAuth{
-					ClientID: testClientID,
-				},
+				ClientAuth:            config.ClientAuth{},
 			},
 			setupOIDCRepo: func(t *testing.T) *trustmock.Repository {
 				t.Helper()
@@ -470,9 +468,7 @@ func TestManager_Logout(t *testing.T) {
 			cfg: &config.SessionManager{
 				CSRFSecretParsed:      []byte(testCSRFSecret),
 				PostLogoutRedirectURL: postLogoutURL,
-				ClientAuth: config.ClientAuth{
-					ClientID: testClientID,
-				},
+				ClientAuth:            config.ClientAuth{},
 			},
 			setupOIDCRepo: func(t *testing.T) *trustmock.Repository {
 				t.Helper()

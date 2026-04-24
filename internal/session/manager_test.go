@@ -51,6 +51,7 @@ func TestManager_Auth(t *testing.T) {
 
 	oidcMapping := trust.OIDCMapping{
 		IssuerURL: oidcServer.URL,
+		ClientID:  "my-client-id",
 		Blocked:   false,
 		JWKSURI:   "http://jwks.example.com",
 		Audiences: []string{requestURI},
@@ -81,10 +82,8 @@ func TestManager_Auth(t *testing.T) {
 				SessionDuration:                    time.Hour,
 				CallbackURL:                        callbackURL,
 				AdditionalQueryParametersAuthorize: []string{"paramAuth1"},
-				ClientAuth: config.ClientAuth{
-					ClientID: testClientID,
-				},
-				CSRFSecretParsed: []byte(testCSRFSecret),
+				ClientAuth:                         config.ClientAuth{},
+				CSRFSecretParsed:                   []byte(testCSRFSecret),
 			},
 			tenantID:    tenantID,
 			fingerprint: "fingerprint",
@@ -590,9 +589,7 @@ func TestManager_LogoutEdgeCases(t *testing.T) {
 
 			cfg := &config.SessionManager{
 				CSRFSecretParsed: []byte(testCSRFSecret),
-				ClientAuth: config.ClientAuth{
-					ClientID: testClientID,
-				},
+				ClientAuth:       config.ClientAuth{},
 			}
 
 			m, err := session.NewManager(ctx, cfg, oidcMock, sessionMock, auditLogger)
