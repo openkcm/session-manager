@@ -15,7 +15,7 @@ import (
 
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/openkcm/common-sdk/pkg/csrf"
 	"github.com/openkcm/common-sdk/pkg/oidc"
@@ -214,7 +214,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 	}
 
 	// audit log metadata
-	correlationId := uuid.NewString()
+	correlationId := uuid.Must(uuid.NewV4()).String()
 	metadata, err := otlpaudit.NewEventMetadata("session manager", state.TenantID, correlationId)
 	if err != nil {
 		return OIDCSessionData{}, fmt.Errorf("creating audit metadata: %w", err)
