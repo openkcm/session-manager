@@ -147,7 +147,7 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 			StatusCode: status,
 		}, nil
 	}
-	if !csrf.Validate(req.Params.LoginCSRF, req.Params.State, s.csrfSecret) {
+	if !csrf.Validate(req.Params.UnderscoreUnderscoreHostLoginCSRF, req.Params.State, s.csrfSecret) {
 		err := serviceerr.ErrInvalidLoginCSRFToken
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())

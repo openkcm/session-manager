@@ -207,9 +207,9 @@ func TestOpenAPIServer_Callback_ExtractFingerprint_Failed(t *testing.T) {
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:     "state",
-				Code:      "code",
-				LoginCSRF: "session-id=123",
+				State:                             "state",
+				Code:                              "code",
+				UnderscoreUnderscoreHostLoginCSRF: "session-id=123",
 			},
 		}
 
@@ -233,9 +233,9 @@ func TestOpenAPIServer_Callback_NoResponseWriter(t *testing.T) {
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:     "state",
-				Code:      "code",
-				LoginCSRF: "session-id=123",
+				State:                             "state",
+				Code:                              "code",
+				UnderscoreUnderscoreHostLoginCSRF: "session-id=123",
 			},
 		}
 
@@ -270,9 +270,9 @@ func TestOpenAPIServer_Callback_FinaliseOIDCLogin_Failed(t *testing.T) {
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:     "state",
-				Code:      "code",
-				LoginCSRF: loginCsrfToken,
+				State:                             "state",
+				Code:                              "code",
+				UnderscoreUnderscoreHostLoginCSRF: loginCsrfToken,
 			},
 		}
 
@@ -315,9 +315,9 @@ func TestOpenAPIServer_Callback_MakeSessionCookie_Failed(t *testing.T) {
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:     state,
-				Code:      "code",
-				LoginCSRF: loginCsrfToken,
+				State:                             state,
+				Code:                              "code",
+				UnderscoreUnderscoreHostLoginCSRF: loginCsrfToken,
 			},
 		}
 
@@ -344,9 +344,9 @@ func TestOpenAPIServer_Callback_InvalidCsrfToken_Failed(t *testing.T) {
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:     "state",
-				Code:      "code",
-				LoginCSRF: "invalid-csrf-token",
+				State:                             "state",
+				Code:                              "code",
+				UnderscoreUnderscoreHostLoginCSRF: "invalid-csrf-token",
 			},
 		}
 
@@ -393,9 +393,9 @@ func TestOpenAPIServer_Callback_MakeCSRFCookie_Failed(t *testing.T) {
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:     state,
-				Code:      "code",
-				LoginCSRF: loginCsrfToken,
+				State:                             state,
+				Code:                              "code",
+				UnderscoreUnderscoreHostLoginCSRF: loginCsrfToken,
 			},
 		}
 
@@ -442,9 +442,9 @@ func TestOpenAPIServer_Callback_Success(t *testing.T) {
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
-				State:     state,
-				Code:      "code",
-				LoginCSRF: loginCsrfToken,
+				State:                             state,
+				Code:                              "code",
+				UnderscoreUnderscoreHostLoginCSRF: loginCsrfToken,
 			},
 		}
 

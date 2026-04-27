@@ -35,9 +35,9 @@ type BclogoutFormdataBody struct {
 
 // CallbackParams defines parameters for Callback.
 type CallbackParams struct {
-	Code      string `form:"code" json:"code"`
-	State     string `form:"state" json:"state"`
-	LoginCSRF string `form:"LoginCSRF" json:"LoginCSRF"`
+	Code                              string `form:"code" json:"code"`
+	State                             string `form:"state" json:"state"`
+	UnderscoreUnderscoreHostLoginCSRF string `form:"__Host-LoginCSRF" json:"__Host-LoginCSRF"`
 }
 
 // LogoutParams defines parameters for Logout.
@@ -178,17 +178,17 @@ func (siw *ServerInterfaceWrapper) Callback(w http.ResponseWriter, r *http.Reque
 	{
 		var cookie *http.Cookie
 
-		if cookie, err = r.Cookie("LoginCSRF"); err == nil {
+		if cookie, err = r.Cookie("__Host-LoginCSRF"); err == nil {
 			var value string
-			err = runtime.BindStyledParameterWithOptions("simple", "LoginCSRF", cookie.Value, &value, runtime.BindStyledParameterOptions{Explode: true, Required: true})
+			err = runtime.BindStyledParameterWithOptions("simple", "__Host-LoginCSRF", cookie.Value, &value, runtime.BindStyledParameterOptions{Explode: true, Required: true})
 			if err != nil {
-				siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "LoginCSRF", Err: err})
+				siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "__Host-LoginCSRF", Err: err})
 				return
 			}
-			params.LoginCSRF = value
+			params.UnderscoreUnderscoreHostLoginCSRF = value
 
 		} else {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "LoginCSRF"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "__Host-LoginCSRF"})
 			return
 		}
 	}

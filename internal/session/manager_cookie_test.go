@@ -337,7 +337,7 @@ func TestManager_MakeLoginCSRFCookie(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, cookie)
-	assert.Equal(t, "LoginCSRF", cookie.Name)
+	assert.Equal(t, "__Host-LoginCSRF", cookie.Name)
 	assert.Equal(t, "csrf-456", cookie.Value)
 }
 
