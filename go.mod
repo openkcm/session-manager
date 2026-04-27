@@ -19,7 +19,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/jellydator/ttlcache/v3 v3.4.0
-	github.com/moby/moby/api v1.54.1
+	github.com/moby/moby/api v1.54.2
 	github.com/oapi-codegen/runtime v1.4.0
 	github.com/openkcm/api-sdk v0.17.0
 	github.com/openkcm/common-sdk v1.15.2
