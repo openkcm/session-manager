@@ -36,7 +36,7 @@ const defaultWKOCCacheExpiration = 30 * time.Minute
 var debugSettingSMDumpTransport = debugtools.NewSetting("smdumptransport")
 
 const (
-	LoginCSRFCookieName = "LoginCSRF"
+	LoginCSRFCookieName = "__Host-LoginCSRF"
 )
 
 type Manager struct {
