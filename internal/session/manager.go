@@ -54,7 +54,6 @@ type Manager struct {
 	queryParametersToken  []string
 	authContextKeys       []string
 	queryParametersLogout []string
-	postLogoutRedirectURL string
 
 	sessionCookieTemplate   config.CookieTemplate
 	csrfCookieTemplate      config.CookieTemplate
@@ -91,7 +90,6 @@ func NewManager(
 		queryParametersToken:    cfg.AdditionalQueryParametersToken,
 		authContextKeys:         cfg.AdditionalAuthContextKeys,
 		queryParametersLogout:   cfg.AdditionalQueryParametersLogout,
-		postLogoutRedirectURL:   cfg.PostLogoutRedirectURL,
 		sessionCookieTemplate:   cfg.SessionCookieTemplate,
 		csrfCookieTemplate:      cfg.CSRFCookieTemplate,
 		loginCSRFCookieTemplate: cfg.LoginCSRFCookieTemplate,
@@ -369,7 +367,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 	}, nil
 }
 
-func (m *Manager) Logout(ctx context.Context, sessionID string) (string, error) {
+func (m *Manager) Logout(ctx context.Context, sessionID, postLogoutRedirectURL string) (string, error) {
 	session, err := m.sessions.LoadSession(ctx, sessionID)
 	if err != nil {
 		slogctx.Warn(ctx, "failed to get session by id", "error", err)
@@ -399,13 +397,7 @@ func (m *Manager) Logout(ctx context.Context, sessionID string) (string, error) 
 
 	if oidcConf.EndSessionEndpoint == "" {
 		slogctx.Warn(ctx, "the provider does not support RP-Initiated Logout")
-
-		// Redirect to the landing page if possible
-		if m.postLogoutRedirectURL != "" {
-			return m.postLogoutRedirectURL, nil
-		}
-
-		return "", serviceerr.ErrEndSessionNotSupported
+		return postLogoutRedirectURL, nil
 	}
 
 	redirectURL, err := url.Parse(oidcConf.EndSessionEndpoint)
@@ -416,9 +408,7 @@ func (m *Manager) Logout(ctx context.Context, sessionID string) (string, error) 
 
 	vals := make(url.Values, 2)
 	vals.Set("client_id", m.getClientID(mapping))
-	if m.postLogoutRedirectURL != "" {
-		vals.Set("post_logout_redirect_uri", m.postLogoutRedirectURL)
-	}
+	vals.Set("post_logout_redirect_uri", postLogoutRedirectURL)
 
 	for _, parameter := range m.queryParametersLogout {
 		value, ok := mapping.Properties[parameter]

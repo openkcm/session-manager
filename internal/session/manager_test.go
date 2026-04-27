@@ -539,8 +539,9 @@ func TestManager_BCLogout(t *testing.T) {
 
 func TestManager_LogoutEdgeCases(t *testing.T) {
 	const (
-		tenantID  = "tenant-id"
-		sessionID = "session-id"
+		tenantID      = "tenant-id"
+		sessionID     = "session-id"
+		postLogoutURL = "https://app.example.com/logged-out"
 	)
 
 	tests := []struct {
@@ -598,7 +599,7 @@ func TestManager_LogoutEdgeCases(t *testing.T) {
 			m, err := session.NewManager(ctx, cfg, oidcMock, sessionMock, auditLogger)
 			require.NoError(t, err)
 
-			_, err = m.Logout(ctx, tt.sessionID)
+			_, err = m.Logout(ctx, tt.sessionID, postLogoutURL)
 			tt.errAssert(t, err)
 		})
 	}

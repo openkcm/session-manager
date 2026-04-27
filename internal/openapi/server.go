@@ -42,8 +42,9 @@ type CallbackParams struct {
 
 // LogoutParams defines parameters for Logout.
 type LogoutParams struct {
-	TenantID string `form:"tenant_id" json:"tenant_id"`
-	Cookie   string `json:"Cookie"`
+	TenantID              string `form:"tenant_id" json:"tenant_id"`
+	PostLogoutRedirectURI string `form:"post_logout_redirect_uri" json:"post_logout_redirect_uri"`
+	Cookie                string `json:"Cookie"`
 }
 
 // BclogoutFormdataRequestBody defines body for Bclogout for application/x-www-form-urlencoded ContentType.
@@ -224,6 +225,21 @@ func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request
 	err = runtime.BindQueryParameter("form", true, true, "tenant_id", r.URL.Query(), &params.TenantID)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tenant_id", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "post_logout_redirect_uri" -------------
+
+	if paramValue := r.URL.Query().Get("post_logout_redirect_uri"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "post_logout_redirect_uri"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "post_logout_redirect_uri", r.URL.Query(), &params.PostLogoutRedirectURI)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "post_logout_redirect_uri", Err: err})
 		return
 	}
 

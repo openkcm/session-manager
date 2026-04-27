@@ -3,7 +3,9 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/openkcm/common-sdk/pkg/csrf"
 	"github.com/openkcm/common-sdk/pkg/fingerprint"
@@ -26,7 +28,7 @@ type sessionManager interface {
 	MakeSessionCookie(ctx context.Context, tenantID, sessionID string) (*http.Cookie, error)
 	MakeCSRFCookie(ctx context.Context, tenantID, csrfToken string) (*http.Cookie, error)
 	MakeLoginCSRFCookie(ctx context.Context, csrfToken string) (*http.Cookie, error)
-	Logout(ctx context.Context, sessionID string) (string, error)
+	Logout(ctx context.Context, sessionID, postLogoutRedirectURL string) (string, error)
 	BCLogout(ctx context.Context, logoutToken string) error
 }
 
@@ -38,6 +40,7 @@ type openAPIServer struct {
 
 	sessionIDCookieNamePrefix string
 	csrfTokenCookieNamePrefix string
+	allowedRedirectBaseURLs   []string
 }
 
 // Ensure openAPIServer implements [openapi.StrictServerInterface]
@@ -49,12 +52,14 @@ func newOpenAPIServer(
 	csrfSecret []byte,
 	sessionIDCookieNamePrefix,
 	csrfTokenCookieNamePrefix string,
+	allowedRedirectBaseURLs []string,
 ) *openAPIServer {
 	return &openAPIServer{
 		sManager:                  sManager,
 		csrfSecret:                csrfSecret,
 		sessionIDCookieNamePrefix: sessionIDCookieNamePrefix,
 		csrfTokenCookieNamePrefix: csrfTokenCookieNamePrefix,
+		allowedRedirectBaseURLs:   allowedRedirectBaseURLs,
 	}
 }
 
@@ -66,6 +71,19 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 
 	slogctx.Debug(ctx, "Auth() called", "tenantId", request.Params.TenantID, "requestUri", request.Params.RequestURI)
 	defer slogctx.Debug(ctx, "Auth() completed")
+
+	if !s.isAllowedRedirectBaseURL(request.Params.RequestURI) {
+		err := fmt.Errorf("request URI does not match an allowed redirect base URL: %s", request.Params.RequestURI)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "request URI does not match an allowed redirect base URL")
+		slogctx.Error(ctx, "Request URI does not match an allowed redirect base URL", "requestURI", request.Params.RequestURI)
+
+		body, status := s.toErrorModel(err)
+		return openapi.AuthdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
 
 	fingerprint, err := fingerprint.ExtractFingerprint(ctx)
 	if err != nil {
@@ -226,8 +244,21 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 	ctx, span := tracer.Tracer("").Start(ctx, "logout")
 	defer span.End()
 
-	slogctx.Debug(ctx, "Logout() called", "tenantId", request.Params.TenantID)
+	slogctx.Debug(ctx, "Logout() called", "tenantId", request.Params.TenantID, "postLogoutRedirectURI", request.Params.PostLogoutRedirectURI)
 	defer slogctx.Debug(ctx, "Logout() completed")
+
+	if !s.isAllowedRedirectBaseURL(request.Params.PostLogoutRedirectURI) {
+		err := fmt.Errorf("post logout redirect URI does not match an allowed redirect base URL: %s", request.Params.PostLogoutRedirectURI)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "post logout redirect URI does not match an allowed redirect base URL")
+		slogctx.Error(ctx, "Post logout redirect URI does not match an allowed redirect base URL", "postLogoutRedirectURI", request.Params.PostLogoutRedirectURI)
+
+		body, status := s.toErrorModel(err)
+		return openapi.LogoutdefaultJSONResponse{
+			Body:       body,
+			StatusCode: status,
+		}, nil
+	}
 
 	rw, err := middleware.ResponseWriterFromContext(ctx)
 	if err != nil {
@@ -285,7 +316,7 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 		}, nil
 	}
 
-	logoutURL, err := s.sManager.Logout(ctx, sessionCookie.Value)
+	logoutURL, err := s.sManager.Logout(ctx, sessionCookie.Value, request.Params.PostLogoutRedirectURI)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to logout user")
@@ -343,6 +374,15 @@ func (s *openAPIServer) toErrorModel(err error) (model openapi.ErrorModel, httpS
 		Error:            string(serviceErr.Err),
 		ErrorDescription: &serviceErr.Description,
 	}, serviceErr.HTTPStatus()
+}
+
+func (s *openAPIServer) isAllowedRedirectBaseURL(url string) bool {
+	for _, baseURL := range s.allowedRedirectBaseURLs {
+		if strings.HasPrefix(url, baseURL) {
+			return true
+		}
+	}
+	return false
 }
 
 func newBadRequest(description string) (model openapi.ErrorModel, httpStatus int) {
