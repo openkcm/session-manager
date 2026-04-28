@@ -65,17 +65,16 @@ var (
 
 // Custom defined
 var (
-	ErrUnknown                = newErr("unknown error", CodeUnknown)
-	ErrConflict               = newErr("already exists", CodeConflict)
-	ErrNotFound               = newErr("not found", CodeNotFound)
-	ErrFingerprintMismatch    = newErr("fingerprint mismatch", CodeFingerprintMismatch)
-	ErrStateExpired           = newErr("state expired", CodeStateExpired)
-	ErrInvalidOIDCProvider    = newErr("invalid OIDC provider", CodeInvalidOIDCProvider)
-	ErrInvalidCSRFToken       = newErr("invalid CSRF token", CodeInvalidCSRFToken)
-	ErrUnauthorized           = newErr("unauthorized", CodeUnauthorizedClient)
-	ErrInvalidAtHash          = newErr("invalid atHash token", CodeInvalidAtHashToken)
-	ErrEndSessionNotSupported = newErr("the provider does not support end session", CodeEndSessionNotSupported)
-	ErrInvalidLoginCSRFToken  = newErr("invalid login CSRF token", CodeInvalidLoginCSRFToken)
+	ErrUnknown               = newErr("unknown error", CodeUnknown)
+	ErrConflict              = newErr("already exists", CodeConflict)
+	ErrNotFound              = newErr("not found", CodeNotFound)
+	ErrFingerprintMismatch   = newErr("fingerprint mismatch", CodeFingerprintMismatch)
+	ErrStateExpired          = newErr("state expired", CodeStateExpired)
+	ErrInvalidOIDCProvider   = newErr("invalid OIDC provider", CodeInvalidOIDCProvider)
+	ErrInvalidCSRFToken      = newErr("invalid CSRF token", CodeInvalidCSRFToken)
+	ErrUnauthorized          = newErr("unauthorized", CodeUnauthorizedClient)
+	ErrInvalidAtHash         = newErr("invalid atHash token", CodeInvalidAtHashToken)
+	ErrInvalidLoginCSRFToken = newErr("invalid login CSRF token", CodeInvalidLoginCSRFToken)
 )
 
 //nolint:recvcheck
