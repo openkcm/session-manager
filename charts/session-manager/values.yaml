@@ -342,8 +342,8 @@ config:
     loginCSRFCookieTemplate:
       path: "/"
       secure: true
-      sameSite: Strict
-      domain: localhost
+      sameSite: Lax
+      httpOnly: true
     csrfSecret:
       source: embedded
       value: my-csrf-secret-at-least-thirty-two-bits-size
