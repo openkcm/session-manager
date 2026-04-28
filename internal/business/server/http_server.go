@@ -26,6 +26,7 @@ func createHTTPServer(_ context.Context, cfg *config.Config, sManager *session.M
 		cfg.SessionManager.CSRFSecretParsed,
 		cfg.SessionManager.SessionCookieTemplate.Name,
 		cfg.SessionManager.CSRFCookieTemplate.Name,
+		cfg.SessionManager.AllowedRedirectBaseURLs,
 	)
 	strictHandler := openapi.NewStrictHandler(
 		openAPIServer,

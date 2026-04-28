@@ -435,8 +435,7 @@ func TestManager_Logout(t *testing.T) {
 		{
 			name: "Success - redirect to postLogoutURL when no end session endpoint",
 			cfg: &config.SessionManager{
-				CSRFSecretParsed:      []byte(testCSRFSecret),
-				PostLogoutRedirectURL: postLogoutURL,
+				CSRFSecretParsed: []byte(testCSRFSecret),
 				ClientAuth: config.ClientAuth{
 					ClientID: testClientID,
 				},
@@ -502,7 +501,7 @@ func TestManager_Logout(t *testing.T) {
 			)
 			require.NoError(t, err)
 
-			logoutURL, err := m.Logout(t.Context(), sessionID)
+			logoutURL, err := m.Logout(t.Context(), sessionID, postLogoutURL)
 
 			if tt.wantErr {
 				assert.Error(t, err)

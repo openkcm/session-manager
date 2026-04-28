@@ -203,7 +203,6 @@ func TestPredefinedErrors(t *testing.T) {
 		{name: "ErrInvalidCSRFToken", err: serviceerr.ErrInvalidCSRFToken, expectedErr: serviceerr.CodeInvalidCSRFToken, hasDesc: true},
 		{name: "ErrUnauthorized", err: serviceerr.ErrUnauthorized, expectedErr: serviceerr.CodeUnauthorizedClient, hasDesc: true},
 		{name: "ErrInvalidAtHash", err: serviceerr.ErrInvalidAtHash, expectedErr: serviceerr.CodeInvalidAtHashToken, hasDesc: true},
-		{name: "ErrEndSessionNotSupported", err: serviceerr.ErrEndSessionNotSupported, expectedErr: serviceerr.CodeEndSessionNotSupported, hasDesc: true},
 	}
 
 	for _, tt := range tests {

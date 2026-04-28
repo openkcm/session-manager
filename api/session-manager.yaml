@@ -68,6 +68,11 @@ paths:
                   required: true
                   schema:
                       type: string
+                - name: post_logout_redirect_uri
+                  in: query
+                  required: true
+                  schema:
+                      type: string
                 - name: "Cookie"
                   in: header
                   required: true

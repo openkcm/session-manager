@@ -72,7 +72,6 @@ type SessionManager struct {
 	AdditionalQueryParametersIntrospect []string            `yaml:"additionalQueryParametersIntrospect"`
 	AdditionalQueryParametersLogout     []string            `yaml:"additionalQueryParametersLogout"`
 	AdditionalAuthContextKeys           []string            `yaml:"additionalAuthContextKeys"`
-	PostLogoutRedirectURL               string              `yaml:"postLogoutRedirectURL"`
 	// SessionCookieTemplate defines the template attributes for the session cookie.
 	SessionCookieTemplate CookieTemplate `yaml:"sessionCookieTemplate"`
 	// CSRFCookieTemplate defines the template attributes for the CSRF cookie.
@@ -80,6 +79,13 @@ type SessionManager struct {
 	// LoginCSRFCookieTemplate defines the template attributes for the CSRF cookie.
 	LoginCSRFCookieTemplate CookieTemplate `yaml:"loginCSRFCookieTemplate"`
 
+	// AllowedRedirectBaseURLs defines the list of allowed base URLs for redirection
+	// during the authorization flow and post logout. This is used to validate the redirect
+	// URLs provided in the authorization request and post logout requests.
+	AllowedRedirectBaseURLs []string `yaml:"allowedRedirectBaseURLs"`
+
+	// Deprecated: use AllowedRedirectBaseURLs instead.
+	PostLogoutRedirectURL string `yaml:"postLogoutRedirectURL"`
 	// Deprecated: not used anymore. Kept for a helm issue with the migrate job.
 	RedirectURL string `yaml:"redirectURL" default:"/sm/redirect"`
 	// Deprecated: use AdditionalQueryParametersAuthorize instead.
