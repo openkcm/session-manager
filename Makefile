@@ -106,37 +106,41 @@ docker-dev-build:
 .PHONY: codegen
 codegen:
 	go generate ./...
-	go run github.com/sqlc-dev/sqlc/cmd/sqlc@latest generate
+	go tool github.com/sqlc-dev/sqlc/cmd/sqlc generate
 
 .PHONY: clean
 clean:
-	rm -f cover.out cover.html session-manager
-	rm -rf cover/
+	@rm -f cover.out cover.html session-manager
+	@rm -rf cover/
+
+.PHONY: fix-lint
+fix-lint:
+	golangci-lint run --fix --build-tags=integration ./...
 
 .PHONY: lint
 lint:
-	golangci-lint run ./...
+	golangci-lint run --build-tags=integration ./...
 
 .PHONY: build
 build:
 	go build ./cmd/session-manager
 
 .PHONY: test
-test: clean install-gotestsum
+test: clean
 	@mkdir -p cover/integration cover/unit
 	@go clean -testcache
 
-	gotestsum --junitfile="${CURDIR}/junit-unit.xml" --format=testname -- -count=1 -race -cover ./... -args -test.gocoverdir="${CURDIR}/cover/unit"
-	GOCOVERDIR="${CURDIR}/cover/integration" gotestsum --junitfile="${CURDIR}/junit-integration.xml" --format=testname -- -v -count=1 -race -tags=integration ./integration
+	@go tool gotest.tools/gotestsum --junitfile="${CURDIR}/junit-unit.xml" --format=dots-v2 -- -count=1 -race -cover ./... -args -test.gocoverdir="${CURDIR}/cover/unit"
+	@GOCOVERDIR=${CURDIR}/cover/integration go tool gotest.tools/gotestsum --junitfile="${CURDIR}/junit-integration.xml" --format=dots-v2 -- -v -count=1 -race -tags=integration ./integration
 
 	@go tool covdata textfmt -i=./cover/unit,./cover/integration -o cover.out
 	@grep -v 'github.com/openkcm/session-manager/internal/openapi/'         cover.out > cover.tmp && mv cover.tmp cover.out
 	@grep -v 'github.com/openkcm/session-manager/internal/dbtest/'          cover.out > cover.tmp && mv cover.tmp cover.out
-	@grep -v 'github.com/openkcm/session-manager/internal/trust/trustmock/' cover.out > cover.tmp && mv cover.tmp cover.out
+	@grep -v 'github.com/openkcm/session-manager/modules/oidctrust/mocks/'  cover.out > cover.tmp && mv cover.tmp cover.out
 	@grep -v 'github.com/openkcm/session-manager/internal/session/mock/'    cover.out > cover.tmp && mv cover.tmp cover.out
 	@go tool cover -func=cover.out
 
-	@echo "On a Mac, you can use the following command to open the coverage report in the browser\ngo tool cover -html=cover.out -o cover.html && open cover.html"
+	@echo "On a Mac, you can use the following command to open the coverage report in the browser\ngo tool cover -html=cover.out"
 
 .PHONY: helm-test
 helm-test:
@@ -171,10 +175,6 @@ helm-integration-test-run:
 .PHONY: k3d-teardown
 k3d-teardown:
 	k3d cluster delete $(K3D_CLUSTER_NAME)
-
-.PHONY: install-gotestsum
-install-gotestsum:
-	(cd /tmp && go install gotest.tools/gotestsum@latest)
 
 .PHONY: image
 image:

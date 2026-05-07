@@ -3,13 +3,19 @@
 package config
 
 import (
+	"fmt"
+	"reflect"
 	"time"
 
+	"github.com/creasty/defaults"
+	"github.com/knadh/koanf/v2"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
+
+	sessionmanager "github.com/openkcm/session-manager"
 )
 
 type Config struct {
-	commoncfg.BaseConfig `mapstructure:",squash" yaml:",inline"`
+	commoncfg.BaseConfig `yaml:",inline"`
 
 	HTTP HTTPServer `yaml:"http"`
 	GRPC GRPCServer `yaml:"grpc"`
@@ -19,6 +25,36 @@ type Config struct {
 	Migrate        Migrate        `yaml:"migrate"`
 	SessionManager SessionManager `yaml:"sessionManager"`
 	Housekeeper    Housekeeper    `yaml:"housekeeper"`
+	Trust          Trust          `yaml:"trust"`
+}
+
+type Trust struct {
+	Mod   string `yaml:"module" default:"trust.module.oidc"`
+	koanf *koanf.Koanf
+}
+
+func (c *Trust) setKoanf(ko *koanf.Koanf) {
+	c.koanf = ko
+}
+
+func (c *Trust) Module() string {
+	return c.Mod
+}
+
+func (c *Trust) UnmarshalExtension(into sessionmanager.Module) error {
+	return unmarshalExtension(into, c.koanf)
+}
+
+func unmarshalExtension(out any, ko *koanf.Koanf) error {
+	if err := ko.UnmarshalWithConf("", out, koanfUnmarshalConf); err != nil {
+		return fmt.Errorf("unmarshaling into a structure: %w", err)
+	}
+
+	setKoanf(reflect.ValueOf(out), ko)
+	if err := defaults.Set(out); err != nil {
+		return fmt.Errorf("setting defaults: %w", err)
+	}
+	return nil
 }
 
 type Housekeeper struct {
@@ -37,17 +73,27 @@ type HTTPServer struct {
 }
 
 type GRPCServer struct {
-	commoncfg.GRPCServer `mapstructure:",squash" yaml:",inline"`
+	commoncfg.GRPCServer `yaml:",inline"`
 
 	ShutdownTimeout time.Duration `yaml:"shutdownTimeout" default:"5s"`
 }
 
 type Database struct {
-	Name     string              `yaml:"name"`
-	Port     string              `yaml:"port"`
-	Host     commoncfg.SourceRef `yaml:"host"`
-	User     commoncfg.SourceRef `yaml:"user"`
-	Password commoncfg.SourceRef `yaml:"password"`
+	Mod string `yaml:"module" default:"database.module.pgxpool"`
+
+	koanf *koanf.Koanf
+}
+
+func (c *Database) setKoanf(ko *koanf.Koanf) {
+	c.koanf = ko
+}
+
+func (c *Database) Module() string {
+	return c.Mod
+}
+
+func (c *Database) UnmarshalExtension(into sessionmanager.Module) error {
+	return unmarshalExtension(into, c.koanf)
 }
 
 type ValKey struct {
@@ -63,15 +109,10 @@ type SessionManager struct {
 	SessionDuration    time.Duration `yaml:"sessionDuration" default:"12h"`
 
 	// CallbackURL is the URL path for the OAuth2 callback endpoint, where we receive the authorization code.
-	CallbackURL                         string              `yaml:"callbackURL" default:"/sm/callback"`
-	ClientAuth                          ClientAuth          `yaml:"clientAuth"`
-	CSRFSecret                          commoncfg.SourceRef `yaml:"csrfSecret"`
-	CSRFSecretParsed                    []byte              `yaml:"-"`
-	AdditionalQueryParametersAuthorize  []string            `yaml:"additionalQueryParametersAuthorize"`
-	AdditionalQueryParametersToken      []string            `yaml:"additionalQueryParametersToken"`
-	AdditionalQueryParametersIntrospect []string            `yaml:"additionalQueryParametersIntrospect"`
-	AdditionalQueryParametersLogout     []string            `yaml:"additionalQueryParametersLogout"`
-	AdditionalAuthContextKeys           []string            `yaml:"additionalAuthContextKeys"`
+	CallbackURL      string              `yaml:"callbackURL" default:"/sm/callback"`
+	ClientAuth       ClientAuth          `yaml:"clientAuth"`
+	CSRFSecret       commoncfg.SourceRef `yaml:"csrfSecret"`
+	CSRFSecretParsed []byte              `yaml:"-"`
 	// SessionCookieTemplate defines the template attributes for the session cookie.
 	SessionCookieTemplate CookieTemplate `yaml:"sessionCookieTemplate"`
 	// CSRFCookieTemplate defines the template attributes for the CSRF cookie.
@@ -83,15 +124,6 @@ type SessionManager struct {
 	// during the authorization flow and post logout. This is used to validate the redirect
 	// URLs provided in the authorization request and post logout requests.
 	AllowedRedirectBaseURLs []string `yaml:"allowedRedirectBaseURLs"`
-
-	// Deprecated: use AllowedRedirectBaseURLs instead.
-	PostLogoutRedirectURL string `yaml:"postLogoutRedirectURL"`
-	// Deprecated: not used anymore. Kept for a helm issue with the migrate job.
-	RedirectURL string `yaml:"redirectURL" default:"/sm/redirect"`
-	// Deprecated: use AdditionalQueryParametersAuthorize instead.
-	AdditionalGetParametersAuthorize []string `yaml:"additionalGetParametersAuthorize"`
-	// Deprecated: use AdditionalQueryParametersToken instead.
-	AdditionalGetParametersToken []string `yaml:"additionalGetParametersToken"`
 }
 
 type CookieSameSiteValue string
@@ -126,5 +158,18 @@ type ClientAuth struct {
 }
 
 type Migrate struct {
-	Source string `yaml:"source" default:"file://./sql"`
+	Mod   string `yaml:"module" default:"trust.migration.module.oidc"`
+	koanf *koanf.Koanf
+}
+
+func (c *Migrate) setKoanf(ko *koanf.Koanf) {
+	c.koanf = ko
+}
+
+func (c *Migrate) Module() string {
+	return c.Mod
+}
+
+func (c *Migrate) UnmarshalExtension(into sessionmanager.Module) error {
+	return unmarshalExtension(into, c.koanf)
 }

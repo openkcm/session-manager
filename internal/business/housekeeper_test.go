@@ -10,52 +10,8 @@ import (
 	"github.com/openkcm/session-manager/internal/config"
 )
 
-func TestHousekeeperMain_InvalidDatabaseConfig(t *testing.T) {
-	cfg := &config.Config{
-		Database: config.Database{
-			Host:     commoncfg.SourceRef{Source: "file", File: commoncfg.CredentialFile{Path: "/nonexistent/file"}},
-			Port:     "5432",
-			Name:     "testdb",
-			User:     commoncfg.SourceRef{Source: "embedded", Value: "user"},
-			Password: commoncfg.SourceRef{Source: "embedded", Value: "pass"},
-		},
-	}
-
-	err := HousekeeperMain(t.Context(), cfg)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to initialise the session manager")
-}
-
-func TestHousekeeperMain_InvalidValkeyConfig(t *testing.T) {
-	cfg := &config.Config{
-		Database: config.Database{
-			Host:     commoncfg.SourceRef{Source: "embedded", Value: "localhost"},
-			Port:     "5432",
-			Name:     "testdb",
-			User:     commoncfg.SourceRef{Source: "embedded", Value: "user"},
-			Password: commoncfg.SourceRef{Source: "embedded", Value: "pass"},
-		},
-		ValKey: config.ValKey{
-			Host:     commoncfg.SourceRef{Source: "file", File: commoncfg.CredentialFile{Path: "/nonexistent/file"}},
-			User:     commoncfg.SourceRef{Source: "embedded", Value: "user"},
-			Password: commoncfg.SourceRef{Source: "embedded", Value: "pass"},
-		},
-	}
-
-	err := HousekeeperMain(t.Context(), cfg)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to initialise the session manager")
-}
-
 func TestHousekeeperMain_CancelledContext(t *testing.T) {
 	cfg := &config.Config{
-		Database: config.Database{
-			Host:     commoncfg.SourceRef{Source: "embedded", Value: "localhost"},
-			Port:     "5432",
-			Name:     "testdb",
-			User:     commoncfg.SourceRef{Source: "embedded", Value: "user"},
-			Password: commoncfg.SourceRef{Source: "embedded", Value: "pass"},
-		},
 		ValKey: config.ValKey{
 			Host:     commoncfg.SourceRef{Source: "embedded", Value: "localhost:6379"},
 			User:     commoncfg.SourceRef{Source: "embedded", Value: "user"},
@@ -63,7 +19,7 @@ func TestHousekeeperMain_CancelledContext(t *testing.T) {
 		},
 		SessionManager: config.SessionManager{
 			ClientAuth: config.ClientAuth{
-				Type: clientAuthTypeInsecure,
+				Type: insecure,
 			},
 		},
 	}

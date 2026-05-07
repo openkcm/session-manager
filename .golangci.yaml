@@ -7,6 +7,7 @@ run:
 linters:
   default: all
   disable:
+    - gomodguard # Replaced by gomodguard_v2, enabled by default: all
     - nilerr
     - tagliatelle
     - bodyclose

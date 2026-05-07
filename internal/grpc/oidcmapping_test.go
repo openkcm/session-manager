@@ -9,45 +9,44 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	oidcmappingv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/oidcmapping/v1"
+	trustmappingv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/trustmapping/v1"
+	oidcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/v1"
+	trustv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/v1"
 
 	"github.com/openkcm/session-manager/internal/grpc"
-	"github.com/openkcm/session-manager/internal/serviceerr"
-	"github.com/openkcm/session-manager/internal/trust"
-	"github.com/openkcm/session-manager/internal/trust/trustmock"
+	mocktrust "github.com/openkcm/session-manager/modules/oidctrust/mocks"
+	"github.com/openkcm/session-manager/pkg/serviceerr"
 )
 
-func TestNewOIDCMappingServer(t *testing.T) {
+func TestNewTrustMappingServer(t *testing.T) {
 	t.Run("creates server successfully", func(t *testing.T) {
-		repo := trustmock.NewInMemRepository()
-		svc := trust.NewService(repo)
-		server := grpc.NewOIDCMappingServer(svc)
+		repo := mocktrust.NewInMemRepository()
+		svc := newTrust(repo)
+		server := grpc.NewTrustMappingServer(svc)
 
 		assert.NotNil(t, server)
 	})
 }
 
-func TestApplyOIDCMapping(t *testing.T) {
+func TestApplyTrustMapping(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("success - creates new mapping", func(t *testing.T) {
-		repo := trustmock.NewInMemRepository()
-		svc := trust.NewService(repo)
-		server := grpc.NewOIDCMappingServer(svc)
+		repo := mocktrust.NewInMemRepository()
+		svc := newTrust(repo)
+		server := grpc.NewTrustMappingServer(svc)
 
 		jwksUri := "https://issuer.example.com/.well-known/jwks.json"
-		req := &oidcmappingv1.ApplyOIDCMappingRequest{
-			TenantId:  "tenant-123",
-			Issuer:    "https://issuer.example.com",
-			JwksUri:   &jwksUri,
-			Audiences: []string{"audience1", "audience2"},
-			Properties: map[string]string{
-				"prop1": "value1",
-				"prop2": "value2",
-			},
-		}
+		req := trustmappingv1.ApplyTrustMappingRequest_builder{
+			TenantId: new("tenant-123"),
+			Oidc: trustmappingv1.ApplyTrustMappingRequest_ApplyOIDCTrust_builder{
+				Issuer:    new("https://issuer.example.com"),
+				JwksUri:   &jwksUri,
+				Audiences: []string{"audience1", "audience2"},
+			}.Build(),
+		}.Build()
 
-		resp, err := server.ApplyOIDCMapping(ctx, req)
+		resp, err := server.ApplyTrustMapping(ctx, req)
 
 		require.NoError(t, err)
 		assert.NotNil(t, resp)
@@ -56,26 +55,31 @@ func TestApplyOIDCMapping(t *testing.T) {
 	})
 
 	t.Run("success - updates existing mapping", func(t *testing.T) {
-		existingMapping := trust.OIDCMapping{
-			IssuerURL: "https://old-issuer.example.com",
-			JWKSURI:   "https://old-issuer.example.com/jwks.json",
-			Audiences: []string{"old-audience"},
-		}
-		repo := trustmock.NewInMemRepository(
-			trustmock.WithTrust("tenant-123", existingMapping),
+		existingMapping := trustv1.Trust_builder{
+			TenantId: new("tenant-123"),
+			Oidc: oidcv1.OIDC_builder{
+				Issuer:    new("https://old-issuer.example.com"),
+				JwksUri:   new("https://old-issuer.example.com/jwks.json"),
+				Audiences: []string{"old-audience"},
+			}.Build(),
+		}.Build()
+		repo := mocktrust.NewInMemRepository(
+			mocktrust.WithTrust(existingMapping),
 		)
-		svc := trust.NewService(repo)
-		server := grpc.NewOIDCMappingServer(svc)
+		svc := newTrust(repo)
+		server := grpc.NewTrustMappingServer(svc)
 
 		jwksUri := "https://new-issuer.example.com/jwks.json"
-		req := &oidcmappingv1.ApplyOIDCMappingRequest{
-			TenantId:  "tenant-123",
-			Issuer:    "https://new-issuer.example.com",
-			JwksUri:   &jwksUri,
-			Audiences: []string{"new-audience"},
-		}
+		req := trustmappingv1.ApplyTrustMappingRequest_builder{
+			TenantId: new("tenant-123"),
+			Oidc: trustmappingv1.ApplyTrustMappingRequest_ApplyOIDCTrust_builder{
+				Issuer:    new("https://new-issuer.example.com"),
+				JwksUri:   new(jwksUri),
+				Audiences: []string{"new-audience"},
+			}.Build(),
+		}.Build()
 
-		resp, err := server.ApplyOIDCMapping(ctx, req)
+		resp, err := server.ApplyTrustMapping(ctx, req)
 
 		require.NoError(t, err)
 		assert.NotNil(t, resp)
@@ -83,20 +87,22 @@ func TestApplyOIDCMapping(t *testing.T) {
 	})
 
 	t.Run("not found error - returns response with message", func(t *testing.T) {
-		repo := trustmock.NewInMemRepository(
-			trustmock.WithCreateError(serviceerr.ErrNotFound),
+		repo := mocktrust.NewInMemRepository(
+			mocktrust.WithCreateError(serviceerr.ErrNotFound),
 		)
-		svc := trust.NewService(repo)
-		server := grpc.NewOIDCMappingServer(svc)
+		svc := newTrust(repo)
+		server := grpc.NewTrustMappingServer(svc)
 
 		jwksUri := "https://issuer.example.com/jwks.json"
-		req := &oidcmappingv1.ApplyOIDCMappingRequest{
-			TenantId: "tenant-123",
-			Issuer:   "https://issuer.example.com",
-			JwksUri:  &jwksUri,
-		}
+		req := trustmappingv1.ApplyTrustMappingRequest_builder{
+			TenantId: new("tenant-123"),
+			Oidc: trustmappingv1.ApplyTrustMappingRequest_ApplyOIDCTrust_builder{
+				Issuer:  new("https://issuer.example.com"),
+				JwksUri: new(jwksUri),
+			}.Build(),
+		}.Build()
 
-		resp, err := server.ApplyOIDCMapping(ctx, req)
+		resp, err := server.ApplyTrustMapping(ctx, req)
 
 		require.NoError(t, err)
 		assert.NotNil(t, resp)
@@ -107,20 +113,22 @@ func TestApplyOIDCMapping(t *testing.T) {
 
 	t.Run("internal error - returns grpc error", func(t *testing.T) {
 		internalErr := errors.New("database connection failed")
-		repo := trustmock.NewInMemRepository(
-			trustmock.WithCreateError(internalErr),
+		repo := mocktrust.NewInMemRepository(
+			mocktrust.WithCreateError(internalErr),
 		)
-		svc := trust.NewService(repo)
-		server := grpc.NewOIDCMappingServer(svc)
+		svc := newTrust(repo)
+		server := grpc.NewTrustMappingServer(svc)
 
 		jwksUri := "https://issuer.example.com/jwks.json"
-		req := &oidcmappingv1.ApplyOIDCMappingRequest{
-			TenantId: "tenant-123",
-			Issuer:   "https://issuer.example.com",
-			JwksUri:  &jwksUri,
-		}
+		req := trustmappingv1.ApplyTrustMappingRequest_builder{
+			TenantId: new("tenant-123"),
+			Oidc: trustmappingv1.ApplyTrustMappingRequest_ApplyOIDCTrust_builder{
+				Issuer:  new("https://issuer.example.com"),
+				JwksUri: new(jwksUri),
+			}.Build(),
+		}.Build()
 
-		resp, err := server.ApplyOIDCMapping(ctx, req)
+		resp, err := server.ApplyTrustMapping(ctx, req)
 
 		assert.Nil(t, resp)
 		require.Error(t, err)
@@ -128,29 +136,34 @@ func TestApplyOIDCMapping(t *testing.T) {
 		st, ok := status.FromError(err)
 		require.True(t, ok)
 		assert.Equal(t, codes.Internal, st.Code())
-		assert.Contains(t, st.Message(), "failed to apply OIDC mapping")
+		assert.Contains(t, st.Message(), "failed to apply Trust mapping")
 	})
 
 	t.Run("update error - returns grpc error", func(t *testing.T) {
-		existingMapping := trust.OIDCMapping{
-			IssuerURL: "https://issuer.example.com",
-		}
+		existingMapping := trustv1.Trust_builder{
+			TenantId: new("tenant-123"),
+			Oidc: oidcv1.OIDC_builder{
+				Issuer: new("https://issuer.example.com"),
+			}.Build(),
+		}.Build()
 		updateErr := errors.New("update failed")
-		repo := trustmock.NewInMemRepository(
-			trustmock.WithTrust("tenant-123", existingMapping),
-			trustmock.WithUpdateError(updateErr),
+		repo := mocktrust.NewInMemRepository(
+			mocktrust.WithTrust(existingMapping),
+			mocktrust.WithUpdateError(updateErr),
 		)
-		svc := trust.NewService(repo)
-		server := grpc.NewOIDCMappingServer(svc)
+		svc := newTrust(repo)
+		server := grpc.NewTrustMappingServer(svc)
 
 		jwksUri := "https://new-issuer.example.com/jwks.json"
-		req := &oidcmappingv1.ApplyOIDCMappingRequest{
-			TenantId: "tenant-123",
-			Issuer:   "https://new-issuer.example.com",
-			JwksUri:  &jwksUri,
-		}
+		req := trustmappingv1.ApplyTrustMappingRequest_builder{
+			TenantId: new("tenant-123"),
+			Oidc: trustmappingv1.ApplyTrustMappingRequest_ApplyOIDCTrust_builder{
+				Issuer:  new("https://new-issuer.example.com"),
+				JwksUri: new(jwksUri),
+			}.Build(),
+		}.Build()
 
-		resp, err := server.ApplyOIDCMapping(ctx, req)
+		resp, err := server.ApplyTrustMapping(ctx, req)
 
 		assert.Nil(t, resp)
 		require.Error(t, err)
@@ -161,25 +174,28 @@ func TestApplyOIDCMapping(t *testing.T) {
 	})
 }
 
-func TestBlockOIDCMapping(t *testing.T) {
+func TestBlockTrustMapping(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("success - blocks existing mapping", func(t *testing.T) {
-		existingMapping := trust.OIDCMapping{
-			IssuerURL: "https://issuer.example.com",
-			Blocked:   false,
-		}
-		repo := trustmock.NewInMemRepository(
-			trustmock.WithTrust("tenant-123", existingMapping),
+		existingMapping := trustv1.Trust_builder{
+			TenantId: new("tenant-123"),
+			Blocked:  new(false),
+			Oidc: oidcv1.OIDC_builder{
+				Issuer: new("https://issuer.example.com"),
+			}.Build(),
+		}.Build()
+		repo := mocktrust.NewInMemRepository(
+			mocktrust.WithTrust(existingMapping),
 		)
-		svc := trust.NewService(repo)
-		server := grpc.NewOIDCMappingServer(svc)
+		svc := newTrust(repo)
+		server := grpc.NewTrustMappingServer(svc)
 
-		req := &oidcmappingv1.BlockOIDCMappingRequest{
-			TenantId: "tenant-123",
-		}
+		req := trustmappingv1.BlockTrustMappingRequest_builder{
+			TenantId: new("tenant-123"),
+		}.Build()
 
-		resp, err := server.BlockOIDCMapping(ctx, req)
+		resp, err := server.BlockTrustMapping(ctx, req)
 
 		require.NoError(t, err)
 		assert.NotNil(t, resp)
@@ -188,21 +204,24 @@ func TestBlockOIDCMapping(t *testing.T) {
 	})
 
 	t.Run("success - already blocked", func(t *testing.T) {
-		existingMapping := trust.OIDCMapping{
-			IssuerURL: "https://issuer.example.com",
-			Blocked:   true,
-		}
-		repo := trustmock.NewInMemRepository(
-			trustmock.WithTrust("tenant-123", existingMapping),
+		existingMapping := trustv1.Trust_builder{
+			TenantId: new("tenant-123"),
+			Blocked:  new(true),
+			Oidc: oidcv1.OIDC_builder{
+				Issuer: new("https://issuer.example.com"),
+			}.Build(),
+		}.Build()
+		repo := mocktrust.NewInMemRepository(
+			mocktrust.WithTrust(existingMapping),
 		)
-		svc := trust.NewService(repo)
-		server := grpc.NewOIDCMappingServer(svc)
+		svc := newTrust(repo)
+		server := grpc.NewTrustMappingServer(svc)
 
-		req := &oidcmappingv1.BlockOIDCMappingRequest{
-			TenantId: "tenant-123",
-		}
+		req := trustmappingv1.BlockTrustMappingRequest_builder{
+			TenantId: new("tenant-123"),
+		}.Build()
 
-		resp, err := server.BlockOIDCMapping(ctx, req)
+		resp, err := server.BlockTrustMapping(ctx, req)
 
 		require.NoError(t, err)
 		assert.NotNil(t, resp)
@@ -210,17 +229,17 @@ func TestBlockOIDCMapping(t *testing.T) {
 	})
 
 	t.Run("not found - returns success", func(t *testing.T) {
-		repo := trustmock.NewInMemRepository(
-			trustmock.WithGetError(serviceerr.ErrNotFound),
+		repo := mocktrust.NewInMemRepository(
+			mocktrust.WithGetError(serviceerr.ErrNotFound),
 		)
-		svc := trust.NewService(repo)
-		server := grpc.NewOIDCMappingServer(svc)
+		svc := newTrust(repo)
+		server := grpc.NewTrustMappingServer(svc)
 
-		req := &oidcmappingv1.BlockOIDCMappingRequest{
-			TenantId: "tenant-123",
-		}
+		req := trustmappingv1.BlockTrustMappingRequest_builder{
+			TenantId: new("tenant-123"),
+		}.Build()
 
-		resp, err := server.BlockOIDCMapping(ctx, req)
+		resp, err := server.BlockTrustMapping(ctx, req)
 
 		require.NoError(t, err)
 		assert.NotNil(t, resp)
@@ -229,17 +248,17 @@ func TestBlockOIDCMapping(t *testing.T) {
 
 	t.Run("error - returns grpc error with message", func(t *testing.T) {
 		internalErr := errors.New("database error")
-		repo := trustmock.NewInMemRepository(
-			trustmock.WithGetError(internalErr),
+		repo := mocktrust.NewInMemRepository(
+			mocktrust.WithGetError(internalErr),
 		)
-		svc := trust.NewService(repo)
-		server := grpc.NewOIDCMappingServer(svc)
+		svc := newTrust(repo)
+		server := grpc.NewTrustMappingServer(svc)
 
-		req := &oidcmappingv1.BlockOIDCMappingRequest{
-			TenantId: "tenant-123",
-		}
+		req := trustmappingv1.BlockTrustMappingRequest_builder{
+			TenantId: new("tenant-123"),
+		}.Build()
 
-		resp, err := server.BlockOIDCMapping(ctx, req)
+		resp, err := server.BlockTrustMapping(ctx, req)
 
 		require.Error(t, err)
 		assert.NotNil(t, resp)
@@ -249,28 +268,31 @@ func TestBlockOIDCMapping(t *testing.T) {
 		st, ok := status.FromError(err)
 		require.True(t, ok)
 		assert.Equal(t, codes.Internal, st.Code())
-		assert.Contains(t, st.Message(), "failed to block OIDC mapping")
+		assert.Contains(t, st.Message(), "failed to block Trust mapping")
 	})
 }
 
-func TestRemoveOIDCMapping(t *testing.T) {
+func TestRemoveTrustMapping(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("success - removes existing mapping", func(t *testing.T) {
-		existingMapping := trust.OIDCMapping{
-			IssuerURL: "https://issuer.example.com",
-		}
-		repo := trustmock.NewInMemRepository(
-			trustmock.WithTrust("tenant-123", existingMapping),
+		existingMapping := trustv1.Trust_builder{
+			TenantId: new("tenant-123"),
+			Oidc: oidcv1.OIDC_builder{
+				Issuer: new("https://issuer.example.com"),
+			}.Build(),
+		}.Build()
+		repo := mocktrust.NewInMemRepository(
+			mocktrust.WithTrust(existingMapping),
 		)
-		svc := trust.NewService(repo)
-		server := grpc.NewOIDCMappingServer(svc)
+		svc := newTrust(repo)
+		server := grpc.NewTrustMappingServer(svc)
 
-		req := &oidcmappingv1.RemoveOIDCMappingRequest{
-			TenantId: "tenant-123",
-		}
+		req := trustmappingv1.RemoveTrustMappingRequest_builder{
+			TenantId: new("tenant-123"),
+		}.Build()
 
-		resp, err := server.RemoveOIDCMapping(ctx, req)
+		resp, err := server.RemoveTrustMapping(ctx, req)
 
 		require.NoError(t, err)
 		assert.NotNil(t, resp)
@@ -280,17 +302,17 @@ func TestRemoveOIDCMapping(t *testing.T) {
 
 	t.Run("error - returns grpc error with message", func(t *testing.T) {
 		deleteErr := errors.New("delete failed")
-		repo := trustmock.NewInMemRepository(
-			trustmock.WithDeleteError(deleteErr),
+		repo := mocktrust.NewInMemRepository(
+			mocktrust.WithDeleteError(deleteErr),
 		)
-		svc := trust.NewService(repo)
-		server := grpc.NewOIDCMappingServer(svc)
+		svc := newTrust(repo)
+		server := grpc.NewTrustMappingServer(svc)
 
-		req := &oidcmappingv1.RemoveOIDCMappingRequest{
-			TenantId: "tenant-123",
-		}
+		req := trustmappingv1.RemoveTrustMappingRequest_builder{
+			TenantId: new("tenant-123"),
+		}.Build()
 
-		resp, err := server.RemoveOIDCMapping(ctx, req)
+		resp, err := server.RemoveTrustMapping(ctx, req)
 
 		require.Error(t, err)
 		assert.NotNil(t, resp)
@@ -300,21 +322,21 @@ func TestRemoveOIDCMapping(t *testing.T) {
 		st, ok := status.FromError(err)
 		require.True(t, ok)
 		assert.Equal(t, codes.Internal, st.Code())
-		assert.Contains(t, st.Message(), "failed to remove OIDC mapping")
+		assert.Contains(t, st.Message(), "failed to remove Trust mapping")
 	})
 
 	t.Run("error - delete is indempotent", func(t *testing.T) {
-		repo := trustmock.NewInMemRepository(
-			trustmock.WithDeleteError(serviceerr.ErrNotFound),
+		repo := mocktrust.NewInMemRepository(
+			mocktrust.WithDeleteError(serviceerr.ErrNotFound),
 		)
-		svc := trust.NewService(repo)
-		server := grpc.NewOIDCMappingServer(svc)
+		svc := newTrust(repo)
+		server := grpc.NewTrustMappingServer(svc)
 
-		req := &oidcmappingv1.RemoveOIDCMappingRequest{
-			TenantId: "tenant-123",
-		}
+		req := trustmappingv1.RemoveTrustMappingRequest_builder{
+			TenantId: new("tenant-123"),
+		}.Build()
 
-		resp, err := server.RemoveOIDCMapping(ctx, req)
+		resp, err := server.RemoveTrustMapping(ctx, req)
 
 		require.NoError(t, err)
 		assert.NotNil(t, resp)
@@ -323,25 +345,28 @@ func TestRemoveOIDCMapping(t *testing.T) {
 	})
 }
 
-func TestUnblockOIDCMapping(t *testing.T) {
+func TestUnblockTrustMapping(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("success - unblocks blocked mapping", func(t *testing.T) {
-		existingMapping := trust.OIDCMapping{
-			IssuerURL: "https://issuer.example.com",
-			Blocked:   true,
-		}
-		repo := trustmock.NewInMemRepository(
-			trustmock.WithTrust("tenant-123", existingMapping),
+		existingMapping := trustv1.Trust_builder{
+			TenantId: new("tenant-123"),
+			Blocked:  new(true),
+			Oidc: oidcv1.OIDC_builder{
+				Issuer: new("https://issuer.example.com"),
+			}.Build(),
+		}.Build()
+		repo := mocktrust.NewInMemRepository(
+			mocktrust.WithTrust(existingMapping),
 		)
-		svc := trust.NewService(repo)
-		server := grpc.NewOIDCMappingServer(svc)
+		svc := newTrust(repo)
+		server := grpc.NewTrustMappingServer(svc)
 
-		req := &oidcmappingv1.UnblockOIDCMappingRequest{
-			TenantId: "tenant-123",
-		}
+		req := trustmappingv1.UnblockTrustMappingRequest_builder{
+			TenantId: new("tenant-123"),
+		}.Build()
 
-		resp, err := server.UnblockOIDCMapping(ctx, req)
+		resp, err := server.UnblockTrustMapping(ctx, req)
 
 		require.NoError(t, err)
 		assert.NotNil(t, resp)
@@ -350,21 +375,24 @@ func TestUnblockOIDCMapping(t *testing.T) {
 	})
 
 	t.Run("success - already unblocked", func(t *testing.T) {
-		existingMapping := trust.OIDCMapping{
-			IssuerURL: "https://issuer.example.com",
-			Blocked:   false,
-		}
-		repo := trustmock.NewInMemRepository(
-			trustmock.WithTrust("tenant-123", existingMapping),
+		existingMapping := trustv1.Trust_builder{
+			TenantId: new("tenant-123"),
+			Blocked:  new(false),
+			Oidc: oidcv1.OIDC_builder{
+				Issuer: new("https://issuer.example.com"),
+			}.Build(),
+		}.Build()
+		repo := mocktrust.NewInMemRepository(
+			mocktrust.WithTrust(existingMapping),
 		)
-		svc := trust.NewService(repo)
-		server := grpc.NewOIDCMappingServer(svc)
+		svc := newTrust(repo)
+		server := grpc.NewTrustMappingServer(svc)
 
-		req := &oidcmappingv1.UnblockOIDCMappingRequest{
-			TenantId: "tenant-123",
-		}
+		req := trustmappingv1.UnblockTrustMappingRequest_builder{
+			TenantId: new("tenant-123"),
+		}.Build()
 
-		resp, err := server.UnblockOIDCMapping(ctx, req)
+		resp, err := server.UnblockTrustMapping(ctx, req)
 
 		require.NoError(t, err)
 		assert.NotNil(t, resp)
@@ -372,17 +400,17 @@ func TestUnblockOIDCMapping(t *testing.T) {
 	})
 
 	t.Run("not found - returns success", func(t *testing.T) {
-		repo := trustmock.NewInMemRepository(
-			trustmock.WithGetError(serviceerr.ErrNotFound),
+		repo := mocktrust.NewInMemRepository(
+			mocktrust.WithGetError(serviceerr.ErrNotFound),
 		)
-		svc := trust.NewService(repo)
-		server := grpc.NewOIDCMappingServer(svc)
+		svc := newTrust(repo)
+		server := grpc.NewTrustMappingServer(svc)
 
-		req := &oidcmappingv1.UnblockOIDCMappingRequest{
-			TenantId: "tenant-123",
-		}
+		req := trustmappingv1.UnblockTrustMappingRequest_builder{
+			TenantId: new("tenant-123"),
+		}.Build()
 
-		resp, err := server.UnblockOIDCMapping(ctx, req)
+		resp, err := server.UnblockTrustMapping(ctx, req)
 
 		require.NoError(t, err)
 		assert.NotNil(t, resp)
@@ -391,22 +419,25 @@ func TestUnblockOIDCMapping(t *testing.T) {
 
 	t.Run("error - returns grpc error with message", func(t *testing.T) {
 		internalErr := errors.New("update failed")
-		existingMapping := trust.OIDCMapping{
-			IssuerURL: "https://issuer.example.com",
-			Blocked:   true,
-		}
-		repo := trustmock.NewInMemRepository(
-			trustmock.WithTrust("tenant-123", existingMapping),
-			trustmock.WithUpdateError(internalErr),
+		existingMapping := trustv1.Trust_builder{
+			TenantId: new("tenant-123"),
+			Blocked:  new(true),
+			Oidc: oidcv1.OIDC_builder{
+				Issuer: new("https://issuer.example.com"),
+			}.Build(),
+		}.Build()
+		repo := mocktrust.NewInMemRepository(
+			mocktrust.WithTrust(existingMapping),
+			mocktrust.WithUpdateError(internalErr),
 		)
-		svc := trust.NewService(repo)
-		server := grpc.NewOIDCMappingServer(svc)
+		svc := newTrust(repo)
+		server := grpc.NewTrustMappingServer(svc)
 
-		req := &oidcmappingv1.UnblockOIDCMappingRequest{
-			TenantId: "tenant-123",
-		}
+		req := trustmappingv1.UnblockTrustMappingRequest_builder{
+			TenantId: new("tenant-123"),
+		}.Build()
 
-		resp, err := server.UnblockOIDCMapping(ctx, req)
+		resp, err := server.UnblockTrustMapping(ctx, req)
 
 		require.Error(t, err)
 		assert.NotNil(t, resp)
@@ -416,6 +447,6 @@ func TestUnblockOIDCMapping(t *testing.T) {
 		st, ok := status.FromError(err)
 		require.True(t, ok)
 		assert.Equal(t, codes.Internal, st.Code())
-		assert.Contains(t, st.Message(), "failed to unblock OIDC mapping")
+		assert.Contains(t, st.Message(), "failed to unblock Trust mapping")
 	})
 }

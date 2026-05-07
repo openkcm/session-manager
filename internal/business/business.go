@@ -5,49 +5,73 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 
-	"github.com/exaring/otelpgx"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/valkey-io/valkey-go"
-	"golang.org/x/sync/errgroup"
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 	slogctx "github.com/veqryn/slog-context"
 
+	sessionmanager "github.com/openkcm/session-manager"
 	"github.com/openkcm/session-manager/internal/business/server"
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/credentials"
 	"github.com/openkcm/session-manager/internal/grpc"
 	"github.com/openkcm/session-manager/internal/session"
 	sessionvalkey "github.com/openkcm/session-manager/internal/session/valkey"
-	"github.com/openkcm/session-manager/internal/trust"
-	"github.com/openkcm/session-manager/internal/trust/trustsql"
 )
 
-const clientAuthTypeInsecure = "insecure"
+const (
+	insecure         = "insecure"
+	mtls             = "mtls"
+	clientSecret     = "client_secret" // An alias to clientSecretPost. Prefer using clientSecretPost.
+	clientSecretPost = "client_secret_post"
+)
 
 // Main starts both API servers
 func Main(ctx context.Context, cfg *config.Config) error {
-	eg, ctx := errgroup.WithContext(ctx)
+	c, cancelCause := sessionmanager.NewContext(ctx)
+	defer cancelCause(nil)
 
-	eg.Go(func() error {
-		return publicMain(ctx, cfg)
+	if _, err := c.LoadModule(&cfg.Database); err != nil {
+		return fmt.Errorf("loading database module: %w", err)
+	}
+
+	if _, err := c.LoadModule(&cfg.Trust); err != nil {
+		return fmt.Errorf("loading trust module: %w", err)
+	}
+
+	// errChan is used to capture the first error and shutdown the servers.
+	errChan := make(chan error, 1)
+
+	// wg is used to wait for all servers to shutdown.
+	var wg sync.WaitGroup
+
+	// start public HTTP REST API server
+	wg.Go(func() {
+		errChan <- publicMain(c, cfg)
 	})
 
-	eg.Go(func() error {
-		return internalMain(ctx, cfg)
+	// start internal gRPC API server
+	wg.Go(func() {
+		errChan <- internalMain(c, cfg)
 	})
 
-	err := eg.Wait()
+	err := <-errChan
 	if err != nil {
 		slogctx.Error(ctx, "Shutting down servers", "error", err)
 	}
+	cancelCause(err)
+
+	// wait for all servers to shutdown
+	wg.Wait()
+
 	return err
 }
 
 // publicMain starts the HTTP REST public API server.
-func publicMain(ctx context.Context, cfg *config.Config) error {
+func publicMain(ctx *sessionmanager.Context, cfg *config.Config) error {
 	csrfSecret, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.CSRFSecret)
 	if err != nil {
 		return fmt.Errorf("loading csrf token from source ref: %w", err)
@@ -58,7 +82,15 @@ func publicMain(ctx context.Context, cfg *config.Config) error {
 
 	cfg.SessionManager.CSRFSecretParsed = csrfSecret
 
-	sessionManager, closeFn, err := initSessionManager(ctx, cfg)
+	trustMod, err := ctx.GetModule(cfg.Trust.Module())
+	if err != nil {
+		return fmt.Errorf("getting trust module: %w", err)
+	}
+
+	//nolint:forcetypeassert
+	trust := trustMod.(sessionmanager.Trust)
+
+	sessionManager, closeFn, err := initSessionManager(ctx, cfg, trust)
 	if err != nil {
 		return fmt.Errorf("failed to initialise the session manager: %w", err)
 	}
@@ -69,14 +101,7 @@ func publicMain(ctx context.Context, cfg *config.Config) error {
 }
 
 // internalMain starts the gRPC private API server.
-func internalMain(ctx context.Context, cfg *config.Config) error {
-	// Create trust service
-	trustRepo, err := trustRepoFromConfig(ctx, cfg)
-	if err != nil {
-		return fmt.Errorf("failed to create trust service: %w", err)
-	}
-	trustService := trust.NewService(trustRepo)
-
+func internalMain(ctx *sessionmanager.Context, cfg *config.Config) error {
 	// Create session repository
 	valkeyClient, err := valkeyClientFromConfig(cfg)
 	if err != nil {
@@ -90,26 +115,28 @@ func internalMain(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("failed to create a credentials builder: %w", err)
 	}
 
+	trustMod, err := ctx.GetModule(cfg.Trust.Module())
+	if err != nil {
+		return fmt.Errorf("getting trust module: %w", err)
+	}
+
+	//nolint:forcetypeassert
+	trust := trustMod.(sessionmanager.Trust)
+
 	// Initialize the gRPC servers.
-	oidcmappingsrv := grpc.NewOIDCMappingServer(trustService)
+	oidcmappingsrv := grpc.NewTrustMappingServer(trust)
 	sessionsrv := grpc.NewSessionServer(ctx,
 		sessionRepo,
-		trustRepo,
+		trust,
 		cfg.SessionManager.IdleSessionTimeout,
 		cfg.SessionManager.ClientAuth.ClientID,
-		grpc.WithQueryParametersIntrospect(cfg.SessionManager.AdditionalQueryParametersIntrospect),
 		grpc.WithTransportCredentials(credsBuilder),
 	)
+
 	return server.StartGRPCServer(ctx, cfg, oidcmappingsrv, sessionsrv)
 }
 
-func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Manager, closeFn func(), _ error) {
-	// Create trust repository
-	trustRepo, err := trustRepoFromConfig(ctx, cfg)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create trust repository: %w", err)
-	}
-
+func initSessionManager(ctx context.Context, cfg *config.Config, trust sessionmanager.Trust) (_ *session.Manager, closeFn func(), _ error) {
 	// Create session repository
 	valkeyClient, err := valkeyClientFromConfig(cfg)
 	if err != nil {
@@ -129,7 +156,7 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Man
 
 	sessManager, err := session.NewManager(ctx,
 		&cfg.SessionManager,
-		trustRepo,
+		trust,
 		sessionRepo,
 		auditLogger,
 		session.WithTransportCredentials(credsBuilder),
@@ -139,31 +166,6 @@ func initSessionManager(ctx context.Context, cfg *config.Config) (_ *session.Man
 	}
 
 	return sessManager, valkeyClient.Close, nil
-}
-
-func trustRepoFromConfig(ctx context.Context, cfg *config.Config) (*trustsql.Repository, error) {
-	connStr, err := config.MakeConnStr(cfg.Database)
-	if err != nil {
-		return nil, fmt.Errorf("failed to make dsn from config: %w", err)
-	}
-
-	pgxpoolCfg, err := pgxpool.ParseConfig(connStr)
-	if err != nil {
-		return nil, fmt.Errorf("parsing pgxpool config: %w", err)
-	}
-
-	pgxpoolCfg.ConnConfig.Tracer = otelpgx.NewTracer()
-
-	db, err := pgxpool.NewWithConfig(ctx, pgxpoolCfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialise pgxpool connection: %w", err)
-	}
-
-	if err := otelpgx.RecordStats(db); err != nil {
-		return nil, fmt.Errorf("recording database stat: %w", err)
-	}
-
-	return trustsql.NewRepository(db), nil
 }
 
 func valkeyClientFromConfig(cfg *config.Config) (valkey.Client, error) {
@@ -206,14 +208,14 @@ func valkeyClientFromConfig(cfg *config.Config) (valkey.Client, error) {
 
 func newCredsBuilder(cfg *config.Config) (credentials.Builder, error) {
 	switch cfg.SessionManager.ClientAuth.Type {
-	case "mtls":
+	case mtls:
 		tlsConfig, err := commoncfg.LoadMTLSConfig(cfg.SessionManager.ClientAuth.MTLS)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load mTLS config: %w", err)
 		}
 
 		return func(clientID string) credentials.TransportCredentials { return credentials.NewTLS(clientID, tlsConfig) }, nil
-	case "client_secret", "client_secret_post":
+	case clientSecretPost, clientSecret:
 		secret, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.ClientAuth.ClientSecret)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load client secret: %w", err)
@@ -222,7 +224,7 @@ func newCredsBuilder(cfg *config.Config) (credentials.Builder, error) {
 		return func(clientID string) credentials.TransportCredentials {
 			return credentials.NewClientSecretPost(clientID, string(secret))
 		}, nil
-	case clientAuthTypeInsecure:
+	case insecure:
 		slog.Warn("insecure credentials are used. Do not use this in production")
 		return func(clientID string) credentials.TransportCredentials { return credentials.NewInsecure(clientID) }, nil
 	default:

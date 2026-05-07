@@ -17,14 +17,15 @@ import (
 
 	rpcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/rpc/v1"
 	sessionv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/session/v1"
+	oidcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/v1"
 	typesv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/types/v1"
 	slogctx "github.com/veqryn/slog-context"
 	grpccodes "google.golang.org/grpc/codes"
 
+	sessionmanager "github.com/openkcm/session-manager"
 	"github.com/openkcm/session-manager/internal/credentials"
 	"github.com/openkcm/session-manager/internal/debugtools"
 	"github.com/openkcm/session-manager/internal/session"
-	"github.com/openkcm/session-manager/internal/trust"
 )
 
 const defaultIntrospectionCacheExpiration = 30 * time.Second
@@ -35,7 +36,7 @@ type SessionServer struct {
 	sessionv1.UnimplementedServiceServer
 
 	sessionRepo session.Repository
-	trustRepo   trust.OIDCMappingRepository
+	trust       sessionmanager.Trust
 	newCreds    credentials.Builder
 
 	queryParametersIntrospect []string
@@ -50,14 +51,14 @@ type SessionServer struct {
 func NewSessionServer(
 	ctx context.Context,
 	sessionRepo session.Repository,
-	trustRepo trust.OIDCMappingRepository,
+	trust sessionmanager.Trust,
 	idleSessionTimeout time.Duration,
 	clientID string,
 	opts ...SessionServerOption,
 ) *SessionServer {
 	s := &SessionServer{
 		sessionRepo:        sessionRepo,
-		trustRepo:          trustRepo,
+		trust:              trust,
 		idleSessionTimeout: idleSessionTimeout,
 		newCreds:           func(clientID string) credentials.TransportCredentials { return credentials.NewInsecure(clientID) },
 		clientID:           clientID,
@@ -108,15 +109,15 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 		return &sessionv1.GetSessionResponse{Valid: false}, nil
 	}
 
-	// Get trust mapping for the given tenant ID
-	mapping, err := s.trustRepo.Get(ctx, req.GetTenantId())
+	// Get trust for the given tenant ID
+	trust, err := s.trust.Get(ctx, req.GetTenantId())
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to get an oidc mapping")
 		slogctx.Warn(ctx, "Is this an attack? Could not get trust mapping", "issuer", sess.Issuer, "error", err)
 		return &sessionv1.GetSessionResponse{Valid: false}, nil
 	}
-	if mapping.Blocked {
+	if trust.GetBlocked() {
 		slogctx.Warn(ctx, "Tenant is blocked", "issuer", sess.Issuer)
 		span.SetStatus(codes.Ok, "the tenant is blocked")
 		st := status.New(grpccodes.FailedPrecondition, "the tenant is blocked")
@@ -156,7 +157,7 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 	}
 
 	// Introspect access token
-	result, err := s.introspectToken(ctx, sess.AccessToken, &mapping)
+	result, err := s.introspectToken(ctx, sess.AccessToken, trust.GetOidc())
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to introspect an access token")
@@ -186,38 +187,45 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 	return response, nil
 }
 
+// GetOIDCProvider implements a compatibility level with the OIDC API.
+// Deprecated: use GetTrust instead.
+// TODO: remove this method once the lifecycle of deprecated and compatibility layers is reached to the end.
+//
+//nolint:staticcheck
 func (s *SessionServer) GetOIDCProvider(ctx context.Context, req *sessionv1.GetOIDCProviderRequest) (*sessionv1.GetOIDCProviderResponse, error) {
 	tracer := otel.GetTracerProvider()
 	ctx, span := tracer.Tracer("").Start(ctx, "get_oidc_provider")
 	defer span.End()
 
-	provider, err := s.trustRepo.Get(ctx, req.GetTenantId())
+	provider, err := s.trust.Get(ctx, req.GetTenantId())
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to get an oidc provider")
 		return nil, fmt.Errorf("getting odic provider: %w", err)
 	}
 
+	oidc := provider.GetOidc()
+
 	span.SetStatus(codes.Ok, "")
 	return &sessionv1.GetOIDCProviderResponse{
 		Provider: &typesv1.OIDCProvider{
-			IssuerUrl: provider.IssuerURL,
-			JwksUri:   provider.JWKSURI,
-			Audiences: provider.Audiences,
+			IssuerUrl: oidc.GetIssuer(),
+			JwksUri:   oidc.GetJwksUri(),
+			Audiences: oidc.GetAudiences(),
 		},
 	}, nil
 }
 
-func (s *SessionServer) getClientID(mapping *trust.OIDCMapping) string {
-	if mapping.ClientID != "" {
-		return mapping.ClientID
+func (s *SessionServer) getClientID(oidcTrust *oidcv1.OIDC) string {
+	if clientID := oidcTrust.GetClientId(); clientID != "" {
+		return clientID
 	}
 
 	return s.clientID
 }
 
-func (s *SessionServer) httpClient(mapping *trust.OIDCMapping) *http.Client {
-	creds := s.newCreds(s.getClientID(mapping))
+func (s *SessionServer) httpClient(oidcTrust *oidcv1.OIDC) *http.Client {
+	creds := s.newCreds(s.getClientID(oidcTrust))
 	transport := creds.Transport()
 	if debugSettingSMDumpTransport.Value() == "1" {
 		transport = debugtools.NewTransport(transport)
@@ -228,7 +236,7 @@ func (s *SessionServer) httpClient(mapping *trust.OIDCMapping) *http.Client {
 	}
 }
 
-func (s *SessionServer) introspectToken(ctx context.Context, token string, oidcTrust *trust.OIDCMapping) (oidc.Introspection, error) {
+func (s *SessionServer) introspectToken(ctx context.Context, token string, oidcTrust *oidcv1.OIDC) (oidc.Introspection, error) {
 	// first check the cache for a recent introspection result for this token
 	hashedSuffix := sha256.Sum256([]byte(token))
 	cacheKey := base64.RawURLEncoding.EncodeToString(hashedSuffix[:])
@@ -239,13 +247,12 @@ func (s *SessionServer) introspectToken(ctx context.Context, token string, oidcT
 	httpClient := s.httpClient(oidcTrust)
 
 	// create the provider for the given issuer
-	provider, err := oidc.NewProvider(oidcTrust.IssuerURL, oidcTrust.Audiences,
-		oidc.WithIntrospectQueryParameters(oidcTrust.GetIntrospectParameters(s.queryParametersIntrospect)),
+	provider, err := oidc.NewProvider(oidcTrust.GetIssuer(), oidcTrust.GetAudiences(),
 		oidc.WithAllowHttpScheme(s.allowHttpScheme),
 		oidc.WithSecureHTTPClient(httpClient),
 	)
 	if err != nil {
-		slogctx.Error(ctx, "Could not create OpenID provider", "issuer", oidcTrust.IssuerURL, "error", err)
+		slogctx.Error(ctx, "Could not create OpenID provider", "issuer", oidcTrust.GetIssuer(), "error", err)
 		return oidc.Introspection{Active: false}, err
 	}
 
@@ -256,7 +263,7 @@ func (s *SessionServer) introspectToken(ctx context.Context, token string, oidcT
 			slogctx.Debug(ctx, "No introspection endpoint configured", "issuer", provider.Issuer)
 			return oidc.Introspection{Active: true}, nil
 		}
-		slogctx.Error(ctx, "Could not introspect access token", "error", err)
+		slogctx.Error(ctx, "Could not introspect token", "error", err)
 		return oidc.Introspection{Active: false}, err
 	}
 

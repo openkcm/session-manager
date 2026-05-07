@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	sessionmanager "github.com/openkcm/session-manager"
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/credentials"
 )
@@ -65,7 +66,7 @@ func TestLoadHTTPClient_Insecure(t *testing.T) {
 	cfg := &config.Config{
 		SessionManager: config.SessionManager{
 			ClientAuth: config.ClientAuth{
-				Type:     clientAuthTypeInsecure,
+				Type:     insecure,
 				ClientID: "test-client",
 			},
 		},
@@ -277,90 +278,6 @@ func TestValkeyClientFromConfig_WithMTLS(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to load valkey mTLS config from secret ref")
 }
 
-func TestTrustRepoFromConfig_InvalidDatabaseConfig(t *testing.T) {
-	cfg := &config.Config{
-		Database: config.Database{
-			Host:     commoncfg.SourceRef{Source: "file", File: commoncfg.CredentialFile{Path: "/nonexistent/file"}},
-			Port:     "5432",
-			Name:     "testdb",
-			User:     commoncfg.SourceRef{Source: "embedded", Value: "user"},
-			Password: commoncfg.SourceRef{Source: "embedded", Value: "pass"},
-		},
-	}
-
-	_, err := trustRepoFromConfig(t.Context(), cfg)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to make dsn from config")
-}
-
-func TestInitSessionManager_InvalidOIDCConfig(t *testing.T) {
-	cfg := &config.Config{
-		Database: config.Database{
-			Host:     commoncfg.SourceRef{Source: "file", File: commoncfg.CredentialFile{Path: "/nonexistent/file"}},
-			Port:     "5432",
-			Name:     "testdb",
-			User:     commoncfg.SourceRef{Source: "embedded", Value: "user"},
-			Password: commoncfg.SourceRef{Source: "embedded", Value: "pass"},
-		},
-	}
-
-	_, closeFn, err := initSessionManager(t.Context(), cfg)
-	assert.Error(t, err)
-	assert.Nil(t, closeFn)
-	assert.Contains(t, err.Error(), "failed to create trust repository")
-}
-
-func TestInitSessionManager_InvalidValkeyConfig(t *testing.T) {
-	cfg := &config.Config{
-		Database: config.Database{
-			Host:     commoncfg.SourceRef{Source: "embedded", Value: "localhost"},
-			Port:     "5432",
-			Name:     "testdb",
-			User:     commoncfg.SourceRef{Source: "embedded", Value: "user"},
-			Password: commoncfg.SourceRef{Source: "embedded", Value: "pass"},
-		},
-		ValKey: config.ValKey{
-			Host:     commoncfg.SourceRef{Source: "file", File: commoncfg.CredentialFile{Path: "/nonexistent/file"}},
-			User:     commoncfg.SourceRef{Source: "embedded", Value: "user"},
-			Password: commoncfg.SourceRef{Source: "embedded", Value: "pass"},
-		},
-	}
-
-	_, closeFn, err := initSessionManager(t.Context(), cfg)
-	assert.Error(t, err)
-	assert.Nil(t, closeFn)
-	// Will fail on either DB connection or valkey config
-	// Error details depend on which step fails
-}
-
-func TestInitSessionManager_InvalidHTTPClientConfig(t *testing.T) {
-	cfg := &config.Config{
-		Database: config.Database{
-			Host:     commoncfg.SourceRef{Source: "embedded", Value: "localhost"},
-			Port:     "5432",
-			Name:     "testdb",
-			User:     commoncfg.SourceRef{Source: "embedded", Value: "user"},
-			Password: commoncfg.SourceRef{Source: "embedded", Value: "pass"},
-		},
-		ValKey: config.ValKey{
-			Host:     commoncfg.SourceRef{Source: "embedded", Value: "localhost:6379"},
-			User:     commoncfg.SourceRef{Source: "embedded", Value: "user"},
-			Password: commoncfg.SourceRef{Source: "embedded", Value: "pass"},
-		},
-		SessionManager: config.SessionManager{
-			ClientAuth: config.ClientAuth{
-				Type: "invalid-type",
-			},
-		},
-	}
-
-	_, closeFn, err := initSessionManager(t.Context(), cfg)
-	assert.Error(t, err)
-	assert.Nil(t, closeFn)
-	// Should fail on one of the earlier steps (DB or valkey) or on HTTP client
-	// Error details depend on which step fails
-}
-
 func TestPublicMain_InvalidCSRFSecret(t *testing.T) {
 	cfg := &config.Config{
 		SessionManager: config.SessionManager{
@@ -368,7 +285,10 @@ func TestPublicMain_InvalidCSRFSecret(t *testing.T) {
 		},
 	}
 
-	err := publicMain(t.Context(), cfg)
+	ctx, cancel := sessionmanager.NewContext(t.Context())
+	defer cancel(nil)
+
+	err := publicMain(ctx, cfg)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "loading csrf token from source ref")
 }
@@ -380,36 +300,16 @@ func TestPublicMain_ShortCSRFSecret(t *testing.T) {
 		},
 	}
 
-	err := publicMain(t.Context(), cfg)
+	ctx, cancel := sessionmanager.NewContext(t.Context())
+	defer cancel(nil)
+
+	err := publicMain(ctx, cfg)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "CSRF secret must be at least 32 bytes")
 }
 
-func TestInternalMain_InvalidOIDCConfig(t *testing.T) {
-	cfg := &config.Config{
-		Database: config.Database{
-			Host:     commoncfg.SourceRef{Source: "file", File: commoncfg.CredentialFile{Path: "/nonexistent/file"}},
-			Port:     "5432",
-			Name:     "testdb",
-			User:     commoncfg.SourceRef{Source: "embedded", Value: "user"},
-			Password: commoncfg.SourceRef{Source: "embedded", Value: "pass"},
-		},
-	}
-
-	err := internalMain(t.Context(), cfg)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to create trust service")
-}
-
 func TestInternalMain_InvalidValkeyConfig(t *testing.T) {
 	cfg := &config.Config{
-		Database: config.Database{
-			Host:     commoncfg.SourceRef{Source: "embedded", Value: "localhost"},
-			Port:     "5432",
-			Name:     "testdb",
-			User:     commoncfg.SourceRef{Source: "embedded", Value: "user"},
-			Password: commoncfg.SourceRef{Source: "embedded", Value: "pass"},
-		},
 		ValKey: config.ValKey{
 			Host:     commoncfg.SourceRef{Source: "file", File: commoncfg.CredentialFile{Path: "/nonexistent/file"}},
 			User:     commoncfg.SourceRef{Source: "embedded", Value: "user"},
@@ -417,7 +317,10 @@ func TestInternalMain_InvalidValkeyConfig(t *testing.T) {
 		},
 	}
 
-	err := internalMain(t.Context(), cfg)
+	ctx, cancel := sessionmanager.NewContext(t.Context())
+	defer cancel(nil)
+
+	err := internalMain(ctx, cfg)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to create valkey client")
 	// Could fail on OIDC (DB connection) or valkey
@@ -439,39 +342,6 @@ func TestMain_PublicServerInvalidCSRF(t *testing.T) {
 	cfg := &config.Config{
 		SessionManager: config.SessionManager{
 			CSRFSecret: commoncfg.SourceRef{Source: "file", File: commoncfg.CredentialFile{Path: "/nonexistent/file"}},
-		},
-		Database: config.Database{
-			Host:     commoncfg.SourceRef{Source: "embedded", Value: "localhost"},
-			Port:     "5432",
-			Name:     "testdb",
-			User:     commoncfg.SourceRef{Source: "embedded", Value: "user"},
-			Password: commoncfg.SourceRef{Source: "embedded", Value: "pass"},
-		},
-	}
-
-	err := Main(t.Context(), cfg)
-	assert.Error(t, err)
-}
-
-func TestMain_InternalServerInvalidDatabase(t *testing.T) {
-	cfg := &config.Config{
-		SessionManager: config.SessionManager{
-			CSRFSecret: commoncfg.SourceRef{Source: "embedded", Value: "this-is-a-very-long-secret-that-is-at-least-32-bytes-long"},
-			ClientAuth: config.ClientAuth{
-				Type: clientAuthTypeInsecure,
-			},
-		},
-		Database: config.Database{
-			Host:     commoncfg.SourceRef{Source: "file", File: commoncfg.CredentialFile{Path: "/nonexistent/file"}},
-			Port:     "5432",
-			Name:     "testdb",
-			User:     commoncfg.SourceRef{Source: "embedded", Value: "user"},
-			Password: commoncfg.SourceRef{Source: "embedded", Value: "pass"},
-		},
-		ValKey: config.ValKey{
-			Host:     commoncfg.SourceRef{Source: "embedded", Value: "localhost:6379"},
-			User:     commoncfg.SourceRef{Source: "embedded", Value: "user"},
-			Password: commoncfg.SourceRef{Source: "embedded", Value: "pass"},
 		},
 	}
 

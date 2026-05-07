@@ -8,13 +8,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/goccy/go-yaml"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
-
-	"github.com/openkcm/session-manager/internal/config"
 )
 
 func TestMigrate(t *testing.T) {
@@ -39,6 +38,7 @@ func TestMigrate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to start PostgreSQL: %s", err)
 	}
+	defer func() { _ = pgContainer.Terminate(ctx) }()
 
 	port, err := pgContainer.MappedPort(ctx, "5432")
 	if err != nil {
@@ -46,40 +46,51 @@ func TestMigrate(t *testing.T) {
 	}
 
 	// Prepare config
-	_ = os.MkdirAll(testdir, fs.ModePerm)
-	defer os.RemoveAll(testdir)
-
-	err = os.WriteFile(configFilePath, []byte(validConfig), fs.ModePerm)
-	if err != nil {
-		t.Fatalf("failed to write config file: %s", err)
-	}
-	defer os.Remove(configFilePath)
-
-	var cfg config.Config
-	err = commoncfg.LoadConfig(&cfg, nil, testdir)
-	if err != nil {
-		t.Fatalf("failed to load config: %s", err)
-	}
-
 	currdir, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("failed to get wd: %s", err)
 	}
+
+	abstestdir := filepath.Join(currdir, testdir)
+	_ = os.MkdirAll(abstestdir, fs.ModePerm)
+	defer os.RemoveAll(abstestdir)
+
+	absConfigFilePath := filepath.Join(currdir, configFilePath)
+	err = os.WriteFile(absConfigFilePath, []byte(validConfig), fs.ModePerm)
+	if err != nil {
+		t.Fatalf("failed to write config file: %s", err)
+	}
+
+	cfg := loadExtendedConfig(t, abstestdir)
+	cfg.Logger.Level = "debug"
+	cfg.Logger.Format = commoncfg.TextLoggerFormat
+	cfg.Logger.Formatter.Time.Type = commoncfg.PatternTimeLogger
+	cfg.Logger.Formatter.Time.Pattern = time.Stamp
 
 	cfg.Database.Name = dbname
 	cfg.Database.User = commoncfg.SourceRef{Source: "embedded", Value: dbuser}
 	cfg.Database.Password = commoncfg.SourceRef{Source: "embedded", Value: dbpass}
 	cfg.Database.Host = commoncfg.SourceRef{Source: "embedded", Value: "localhost"}
 	cfg.Database.Port = port.Port()
-	cfg.Migrate.Source = "file://" + filepath.Join(currdir, "../sql")
 
 	cfgMap := make(map[any]any)
-	err = mapstructure.Decode(cfg, &cfgMap)
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		Result: &cfgMap,
+		DecodeHook: mapstructure.ComposeDecodeHookFunc(
+			mapstructure.StringToTimeDurationHookFunc(),
+			mapstructure.TextUnmarshallerHookFunc()),
+		WeaklyTypedInput: true,
+		TagName:          "yaml",
+		SquashTagOption:  "inline",
+	})
 	if err != nil {
+		t.Fatalf("failed to create mapstructure decoder: %s", err)
+	}
+	if err := decoder.Decode(cfg); err != nil {
 		t.Fatalf("failed to decode mapstructure: %s", err)
 	}
 
-	f, err := os.Create(configFilePath)
+	f, err := os.Create(absConfigFilePath)
 	if err != nil {
 		t.Fatalf("failed to create config file: %s", err)
 	}
@@ -90,9 +101,7 @@ func TestMigrate(t *testing.T) {
 		t.Fatalf("failed to write config: %s", err)
 	}
 
-	wd, _ := os.Getwd()
-	t.Chdir(testdir)
-	defer os.Chdir(wd)
+	t.Chdir(abstestdir)
 
 	// Run the migrations
 	cmd := exec.CommandContext(ctx, filepath.Join(currdir, "./session-manager"), cmdName)
@@ -145,40 +154,51 @@ func TestMigrateIdempotent(t *testing.T) {
 	}
 
 	// Prepare config
-	_ = os.MkdirAll(testdir, fs.ModePerm)
-	defer os.RemoveAll(testdir)
-
-	err = os.WriteFile(configFilePath, []byte(validConfig), fs.ModePerm)
-	if err != nil {
-		t.Fatalf("failed to write config file: %s", err)
-	}
-	defer os.Remove(configFilePath)
-
-	var cfg config.Config
-	err = commoncfg.LoadConfig(&cfg, nil, testdir)
-	if err != nil {
-		t.Fatalf("failed to load config: %s", err)
-	}
-
 	currdir, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("failed to get wd: %s", err)
 	}
+
+	abstestdir := filepath.Join(currdir, testdir)
+	_ = os.MkdirAll(abstestdir, fs.ModePerm)
+	defer os.RemoveAll(abstestdir)
+
+	absConfigFilePath := filepath.Join(currdir, configFilePath)
+	err = os.WriteFile(absConfigFilePath, []byte(validConfig), fs.ModePerm)
+	if err != nil {
+		t.Fatalf("failed to write config file: %s", err)
+	}
+
+	cfg := loadExtendedConfig(t, abstestdir)
+	cfg.Logger.Level = "debug"
+	cfg.Logger.Format = commoncfg.TextLoggerFormat
+	cfg.Logger.Formatter.Time.Type = commoncfg.PatternTimeLogger
+	cfg.Logger.Formatter.Time.Pattern = time.Stamp
 
 	cfg.Database.Name = dbname
 	cfg.Database.User = commoncfg.SourceRef{Source: "embedded", Value: dbuser}
 	cfg.Database.Password = commoncfg.SourceRef{Source: "embedded", Value: dbpass}
 	cfg.Database.Host = commoncfg.SourceRef{Source: "embedded", Value: "localhost"}
 	cfg.Database.Port = port.Port()
-	cfg.Migrate.Source = "file://" + filepath.Join(currdir, "../sql")
 
 	cfgMap := make(map[any]any)
-	err = mapstructure.Decode(cfg, &cfgMap)
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		Result: &cfgMap,
+		DecodeHook: mapstructure.ComposeDecodeHookFunc(
+			mapstructure.StringToTimeDurationHookFunc(),
+			mapstructure.TextUnmarshallerHookFunc()),
+		WeaklyTypedInput: true,
+		TagName:          "yaml",
+		SquashTagOption:  "inline",
+	})
 	if err != nil {
+		t.Fatalf("failed to create mapstructure decoder: %s", err)
+	}
+	if err := decoder.Decode(cfg); err != nil {
 		t.Fatalf("failed to decode mapstructure: %s", err)
 	}
 
-	f, err := os.Create(configFilePath)
+	f, err := os.Create(absConfigFilePath)
 	if err != nil {
 		t.Fatalf("failed to create config file: %s", err)
 	}
@@ -189,9 +209,7 @@ func TestMigrateIdempotent(t *testing.T) {
 		t.Fatalf("failed to write config: %s", err)
 	}
 
-	wd, _ := os.Getwd()
-	t.Chdir(testdir)
-	defer os.Chdir(wd)
+	t.Chdir(abstestdir)
 
 	// Run migrations the first time
 	cmd := exec.CommandContext(ctx, filepath.Join(currdir, "./session-manager"), cmdName)

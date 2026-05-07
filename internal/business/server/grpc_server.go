@@ -8,8 +8,8 @@ import (
 
 	"github.com/openkcm/common-sdk/pkg/commongrpc"
 
-	oidcmappingv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/oidcmapping/v1"
 	sessionv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/session/v1"
+	trustmappingv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/trustmapping/v1"
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/session-manager/internal/config"
@@ -17,13 +17,13 @@ import (
 )
 
 func StartGRPCServer(ctx context.Context, cfg *config.Config,
-	oidcmappingsrv *grpc.OIDCMappingServer,
+	oidcmappingsrv *grpc.TrustMappingServer,
 	sessionsrv *grpc.SessionServer,
 ) error {
 	grpcServer := commongrpc.NewServer(ctx, &cfg.GRPC.GRPCServer)
 
 	// Register OIDC mapping server for the regional tenant manager
-	oidcmappingv1.RegisterServiceServer(grpcServer, oidcmappingsrv)
+	trustmappingv1.RegisterServiceServer(grpcServer, oidcmappingsrv)
 	// Register Session server for ExtAuthZ
 	sessionv1.RegisterServiceServer(grpcServer, sessionsrv)
 

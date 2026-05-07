@@ -2,6 +2,7 @@ package session_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,12 +11,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	oidcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/v1"
+	trustv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/v1"
+
 	"github.com/openkcm/session-manager/internal/config"
-	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/internal/session"
 	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
-	"github.com/openkcm/session-manager/internal/trust"
-	"github.com/openkcm/session-manager/internal/trust/trustmock"
+	mocktrust "github.com/openkcm/session-manager/modules/oidctrust/mocks"
+	"github.com/openkcm/session-manager/pkg/serviceerr"
 )
 
 func TestDeleteIdleSessions(t *testing.T) {
@@ -92,7 +95,6 @@ func TestRefreshAccessToken(t *testing.T) {
 			assert.Equal(t, "refresh_token", r.Form.Get("grant_type"))
 			assert.Equal(t, "old-refresh-token", r.Form.Get("refresh_token"))
 			assert.Equal(t, "test-client-id", r.Form.Get("client_id"))
-			assert.Equal(t, "param-value", r.Form.Get("test-param"))
 
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -104,14 +106,15 @@ func TestRefreshAccessToken(t *testing.T) {
 		defer tokenServer.Close()
 		tokenServerURL = tokenServer.URL + "/token"
 
-		mapping := trust.OIDCMapping{
-			IssuerURL: discoveryServerURL,
-			Properties: map[string]string{
-				"test-param": "param-value",
-			},
-		}
+		mapping := trustv1.Trust_builder{
+			TenantId: new(tenantID),
+			Oidc: oidcv1.OIDC_builder{
+				Issuer: new(discoveryServerURL),
+			}.Build(),
+		}.Build()
 
-		oidcRepo := trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, mapping))
+		oidcRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(mapping))
+		trust := newTrust(oidcRepo)
 
 		sess := session.Session{
 			ID:                sessionID,
@@ -130,13 +133,12 @@ func TestRefreshAccessToken(t *testing.T) {
 			ClientAuth: config.ClientAuth{
 				ClientID: "test-client-id",
 			},
-			AdditionalQueryParametersToken: []string{"test-param"},
-			CSRFSecretParsed:               []byte(testCSRFSecret),
+			CSRFSecretParsed: []byte(testCSRFSecret),
 		}
 
 		manager, err := session.NewManager(ctx,
 			cfg,
-			oidcRepo,
+			trust,
 			sessions,
 			nil,
 			session.WithAllowHttpScheme(true),
@@ -155,7 +157,8 @@ func TestRefreshAccessToken(t *testing.T) {
 	})
 
 	t.Run("Error - trust mapping not found", func(t *testing.T) {
-		oidcRepo := trustmock.NewInMemRepository()
+		oidcRepo := mocktrust.NewInMemRepository()
+		trust := newTrust(oidcRepo)
 
 		sess := session.Session{
 			ID:                sessionID,
@@ -176,7 +179,7 @@ func TestRefreshAccessToken(t *testing.T) {
 			CSRFSecretParsed: []byte(testCSRFSecret),
 		}
 
-		manager, err := session.NewManager(ctx, cfg, oidcRepo, sessions, nil)
+		manager, err := session.NewManager(ctx, cfg, trust, sessions, nil)
 		require.NoError(t, err)
 
 		// Trigger housekeeping - should log error but not fail
@@ -205,12 +208,14 @@ func TestRefreshAccessToken(t *testing.T) {
 		defer tokenServer.Close()
 		tokenServerURL = tokenServer.URL + "/token"
 
-		mapping := trust.OIDCMapping{
-			IssuerURL:  discoveryServerURL,
-			Properties: map[string]string{},
-		}
+		mapping := trustv1.Trust_builder{
+			TenantId: new(tenantID),
+			Oidc: oidcv1.OIDC_builder{
+				Issuer: new(discoveryServerURL),
+			}.Build(),
+		}.Build()
 
-		oidcRepo := trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, mapping))
+		oidcRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(mapping))
 
 		sess := session.Session{
 			ID:                sessionID,
@@ -234,7 +239,7 @@ func TestRefreshAccessToken(t *testing.T) {
 
 		manager, err := session.NewManager(ctx,
 			cfg,
-			oidcRepo,
+			newTrust(oidcRepo),
 			sessions,
 			nil,
 			session.WithAllowHttpScheme(true),
@@ -263,12 +268,14 @@ func TestRefreshAccessToken(t *testing.T) {
 		defer discoveryServer.Close()
 		discoveryServerURL = discoveryServer.URL
 
-		mapping := trust.OIDCMapping{
-			IssuerURL:  discoveryServer.URL,
-			Properties: map[string]string{}, // Missing required parameter
-		}
+		mapping := trustv1.Trust_builder{
+			TenantId: new(tenantID),
+			Oidc: oidcv1.OIDC_builder{
+				Issuer: new(discoveryServer.URL),
+			}.Build(),
+		}.Build()
 
-		oidcRepo := trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, mapping))
+		oidcRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(mapping))
 
 		sess := session.Session{
 			ID:                sessionID,
@@ -286,13 +293,12 @@ func TestRefreshAccessToken(t *testing.T) {
 			ClientAuth: config.ClientAuth{
 				ClientID: "test-client-id",
 			},
-			AdditionalQueryParametersToken: []string{"missing-param"},
-			CSRFSecretParsed:               []byte(testCSRFSecret),
+			CSRFSecretParsed: []byte(testCSRFSecret),
 		}
 
 		manager, err := session.NewManager(ctx,
 			cfg,
-			oidcRepo,
+			newTrust(oidcRepo),
 			sessions,
 			nil,
 			session.WithAllowHttpScheme(true),
@@ -366,5 +372,136 @@ func TestHousekeepSession_ErrorCases(t *testing.T) {
 		updatedSess, err := sessions.LoadSession(ctx, sessionID)
 		require.NoError(t, err)
 		assert.Equal(t, "original-token", updatedSess.AccessToken)
+	})
+
+	t.Run("IsActive returns error — session is skipped, housekeeping does not fail", func(t *testing.T) {
+		sessionID := "test-session-id-isactive-err"
+
+		sess := session.Session{
+			ID:                sessionID,
+			TenantID:          "test-tenant",
+			AccessTokenExpiry: time.Now().Add(2 * time.Hour),
+			Expiry:            time.Now().Add(2 * time.Hour),
+		}
+
+		sessions := sessionmock.NewInMemRepository(
+			sessionmock.WithSession(sess),
+			sessionmock.WithIsActiveError(errors.New("valkey unavailable")),
+		)
+
+		cfg := &config.SessionManager{
+			CSRFSecretParsed: []byte(testCSRFSecret),
+		}
+
+		manager, err := session.NewManager(ctx, cfg, nil, sessions, nil)
+		require.NoError(t, err)
+
+		// Housekeeping must not surface the IsActive error.
+		err = manager.TriggerHousekeeping(ctx, 1, time.Hour)
+		require.NoError(t, err)
+
+		// Session must still exist — no deletion was attempted.
+		_, err = sessions.LoadSession(ctx, sessionID)
+		require.NoError(t, err)
+	})
+
+	t.Run("DeleteSession returns error — housekeeping continues without failing", func(t *testing.T) {
+		sessionID := "test-session-id-delete-err"
+
+		sess := session.Session{
+			ID:                sessionID,
+			TenantID:          "test-tenant",
+			AccessTokenExpiry: time.Now().Add(2 * time.Hour),
+			Expiry:            time.Now().Add(2 * time.Hour),
+		}
+
+		// Inactive session (no BumpActive) + DeleteSession always errors.
+		sessions := sessionmock.NewInMemRepository(
+			sessionmock.WithSession(sess),
+			sessionmock.WithDeleteSessionError(errors.New("delete failed")),
+		)
+
+		cfg := &config.SessionManager{
+			CSRFSecretParsed: []byte(testCSRFSecret),
+		}
+
+		manager, err := session.NewManager(ctx, cfg, nil, sessions, nil)
+		require.NoError(t, err)
+
+		// Housekeeping must not surface the DeleteSession error.
+		err = manager.TriggerHousekeeping(ctx, 1, time.Hour)
+		require.NoError(t, err)
+	})
+
+	t.Run("StoreSession error during token refresh — housekeeping continues without failing", func(t *testing.T) {
+		tenantID := "test-tenant-store-err"
+		sessionID := "test-session-id-store-err"
+
+		var discoveryServerURL string
+		discoveryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"issuer":         discoveryServerURL,
+				"token_endpoint": discoveryServerURL + "/token",
+			})
+		}))
+		defer discoveryServer.Close()
+		discoveryServerURL = discoveryServer.URL
+
+		// Token server returns a valid refresh response.
+		tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"access_token":  "new-access-token",
+				"refresh_token": "new-refresh-token",
+				"expires_in":    3600,
+			})
+		}))
+		defer tokenServer.Close()
+
+		mapping := trustv1.Trust_builder{
+			TenantId: new(tenantID),
+			Oidc: oidcv1.OIDC_builder{
+				Issuer: new(discoveryServerURL),
+			}.Build(),
+		}.Build()
+
+		oidcRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(mapping))
+		trust := newTrust(oidcRepo)
+
+		sess := session.Session{
+			ID:                sessionID,
+			TenantID:          tenantID,
+			RefreshToken:      "old-refresh-token",
+			AccessToken:       "old-access-token",
+			AccessTokenExpiry: time.Now().Add(10 * time.Second), // Near expiry.
+			Expiry:            time.Now().Add(1 * time.Hour),
+		}
+
+		sessions := sessionmock.NewInMemRepository(
+			sessionmock.WithSession(sess),
+			sessionmock.WithStoreSessionError(errors.New("store failed")),
+		)
+		err := sessions.BumpActive(ctx, sessionID, time.Hour)
+		require.NoError(t, err)
+
+		cfg := &config.SessionManager{
+			ClientAuth:       config.ClientAuth{ClientID: "client-id"},
+			CSRFSecretParsed: []byte(testCSRFSecret),
+		}
+
+		manager, err := session.NewManager(ctx, cfg, trust, sessions, nil,
+			session.WithAllowHttpScheme(true),
+		)
+		require.NoError(t, err)
+
+		// Housekeeping must not surface the StoreSession error.
+		err = manager.TriggerHousekeeping(ctx, 1, 1*time.Minute)
+		require.NoError(t, err)
+
+		// Access token must remain unchanged — store failed.
+		updatedSess, err := sessions.LoadSession(ctx, sessionID)
+		require.NoError(t, err)
+		assert.Equal(t, "old-access-token", updatedSess.AccessToken)
 	})
 }

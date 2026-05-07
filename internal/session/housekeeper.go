@@ -96,12 +96,14 @@ func (m *Manager) housekeepSession(ctx context.Context, s Session, refreshTrigge
 
 // refreshAccessToken refreshes the access token for the given session using its refresh token.
 func (m *Manager) refreshAccessToken(ctx context.Context, s Session) error {
-	mapping, err := m.trustRepo.Get(ctx, s.TenantID)
+	trust, err := m.trust.Get(ctx, s.TenantID)
 	if err != nil {
 		return fmt.Errorf("could not get trust mapping: %w", err)
 	}
 
-	openidConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL)
+	oidc := trust.GetOidc()
+
+	openidConf, err := m.getOpenIDConfig(ctx, oidc.GetIssuer())
 	if err != nil {
 		return fmt.Errorf("could not get OpenID configuration: %w", err)
 	}
@@ -109,12 +111,6 @@ func (m *Manager) refreshAccessToken(ctx context.Context, s Session) error {
 	data := url.Values{}
 	data.Set("grant_type", "refresh_token")
 	data.Set("refresh_token", s.RefreshToken)
-	for _, parameter := range m.queryParametersToken {
-		value, ok := mapping.Properties[parameter]
-		if ok {
-			data.Set(parameter, value)
-		}
-	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, openidConf.TokenEndpoint, bytes.NewBufferString(data.Encode()))
 	if err != nil {
@@ -122,7 +118,7 @@ func (m *Manager) refreshAccessToken(ctx context.Context, s Session) error {
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client := m.httpClient(mapping)
+	client := m.httpClient(oidc)
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
