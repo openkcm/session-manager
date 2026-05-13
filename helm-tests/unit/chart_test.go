@@ -91,7 +91,9 @@ func TestFullChartRendering(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			args := []string{"template", appName, path}
+			args := []string{"template", appName, path,
+				"--set", "image.tag=latest",
+			}
 			if tt.values != "" {
 				args = append(args, strings.Split(tt.values, " ")...)
 			}
@@ -148,7 +150,9 @@ func TestChartValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			args := []string{"template", appName, path, "--debug"}
+			args := []string{"template", appName, path, "--debug",
+				"--set", "image.tag=latest",
+			}
 			if tt.values != "" {
 				args = append(args, strings.Split(tt.values, " ")...)
 			}
@@ -198,7 +202,9 @@ func TestLabelsAndAnnotations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			args := []string{"template", appName, path}
+			args := []string{"template", appName, path,
+				"--set", "image.tag=latest",
+			}
 			if tt.values != "" {
 				args = append(args, strings.Split(tt.values, " ")...)
 			}

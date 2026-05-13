@@ -278,7 +278,9 @@ func TestDeploymentRendering(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			args := []string{"template", appName, path, "-s", "templates/session-manager/deployment.yaml"}
+			args := []string{"template", appName, path, "-s", "templates/session-manager/deployment.yaml",
+				"--set", "image.tag=latest",
+			}
 			if tt.values != "" {
 				args = append(args, strings.Split(tt.values, " ")...)
 			}
@@ -473,7 +475,9 @@ func TestHousekeeperDeployment(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			args := []string{"template", appName, path, "-s", "templates/housekeeper/deployment.yaml"}
+			args := []string{"template", appName, path, "-s", "templates/housekeeper/deployment.yaml",
+				"--set", "image.tag=latest",
+			}
 			if tt.values != "" {
 				args = append(args, strings.Split(tt.values, " ")...)
 			}
