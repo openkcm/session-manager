@@ -333,6 +333,11 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 	for _, cookie := range cookiesToClear {
 		cookie.MaxAge = -1
 		cookie.Value = ""
+		// Mitigate CxONE findings around missing security flags on cookies,
+		// even though these cookies are being deleted - set the flags to be safe
+		cookie.Secure = true
+		cookie.SameSite = http.SameSiteStrictMode
+		cookie.HttpOnly = true
 		http.SetCookie(rw, cookie)
 	}
 
