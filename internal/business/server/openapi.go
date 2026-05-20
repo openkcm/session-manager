@@ -286,28 +286,40 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 		}, nil
 	}
 
+	sessionCookieValue := ""
 	sessionCookieName := s.sessionIDCookieNamePrefix + "-" + request.Params.TenantID
 	csrfCookieName := s.csrfTokenCookieNamePrefix + "-" + request.Params.TenantID
-	var sessionCookie *http.Cookie
 	var cookiesToClear []*http.Cookie
 
 	// http.ParseCookie limits the number of cookies to 3000
 	// (configurable with $GODEBUG environment variable, see httpcookiemaxnum),
 	// so we can safely iterate over the cookies.
 	for _, cookie := range cookies {
-		switch cookie.Name {
-		case sessionCookieName:
-			sessionCookie = cookie
-			cookiesToClear = append(cookiesToClear, cookie)
-		case csrfCookieName:
-			cookiesToClear = append(cookiesToClear, cookie)
-		}
+		// Stop iterating once we have found both cookies to clear, to avoid unnecessary iterations
 		if len(cookiesToClear) == 2 {
 			break
 		}
+		// We only care about the session cookie and the CSRF cookie for the current tenant, so skip any other cookies
+		if cookie.Name != sessionCookieName && cookie.Name != csrfCookieName {
+			continue
+		}
+		// We need the session cookie value to perform the logout, so keep a reference to it
+		if cookie.Name == sessionCookieName {
+			sessionCookieValue = cookie.Value
+		}
+		// To clear a cookie, we set its MaxAge to -1 and Value to an empty string
+		cookie.MaxAge = -1
+		cookie.Value = ""
+		// Mitigate CxONE findings around missing security flags on cookies,
+		// even though these cookies are being deleted - set the flags to be safe
+		cookie.Secure = true
+		cookie.SameSite = http.SameSiteStrictMode
+		cookie.HttpOnly = true
+		// Add the cookie to the list of cookies to clear after successful logout
+		cookiesToClear = append(cookiesToClear, cookie)
 	}
 
-	if sessionCookie == nil || sessionCookie.Value == "" {
+	if sessionCookieValue == "" {
 		body, status := newBadRequest("missing session id in the cookies")
 		slogctx.Warn(ctx, "missing session id in the cookies")
 		return openapi.LogoutdefaultJSONResponse{
@@ -316,7 +328,7 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 		}, nil
 	}
 
-	logoutURL, err := s.sManager.Logout(ctx, sessionCookie.Value, request.Params.PostLogoutRedirectURI)
+	logoutURL, err := s.sManager.Logout(ctx, sessionCookieValue, request.Params.PostLogoutRedirectURI)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to logout user")
@@ -329,15 +341,7 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 		}, nil
 	}
 
-	// Reset all cookies
 	for _, cookie := range cookiesToClear {
-		cookie.MaxAge = -1
-		cookie.Value = ""
-		// Mitigate CxONE findings around missing security flags on cookies,
-		// even though these cookies are being deleted - set the flags to be safe
-		cookie.Secure = true
-		cookie.SameSite = http.SameSiteStrictMode
-		cookie.HttpOnly = true
 		http.SetCookie(rw, cookie)
 	}
 

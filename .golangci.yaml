@@ -11,6 +11,7 @@ linters:
     - tagliatelle
     - bodyclose
     - gomoddirectives
+    - gomodguard
     - contextcheck
     - cyclop
     - depguard
