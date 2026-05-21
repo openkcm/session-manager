@@ -25,6 +25,8 @@ import (
 	"github.com/openkcm/session-manager/internal/trust/trustsql"
 )
 
+const clientAuthTypeInsecure = "insecure"
+
 // Main starts both API servers
 func Main(ctx context.Context, cfg *config.Config) error {
 	ctx, cancel := context.WithCancel(ctx)
@@ -235,7 +237,7 @@ func newCredsBuilder(cfg *config.Config) (credentials.Builder, error) {
 		return func(clientID string) credentials.TransportCredentials {
 			return credentials.NewClientSecretPost(clientID, string(secret))
 		}, nil
-	case "insecure":
+	case clientAuthTypeInsecure:
 		slog.Warn("insecure credentials are used. Do not use this in production")
 		return func(clientID string) credentials.TransportCredentials { return credentials.NewInsecure(clientID) }, nil
 	default:
