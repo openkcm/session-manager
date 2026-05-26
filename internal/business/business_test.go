@@ -65,7 +65,7 @@ func TestLoadHTTPClient_Insecure(t *testing.T) {
 	cfg := &config.Config{
 		SessionManager: config.SessionManager{
 			ClientAuth: config.ClientAuth{
-				Type:     "insecure",
+				Type:     clientAuthTypeInsecure,
 				ClientID: "test-client",
 			},
 		},
@@ -458,7 +458,7 @@ func TestMain_InternalServerInvalidDatabase(t *testing.T) {
 		SessionManager: config.SessionManager{
 			CSRFSecret: commoncfg.SourceRef{Source: "embedded", Value: "this-is-a-very-long-secret-that-is-at-least-32-bytes-long"},
 			ClientAuth: config.ClientAuth{
-				Type: "insecure",
+				Type: clientAuthTypeInsecure,
 			},
 		},
 		Database: config.Database{

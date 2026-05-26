@@ -81,6 +81,7 @@ func TestManager_Auth(t *testing.T) {
 				SessionDuration:                    time.Hour,
 				CallbackURL:                        callbackURL,
 				AdditionalQueryParametersAuthorize: []string{"paramAuth1"},
+				AllowedRedirectBaseURLs:            []string{"http://localhost"},
 				ClientAuth: config.ClientAuth{
 					ClientID: testClientID,
 				},
@@ -776,4 +777,93 @@ func newTCBuilder(rt localRoundTripper) credentials.Builder {
 			rt: rt,
 		}
 	}
+}
+
+func TestManager_IsValidRequestURI(t *testing.T) {
+	tests := []struct {
+		name       string
+		baseURLs   []string
+		requestURI string
+		want       bool
+	}{
+		{
+			// line 627: url.Parse fails on an unclosed IPv6 bracket
+			name:       "unparseable requestURI returns false",
+			requestURI: "http://[::1",
+			want:       false,
+		},
+		{
+			// line 630: no scheme and no host → relative URI is always accepted
+			name:       "relative URI is accepted",
+			requestURI: "/dashboard",
+			want:       true,
+		},
+		{
+			// line 635: invalid base URL in allowlist is skipped; subsequent valid entry matches
+			name:       "invalid base URL in allowlist is skipped",
+			baseURLs:   []string{"http://[::1", "https://example.com"},
+			requestURI: "https://example.com/path",
+			want:       true,
+		},
+		{
+			// line 638: scheme mismatch causes the entry to be skipped
+			name:       "scheme mismatch is rejected",
+			baseURLs:   []string{"https://example.com"},
+			requestURI: "http://example.com/path",
+			want:       false,
+		},
+		{
+			// line 638: host mismatch causes the entry to be skipped
+			name:       "host mismatch is rejected",
+			baseURLs:   []string{"https://example.com"},
+			requestURI: "https://evil.com/path",
+			want:       false,
+		},
+		{
+			name:       "valid absolute URL under base path is accepted",
+			baseURLs:   []string{"https://example.com/tenant"},
+			requestURI: "https://example.com/tenant/page",
+			want:       true,
+		},
+		{
+			name:       "path prefix boundary prevents sibling path match",
+			baseURLs:   []string{"https://example.com/tenant"},
+			requestURI: "https://example.com/tenant-evil/page",
+			want:       false,
+		},
+		{
+			name:       "subdomain is rejected against bare domain base",
+			baseURLs:   []string{"https://example.com"},
+			requestURI: "https://sub.example.com/path",
+			want:       false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newTestManager(t, tt.baseURLs)
+			assert.Equal(t, tt.want, m.IsValidRequestURI(tt.requestURI))
+		})
+	}
+}
+
+func newTestManager(t *testing.T, allowedRedirectBaseURLs []string) *session.Manager {
+	t.Helper()
+	auditServer := StartAuditServer(t)
+	t.Cleanup(auditServer.Close)
+	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	require.NoError(t, err)
+	m, err := session.NewManager(
+		t.Context(),
+		&config.SessionManager{
+			CallbackURL:             "http://localhost/callback",
+			CSRFSecretParsed:        []byte(testCSRFSecret),
+			AllowedRedirectBaseURLs: allowedRedirectBaseURLs,
+		},
+		trustmock.NewInMemRepository(),
+		sessionmock.NewInMemRepository(),
+		auditLogger,
+	)
+	require.NoError(t, err)
+	return m
 }

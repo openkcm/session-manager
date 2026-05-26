@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"sync"
 
 	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/valkey-io/valkey-go"
+	"golang.org/x/sync/errgroup"
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 	slogctx "github.com/veqryn/slog-context"
@@ -25,37 +25,24 @@ import (
 	"github.com/openkcm/session-manager/internal/trust/trustsql"
 )
 
+const clientAuthTypeInsecure = "insecure"
+
 // Main starts both API servers
 func Main(ctx context.Context, cfg *config.Config) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	eg, ctx := errgroup.WithContext(ctx)
 
-	// errChan is used to capture the first error and shutdown the servers.
-	errChan := make(chan error, 1)
-
-	// wg is used to wait for all servers to shutdown.
-	var wg sync.WaitGroup
-
-	// start public HTTP REST API server
-	wg.Go(func() {
-		errChan <- publicMain(ctx, cfg)
+	eg.Go(func() error {
+		return publicMain(ctx, cfg)
 	})
 
-	// start internal gRPC API server
-	wg.Go(func() {
-		errChan <- internalMain(ctx, cfg)
+	eg.Go(func() error {
+		return internalMain(ctx, cfg)
 	})
 
-	// wait for any error to initiate the shutdown
-	err := <-errChan
+	err := eg.Wait()
 	if err != nil {
 		slogctx.Error(ctx, "Shutting down servers", "error", err)
 	}
-	cancel()
-
-	// wait for all servers to shutdown
-	wg.Wait()
-
 	return err
 }
 
@@ -235,7 +222,7 @@ func newCredsBuilder(cfg *config.Config) (credentials.Builder, error) {
 		return func(clientID string) credentials.TransportCredentials {
 			return credentials.NewClientSecretPost(clientID, string(secret))
 		}, nil
-	case "insecure":
+	case clientAuthTypeInsecure:
 		slog.Warn("insecure credentials are used. Do not use this in production")
 		return func(clientID string) credentials.TransportCredentials { return credentials.NewInsecure(clientID) }, nil
 	default:

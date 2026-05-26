@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/openkcm/common-sdk/pkg/csrf"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -381,9 +382,9 @@ func TestManager_ValidateCSRFToken(t *testing.T) {
 	}{
 		{
 			name:      "Valid token",
-			token:     "valid-token",
+			token:     csrf.NewToken("session-123", csrfSecret),
 			sessionID: "session-123",
-			want:      true, // This depends on the actual CSRF validation logic
+			want:      true,
 		},
 		{
 			name:      "Invalid token",
@@ -407,10 +408,8 @@ func TestManager_ValidateCSRFToken(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Note: The actual validation depends on the CSRF library implementation
-			// We're just testing that the method can be called without errors
 			result := m.ValidateCSRFToken(tt.token, tt.sessionID)
-			assert.IsType(t, false, result) // Ensure it returns a boolean
+			assert.Equal(t, tt.want, result)
 		})
 	}
 }
