@@ -26,6 +26,7 @@ type Config struct {
 	SessionManager SessionManager `yaml:"sessionManager"`
 	Housekeeper    Housekeeper    `yaml:"housekeeper"`
 	Trust          Trust          `yaml:"trust"`
+	Credentials    Credentials    `yaml:"credentials"`
 
 	// Apps configures long-running components that satisfy the sessionmanager.App
 	// interface. The map key is an operator-chosen name. Each entry MUST set
@@ -42,8 +43,9 @@ type Config struct {
 // App is the per-entry configuration under the top-level apps: section. It
 // implements sessionmanager.ExtensionConfig so it can be passed to LoadApp.
 type App struct {
-	Mod   string `yaml:"module"`
-	koanf *koanf.Koanf
+	Mod      string        `yaml:"module"`
+	Services []*ServiceCfg `yaml:"services"`
+	koanf    *koanf.Koanf
 }
 
 func (c *App) setKoanf(ko *koanf.Koanf) {
@@ -55,6 +57,29 @@ func (c *App) Module() string {
 }
 
 func (c *App) UnmarshalExtension(into sessionmanager.Module) error {
+	if c.koanf == nil {
+		return nil
+	}
+	return unmarshalExtension(into, c.koanf)
+}
+
+// ServiceCfg is a per-entry configuration under an App's services: list. It
+// implements sessionmanager.ExtensionConfig so an App's Provision can pass it
+// to ctx.LoadModule.
+type ServiceCfg struct {
+	Mod   string `yaml:"module"`
+	koanf *koanf.Koanf
+}
+
+func (c *ServiceCfg) setKoanf(ko *koanf.Koanf) {
+	c.koanf = ko
+}
+
+func (c *ServiceCfg) Module() string {
+	return c.Mod
+}
+
+func (c *ServiceCfg) UnmarshalExtension(into sessionmanager.Module) error {
 	if c.koanf == nil {
 		return nil
 	}
@@ -130,11 +155,53 @@ func (c *Database) UnmarshalExtension(into sessionmanager.Module) error {
 }
 
 type ValKey struct {
+	Mod       string              `yaml:"module" default:"sessionstore.module.valkey"`
 	Host      commoncfg.SourceRef `yaml:"host"`
 	User      commoncfg.SourceRef `yaml:"user"`
 	Password  commoncfg.SourceRef `yaml:"password"`
 	Prefix    string              `yaml:"prefix"`
 	SecretRef commoncfg.SecretRef `yaml:"secretRef"`
+
+	koanf *koanf.Koanf
+}
+
+func (c *ValKey) setKoanf(ko *koanf.Koanf) {
+	c.koanf = ko
+}
+
+func (c *ValKey) Module() string {
+	return c.Mod
+}
+
+func (c *ValKey) UnmarshalExtension(into sessionmanager.Module) error {
+	if c.koanf == nil {
+		return nil
+	}
+	return unmarshalExtension(into, c.koanf)
+}
+
+// Credentials is a thin top-level entry whose only purpose is to make the
+// credentials module ID swappable. The actual auth-type/secret/mTLS data
+// continues to live under sessionManager.clientAuth and the credentials
+// module reads it via config.FromContext.
+type Credentials struct {
+	Mod   string `yaml:"module" default:"credentials.module.oauth2"`
+	koanf *koanf.Koanf
+}
+
+func (c *Credentials) setKoanf(ko *koanf.Koanf) {
+	c.koanf = ko
+}
+
+func (c *Credentials) Module() string {
+	return c.Mod
+}
+
+func (c *Credentials) UnmarshalExtension(into sessionmanager.Module) error {
+	if c.koanf == nil {
+		return nil
+	}
+	return unmarshalExtension(into, c.koanf)
 }
 
 type SessionManager struct {

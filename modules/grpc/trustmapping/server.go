@@ -1,4 +1,4 @@
-package grpc
+package trustmapping
 
 import (
 	"context"
@@ -16,21 +16,17 @@ import (
 	"github.com/openkcm/session-manager/pkg/serviceerr"
 )
 
-type TrustMappingServer struct {
+type Server struct {
 	trustmappingv1.UnimplementedServiceServer
 
 	trust sessionmanager.Trust
 }
 
-func NewTrustMappingServer(trust sessionmanager.Trust) *TrustMappingServer {
-	srv := &TrustMappingServer{
-		trust: trust,
-	}
-
-	return srv
+func NewServer(trust sessionmanager.Trust) *Server {
+	return &Server{trust: trust}
 }
 
-func (srv *TrustMappingServer) ApplyTrustMapping(ctx context.Context, in *trustmappingv1.ApplyTrustMappingRequest) (*trustmappingv1.ApplyTrustMappingResponse, error) {
+func (srv *Server) ApplyTrustMapping(ctx context.Context, in *trustmappingv1.ApplyTrustMappingRequest) (*trustmappingv1.ApplyTrustMappingResponse, error) {
 	oidcIn := in.GetOidc()
 	oidc := oidcv1.OIDC_builder{
 		Issuer:    new(oidcIn.GetIssuer()),
@@ -75,7 +71,7 @@ func (srv *TrustMappingServer) ApplyTrustMapping(ctx context.Context, in *trustm
 // BlockTrustMapping blocks the trust for the specified tenant.
 // It calls the underlying service to set the trust as blocked.
 // Returns a response containing an optional error message if blocking fails.
-func (srv *TrustMappingServer) BlockTrustMapping(ctx context.Context, req *trustmappingv1.BlockTrustMappingRequest) (*trustmappingv1.BlockTrustMappingResponse, error) {
+func (srv *Server) BlockTrustMapping(ctx context.Context, req *trustmappingv1.BlockTrustMappingRequest) (*trustmappingv1.BlockTrustMappingResponse, error) {
 	ctx = slogctx.With(ctx, "tenantId", req.GetTenantId())
 	slogctx.Debug(ctx, "BlockTrustMapping called")
 
@@ -96,7 +92,7 @@ func (srv *TrustMappingServer) BlockTrustMapping(ctx context.Context, req *trust
 // RemoveTrustMapping removes the trust configuration for the tenant.
 // It calls the underlying service to remove the trust.
 // Returns a respose containing an optional error message if removing fails.
-func (srv *TrustMappingServer) RemoveTrustMapping(ctx context.Context, req *trustmappingv1.RemoveTrustMappingRequest) (*trustmappingv1.RemoveTrustMappingResponse, error) {
+func (srv *Server) RemoveTrustMapping(ctx context.Context, req *trustmappingv1.RemoveTrustMappingRequest) (*trustmappingv1.RemoveTrustMappingResponse, error) {
 	ctx = slogctx.With(ctx, "tenantId", req.GetTenantId())
 	slogctx.Debug(ctx, "RemoveTrustMapping called")
 
@@ -108,9 +104,8 @@ func (srv *TrustMappingServer) RemoveTrustMapping(ctx context.Context, req *trus
 			msg := err.Error()
 			resp.SetMessage(msg)
 			return resp, status.Error(codes.Internal, "failed to remove trust: "+msg)
-		} else {
-			slogctx.Warn(ctx, "RemoveTrustMapping is called but the tenant does not exist", "error", err)
 		}
+		slogctx.Warn(ctx, "RemoveTrustMapping is called but the tenant does not exist", "error", err)
 	}
 
 	resp.SetSuccess(true)
@@ -120,7 +115,7 @@ func (srv *TrustMappingServer) RemoveTrustMapping(ctx context.Context, req *trus
 // UnblockTrustMapping unblocks the trust for the specified tenant.
 // It calls the underlying service to set the trust as unblocked.
 // Returns a response containing an optional error message if unblocking fails.
-func (srv *TrustMappingServer) UnblockTrustMapping(ctx context.Context, req *trustmappingv1.UnblockTrustMappingRequest) (*trustmappingv1.UnblockTrustMappingResponse, error) {
+func (srv *Server) UnblockTrustMapping(ctx context.Context, req *trustmappingv1.UnblockTrustMappingRequest) (*trustmappingv1.UnblockTrustMappingResponse, error) {
 	ctx = slogctx.With(ctx, "tenantId", req.GetTenantId())
 	slogctx.Debug(ctx, "UnblockTrustMapping called")
 

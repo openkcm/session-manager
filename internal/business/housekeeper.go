@@ -17,6 +17,8 @@ func HousekeeperMain(ctx context.Context, cfg *config.Config) error {
 	c, cancelCause := sessionmanager.NewContext(ctx)
 	defer cancelCause(nil)
 
+	c = config.WithContext(c, cfg)
+
 	_, err := c.LoadModule(&cfg.Database)
 	if err != nil {
 		return fmt.Errorf("loading database module: %w", err)
@@ -27,10 +29,18 @@ func HousekeeperMain(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("loading trust module: %w", err)
 	}
 
+	if _, err := c.LoadModule(&cfg.ValKey); err != nil {
+		return fmt.Errorf("loading session-store module: %w", err)
+	}
+
+	if _, err := c.LoadModule(&cfg.Credentials); err != nil {
+		return fmt.Errorf("loading credentials module: %w", err)
+	}
+
 	//nolint:forcetypeassert
 	trust := trustMod.(sessionmanager.Trust)
 
-	sessionManager, closeFn, err := sessionwiring.InitSessionManager(ctx, cfg, trust)
+	sessionManager, closeFn, err := sessionwiring.InitSessionManager(c, cfg, trust)
 	if err != nil {
 		return fmt.Errorf("failed to initialise the session manager: %w", err)
 	}

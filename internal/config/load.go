@@ -101,6 +101,19 @@ func setKoanf(v reflect.Value, ko *koanf.Koanf) {
 				val = val.Addr()
 			}
 
+			// Slice-of-pointer fields need per-entry sub-koanfs that koanf can
+			// only construct from the parent path via Slices(); a positional
+			// Cut() does not work for array indices.
+			indirect := reflect.Indirect(val)
+			if indirect.Kind() == reflect.Slice && indirect.Type().Elem().Kind() == reflect.Pointer {
+				subs := ko.Slices(name)
+				n := min(indirect.Len(), len(subs))
+				for i := range n {
+					setKoanf(indirect.Index(i), subs[i])
+				}
+				continue
+			}
+
 			setKoanf(val, ko.Cut(name))
 		}
 	case reflect.Map:

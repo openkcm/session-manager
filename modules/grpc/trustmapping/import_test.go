@@ -1,4 +1,4 @@
-package grpc_test
+package trustmapping_test
 
 import (
 	_ "unsafe"

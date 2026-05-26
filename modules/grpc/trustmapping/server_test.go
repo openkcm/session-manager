@@ -1,4 +1,4 @@
-package grpc_test
+package trustmapping_test
 
 import (
 	"errors"
@@ -13,7 +13,7 @@ import (
 	oidcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/v1"
 	trustv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/v1"
 
-	"github.com/openkcm/session-manager/internal/grpc"
+	"github.com/openkcm/session-manager/modules/grpc/trustmapping"
 	mocktrust "github.com/openkcm/session-manager/modules/oidctrust/mocks"
 	"github.com/openkcm/session-manager/pkg/serviceerr"
 )
@@ -22,7 +22,7 @@ func TestNewTrustMappingServer(t *testing.T) {
 	t.Run("creates server successfully", func(t *testing.T) {
 		repo := mocktrust.NewInMemRepository()
 		svc := newTrust(repo)
-		server := grpc.NewTrustMappingServer(svc)
+		server := trustmapping.NewServer(svc)
 
 		assert.NotNil(t, server)
 	})
@@ -34,7 +34,7 @@ func TestApplyTrustMapping(t *testing.T) {
 	t.Run("success - creates new trust", func(t *testing.T) {
 		repo := mocktrust.NewInMemRepository()
 		svc := newTrust(repo)
-		server := grpc.NewTrustMappingServer(svc)
+		server := trustmapping.NewServer(svc)
 
 		jwksUri := "https://issuer.example.com/.well-known/jwks.json"
 		req := trustmappingv1.ApplyTrustMappingRequest_builder{
@@ -67,7 +67,7 @@ func TestApplyTrustMapping(t *testing.T) {
 			mocktrust.WithTrust(existingTrust),
 		)
 		svc := newTrust(repo)
-		server := grpc.NewTrustMappingServer(svc)
+		server := trustmapping.NewServer(svc)
 
 		jwksUri := "https://new-issuer.example.com/jwks.json"
 		req := trustmappingv1.ApplyTrustMappingRequest_builder{
@@ -91,7 +91,7 @@ func TestApplyTrustMapping(t *testing.T) {
 			mocktrust.WithCreateError(serviceerr.ErrNotFound),
 		)
 		svc := newTrust(repo)
-		server := grpc.NewTrustMappingServer(svc)
+		server := trustmapping.NewServer(svc)
 
 		jwksUri := "https://issuer.example.com/jwks.json"
 		req := trustmappingv1.ApplyTrustMappingRequest_builder{
@@ -117,7 +117,7 @@ func TestApplyTrustMapping(t *testing.T) {
 			mocktrust.WithCreateError(internalErr),
 		)
 		svc := newTrust(repo)
-		server := grpc.NewTrustMappingServer(svc)
+		server := trustmapping.NewServer(svc)
 
 		jwksUri := "https://issuer.example.com/jwks.json"
 		req := trustmappingv1.ApplyTrustMappingRequest_builder{
@@ -152,7 +152,7 @@ func TestApplyTrustMapping(t *testing.T) {
 			mocktrust.WithUpdateError(updateErr),
 		)
 		svc := newTrust(repo)
-		server := grpc.NewTrustMappingServer(svc)
+		server := trustmapping.NewServer(svc)
 
 		jwksUri := "https://new-issuer.example.com/jwks.json"
 		req := trustmappingv1.ApplyTrustMappingRequest_builder{
@@ -189,7 +189,7 @@ func TestBlockTrustMapping(t *testing.T) {
 			mocktrust.WithTrust(existingTrust),
 		)
 		svc := newTrust(repo)
-		server := grpc.NewTrustMappingServer(svc)
+		server := trustmapping.NewServer(svc)
 
 		req := trustmappingv1.BlockTrustMappingRequest_builder{
 			TenantId: new("tenant-123"),
@@ -215,7 +215,7 @@ func TestBlockTrustMapping(t *testing.T) {
 			mocktrust.WithTrust(existingTrust),
 		)
 		svc := newTrust(repo)
-		server := grpc.NewTrustMappingServer(svc)
+		server := trustmapping.NewServer(svc)
 
 		req := trustmappingv1.BlockTrustMappingRequest_builder{
 			TenantId: new("tenant-123"),
@@ -233,7 +233,7 @@ func TestBlockTrustMapping(t *testing.T) {
 			mocktrust.WithGetError(serviceerr.ErrNotFound),
 		)
 		svc := newTrust(repo)
-		server := grpc.NewTrustMappingServer(svc)
+		server := trustmapping.NewServer(svc)
 
 		req := trustmappingv1.BlockTrustMappingRequest_builder{
 			TenantId: new("tenant-123"),
@@ -252,7 +252,7 @@ func TestBlockTrustMapping(t *testing.T) {
 			mocktrust.WithGetError(internalErr),
 		)
 		svc := newTrust(repo)
-		server := grpc.NewTrustMappingServer(svc)
+		server := trustmapping.NewServer(svc)
 
 		req := trustmappingv1.BlockTrustMappingRequest_builder{
 			TenantId: new("tenant-123"),
@@ -286,7 +286,7 @@ func TestRemoveTrustMapping(t *testing.T) {
 			mocktrust.WithTrust(existingTrust),
 		)
 		svc := newTrust(repo)
-		server := grpc.NewTrustMappingServer(svc)
+		server := trustmapping.NewServer(svc)
 
 		req := trustmappingv1.RemoveTrustMappingRequest_builder{
 			TenantId: new("tenant-123"),
@@ -306,7 +306,7 @@ func TestRemoveTrustMapping(t *testing.T) {
 			mocktrust.WithDeleteError(deleteErr),
 		)
 		svc := newTrust(repo)
-		server := grpc.NewTrustMappingServer(svc)
+		server := trustmapping.NewServer(svc)
 
 		req := trustmappingv1.RemoveTrustMappingRequest_builder{
 			TenantId: new("tenant-123"),
@@ -330,7 +330,7 @@ func TestRemoveTrustMapping(t *testing.T) {
 			mocktrust.WithDeleteError(serviceerr.ErrNotFound),
 		)
 		svc := newTrust(repo)
-		server := grpc.NewTrustMappingServer(svc)
+		server := trustmapping.NewServer(svc)
 
 		req := trustmappingv1.RemoveTrustMappingRequest_builder{
 			TenantId: new("tenant-123"),
@@ -360,7 +360,7 @@ func TestUnblockTrustMapping(t *testing.T) {
 			mocktrust.WithTrust(existingTrust),
 		)
 		svc := newTrust(repo)
-		server := grpc.NewTrustMappingServer(svc)
+		server := trustmapping.NewServer(svc)
 
 		req := trustmappingv1.UnblockTrustMappingRequest_builder{
 			TenantId: new("tenant-123"),
@@ -386,7 +386,7 @@ func TestUnblockTrustMapping(t *testing.T) {
 			mocktrust.WithTrust(existingTrust),
 		)
 		svc := newTrust(repo)
-		server := grpc.NewTrustMappingServer(svc)
+		server := trustmapping.NewServer(svc)
 
 		req := trustmappingv1.UnblockTrustMappingRequest_builder{
 			TenantId: new("tenant-123"),
@@ -404,7 +404,7 @@ func TestUnblockTrustMapping(t *testing.T) {
 			mocktrust.WithGetError(serviceerr.ErrNotFound),
 		)
 		svc := newTrust(repo)
-		server := grpc.NewTrustMappingServer(svc)
+		server := trustmapping.NewServer(svc)
 
 		req := trustmappingv1.UnblockTrustMappingRequest_builder{
 			TenantId: new("tenant-123"),
@@ -431,7 +431,7 @@ func TestUnblockTrustMapping(t *testing.T) {
 			mocktrust.WithUpdateError(internalErr),
 		)
 		svc := newTrust(repo)
-		server := grpc.NewTrustMappingServer(svc)
+		server := trustmapping.NewServer(svc)
 
 		req := trustmappingv1.UnblockTrustMappingRequest_builder{
 			TenantId: new("tenant-123"),

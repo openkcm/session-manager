@@ -1,4 +1,4 @@
-package grpc
+package session
 
 import (
 	"context"
@@ -25,17 +25,17 @@ import (
 	sessionmanager "github.com/openkcm/session-manager"
 	"github.com/openkcm/session-manager/internal/credentials"
 	"github.com/openkcm/session-manager/internal/debugtools"
-	"github.com/openkcm/session-manager/internal/session"
+	internalsession "github.com/openkcm/session-manager/internal/session"
 )
 
 const defaultIntrospectionCacheExpiration = 30 * time.Second
 
 var debugSettingSMDumpTransport = debugtools.NewSetting("smdumptransport")
 
-type SessionServer struct {
+type Server struct {
 	sessionv1.UnimplementedServiceServer
 
-	sessionRepo session.Repository
+	sessionRepo internalsession.Repository
 	trust       sessionmanager.Trust
 	newCreds    credentials.Builder
 
@@ -48,15 +48,15 @@ type SessionServer struct {
 	introspectionCache *ttlcache.Cache[string, oidc.Introspection]
 }
 
-func NewSessionServer(
+func NewServer(
 	ctx context.Context,
-	sessionRepo session.Repository,
+	sessionRepo internalsession.Repository,
 	trust sessionmanager.Trust,
 	idleSessionTimeout time.Duration,
 	clientID string,
-	opts ...SessionServerOption,
-) *SessionServer {
-	s := &SessionServer{
+	opts ...Option,
+) *Server {
+	s := &Server{
 		sessionRepo:        sessionRepo,
 		trust:              trust,
 		idleSessionTimeout: idleSessionTimeout,
@@ -79,7 +79,7 @@ func NewSessionServer(
 	return s
 }
 
-func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessionRequest) (*sessionv1.GetSessionResponse, error) {
+func (s *Server) GetSession(ctx context.Context, req *sessionv1.GetSessionRequest) (*sessionv1.GetSessionResponse, error) {
 	tracer := otel.GetTracerProvider()
 	ctx, span := tracer.Tracer("").Start(ctx, "get_session")
 	defer span.End()
@@ -192,7 +192,7 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 // TODO: remove this method once the lifecycle of deprecated and compatibility layers is reached to the end.
 //
 //nolint:staticcheck
-func (s *SessionServer) GetOIDCProvider(ctx context.Context, req *sessionv1.GetOIDCProviderRequest) (*sessionv1.GetOIDCProviderResponse, error) {
+func (s *Server) GetOIDCProvider(ctx context.Context, req *sessionv1.GetOIDCProviderRequest) (*sessionv1.GetOIDCProviderResponse, error) {
 	tracer := otel.GetTracerProvider()
 	ctx, span := tracer.Tracer("").Start(ctx, "get_oidc_provider")
 	defer span.End()
@@ -216,7 +216,23 @@ func (s *SessionServer) GetOIDCProvider(ctx context.Context, req *sessionv1.GetO
 	}, nil
 }
 
-func (s *SessionServer) getClientID(oidcTrust *oidcv1.OIDC) string {
+func (s *Server) GetTrust(ctx context.Context, req *sessionv1.GetTrustRequest) (*sessionv1.GetTrustResponse, error) {
+	tracer := otel.GetTracerProvider()
+	ctx, span := tracer.Tracer("").Start(ctx, "get_trust")
+	defer span.End()
+
+	trust, err := s.trust.Get(ctx, req.GetTenantId())
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to get an oidc provider")
+		return nil, fmt.Errorf("getting odic provider: %w", err)
+	}
+
+	span.SetStatus(codes.Ok, "")
+	return &sessionv1.GetTrustResponse{Trust: trust}, nil
+}
+
+func (s *Server) getClientID(oidcTrust *oidcv1.OIDC) string {
 	if clientID := oidcTrust.GetClientId(); clientID != "" {
 		return clientID
 	}
@@ -224,7 +240,7 @@ func (s *SessionServer) getClientID(oidcTrust *oidcv1.OIDC) string {
 	return s.clientID
 }
 
-func (s *SessionServer) httpClient(oidcTrust *oidcv1.OIDC) *http.Client {
+func (s *Server) httpClient(oidcTrust *oidcv1.OIDC) *http.Client {
 	creds := s.newCreds(s.getClientID(oidcTrust))
 	transport := creds.Transport()
 	if debugSettingSMDumpTransport.Value() == "1" {
@@ -236,7 +252,7 @@ func (s *SessionServer) httpClient(oidcTrust *oidcv1.OIDC) *http.Client {
 	}
 }
 
-func (s *SessionServer) introspectToken(ctx context.Context, token string, oidcTrust *oidcv1.OIDC) (oidc.Introspection, error) {
+func (s *Server) introspectToken(ctx context.Context, token string, oidcTrust *oidcv1.OIDC) (oidc.Introspection, error) {
 	// first check the cache for a recent introspection result for this token
 	hashedSuffix := sha256.Sum256([]byte(token))
 	cacheKey := base64.RawURLEncoding.EncodeToString(hashedSuffix[:])

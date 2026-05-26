@@ -1,17 +1,14 @@
-// Package sessionwiring centralises the construction of long-lived
-// session-manager dependencies (valkey client, credentials builder, the
-// session.Manager itself) so callers in cmd/, internal/business, and apps
-// configured via the apps: lifecycle loop can build them identically.
+// Package sessionwiring centralises the construction of the long-lived
+// session.Manager that the HTTP API server and the housekeeper subcommand
+// share. The Valkey-backed session.Repository and OAuth2 credentials.Builder
+// it needs are no longer built here; both come from the module registry,
+// loaded by business.Main (or the housekeeper subcommand) before this is
+// invoked.
 package sessionwiring
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"log/slog"
-
-	"github.com/openkcm/common-sdk/pkg/commoncfg"
-	"github.com/valkey-io/valkey-go"
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 
@@ -19,29 +16,29 @@ import (
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/credentials"
 	"github.com/openkcm/session-manager/internal/session"
-	sessionvalkey "github.com/openkcm/session-manager/internal/session/valkey"
 )
 
-const (
-	insecure         = "insecure"
-	mtls             = "mtls"
-	clientSecret     = "client_secret" // Alias for clientSecretPost.
-	clientSecretPost = "client_secret_post"
-)
+// credentialsBuilder is the interface satisfied by a credentials module
+// (e.g. credentials.module.oauth2). Defined locally so this package does not
+// need to import the credentials module.
+type credentialsBuilder interface {
+	Builder() credentials.Builder
+}
 
 // InitSessionManager builds a session.Manager from the supplied config and
-// trust module. The returned closeFn must be invoked once the manager is no
-// longer in use to release the underlying valkey client.
-func InitSessionManager(ctx context.Context, cfg *config.Config, trust sessionmanager.Trust) (_ *session.Manager, closeFn func(), _ error) {
-	valkeyClient, err := ValkeyClient(cfg)
+// trust module, using session repository and credential modules already loaded
+// in ctx. The returned closeFn is a no-op kept for API compatibility — the
+// underlying valkey client is owned by the sessionstore module and closed by
+// the framework's reverse-load-order shutdown.
+func InitSessionManager(ctx *sessionmanager.Context, cfg *config.Config, trust sessionmanager.Trust) (_ *session.Manager, closeFn func(), _ error) {
+	repo, err := SessionRepository(ctx, cfg)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create valkey client: %w", err)
+		return nil, nil, fmt.Errorf("getting session repository: %w", err)
 	}
-	sessionRepo := sessionvalkey.NewRepository(valkeyClient, cfg.ValKey.Prefix)
 
-	credsBuilder, err := CredsBuilder(cfg)
+	credsBuilder, err := CredsBuilder(ctx, cfg)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to load http client: %w", err)
+		return nil, nil, fmt.Errorf("getting credentials builder: %w", err)
 	}
 
 	auditLogger, err := otlpaudit.NewLogger(&cfg.Audit)
@@ -52,7 +49,7 @@ func InitSessionManager(ctx context.Context, cfg *config.Config, trust sessionma
 	sessManager, err := session.NewManager(ctx,
 		&cfg.SessionManager,
 		trust,
-		sessionRepo,
+		repo,
 		auditLogger,
 		session.WithTransportCredentials(credsBuilder),
 	)
@@ -60,71 +57,37 @@ func InitSessionManager(ctx context.Context, cfg *config.Config, trust sessionma
 		return nil, nil, fmt.Errorf("failed to create session manager: %w", err)
 	}
 
-	return sessManager, valkeyClient.Close, nil
+	return sessManager, func() {}, nil
 }
 
-// ValkeyClient creates a valkey client from the valkey-related fields on cfg.
-func ValkeyClient(cfg *config.Config) (valkey.Client, error) {
-	valkeyHost, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.Host)
+// SessionRepository resolves the session repository module loaded under the
+// ID configured in cfg.ValKey.Module() and returns its session.Repository.
+func SessionRepository(ctx *sessionmanager.Context, cfg *config.Config) (session.Repository, error) {
+	mod, err := ctx.GetModule(cfg.ValKey.Module())
 	if err != nil {
-		return nil, fmt.Errorf("failed to load valkey host: %w", err)
+		return nil, fmt.Errorf("getting session-store module %q: %w", cfg.ValKey.Module(), err)
 	}
-
-	valkeyUsername, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.User)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load valkey username: %w", err)
+	repo, ok := mod.(session.Repository)
+	if !ok {
+		return nil, fmt.Errorf("module %q does not implement session.Repository", cfg.ValKey.Module())
 	}
-
-	valkeyPassword, err := commoncfg.LoadValueFromSourceRef(cfg.ValKey.Password)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load valkey password: %w", err)
-	}
-
-	valkeyOpts := valkey.ClientOption{
-		InitAddress: []string{string(valkeyHost)},
-		Username:    string(valkeyUsername),
-		Password:    string(valkeyPassword),
-	}
-
-	if cfg.ValKey.SecretRef.Type == commoncfg.MTLSSecretType {
-		tlsConfig, err := commoncfg.LoadMTLSConfig(&cfg.ValKey.SecretRef.MTLS)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load valkey mTLS config from secret ref: %w", err)
-		}
-		valkeyOpts.TLSConfig = tlsConfig
-	}
-
-	valkeyClient, err := valkey.NewClient(valkeyOpts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create a new valkey client: %w", err)
-	}
-	return valkeyClient, nil
+	return repo, nil
 }
 
-// CredsBuilder returns a credentials.Builder that matches the configured
-// client-auth strategy.
-func CredsBuilder(cfg *config.Config) (credentials.Builder, error) {
-	switch cfg.SessionManager.ClientAuth.Type {
-	case mtls:
-		tlsConfig, err := commoncfg.LoadMTLSConfig(cfg.SessionManager.ClientAuth.MTLS)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load mTLS config: %w", err)
-		}
-
-		return func(clientID string) credentials.TransportCredentials { return credentials.NewTLS(clientID, tlsConfig) }, nil
-	case clientSecretPost, clientSecret:
-		secret, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.ClientAuth.ClientSecret)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load client secret: %w", err)
-		}
-
-		return func(clientID string) credentials.TransportCredentials {
-			return credentials.NewClientSecretPost(clientID, string(secret))
-		}, nil
-	case insecure:
-		slog.Warn("insecure credentials are used. Do not use this in production")
-		return func(clientID string) credentials.TransportCredentials { return credentials.NewInsecure(clientID) }, nil
-	default:
-		return nil, errors.New("unknown Client Auth type")
+// CredsBuilder resolves the credentials module loaded under the ID configured
+// in cfg.Credentials.Module() and returns its credentials.Builder.
+func CredsBuilder(ctx *sessionmanager.Context, cfg *config.Config) (credentials.Builder, error) {
+	mod, err := ctx.GetModule(cfg.Credentials.Module())
+	if err != nil {
+		return nil, fmt.Errorf("getting credentials module %q: %w", cfg.Credentials.Module(), err)
 	}
+	cb, ok := mod.(credentialsBuilder)
+	if !ok {
+		return nil, fmt.Errorf("module %q does not expose Builder()", cfg.Credentials.Module())
+	}
+	return cb.Builder(), nil
 }
+
+// Reference to context.Context to keep imports stable for callers using
+// (ctx context.Context) signatures.
+var _ context.Context = (*sessionmanager.Context)(nil)

@@ -181,6 +181,7 @@ telemetry:
                         jsonPath: "$.server-ca"
 
 database:
+    module: database.module.pgxpool
     name: session_manager
     port: 5432
     host:
@@ -193,7 +194,18 @@ database:
         source: embedded
         value: secret
 
+trust:
+    module: trust.module.oidc
+
+migrate:
+    module: trust.migration.module.oidc
+    source: file://./sql
+
+credentials:
+    module: credentials.module.oauth2
+
 valkey:
+    module: sessionstore.module.valkey
     host:
         source: embedded
         value: localhost:6379
@@ -248,10 +260,14 @@ sessionManager:
         source: embedded
         value: my-csrf-secret-at-least-thirty-two-bits-size
 
-migrate:
-    source: file://./sql
-
 housekeeper:
     triggerInterval: 10m
     concurrencyLimit: 10
     tokenRefreshTriggerInterval: 15m
+
+apps:
+    grpc:
+        module: app.module.grpcserver
+        services:
+            - module: service.module.grpc.session
+            - module: service.module.grpc.trustmapping
