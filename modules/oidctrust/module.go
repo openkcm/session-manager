@@ -17,7 +17,7 @@ func init() {
 	sessionmanager.RegisterModule(new(TrustModule))
 }
 
-// TrustModule is a module that implements sessionmanager.Trust interface. It's using a database providede by the
+// TrustModule is a module that implements sessionmanager.Trust interface. It's using a database provided by the
 // [dbModule] module which implements sessionmanager.DBModule.
 type TrustModule struct {
 	DBModule string `yaml:"dbModule" default:"database.module.pgxpool"`

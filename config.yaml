@@ -271,3 +271,4 @@ apps:
         services:
             - module: service.module.grpc.session
             - module: service.module.grpc.trustmapping
+            - module: service.module.grpc.oidcmapping
