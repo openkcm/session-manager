@@ -40,13 +40,13 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestService_ApplyMapping(t *testing.T) {
+func TestService_Apply(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("success if", func(t *testing.T) {
 		t.Run("the trust does not exist", func(t *testing.T) {
 			expTenantID := uuid.Must(uuid.NewV4()).String()
-			expMapping := trustv1.Trust_builder{
+			expTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Blocked:  new(false),
 				Oidc: oidcv1.OIDC_builder{
@@ -59,19 +59,19 @@ func TestService_ApplyMapping(t *testing.T) {
 			wrapper := &RepoWrapper{Repo: repo}
 			subj := oidctrust.NewModule(wrapper)
 
-			err := subj.ApplyMapping(ctx, expMapping)
+			err := subj.Apply(ctx, expTrust)
 			assert.NoError(t, err)
 
-			actMapping, err := wrapper.Repo.Get(ctx, expTenantID)
+			actTrust, err := wrapper.Repo.Get(ctx, expTenantID)
 			assert.NoError(t, err)
-			if diff := cmp.Diff(expMapping, actMapping, protocmp.Transform()); diff != "" {
-				t.Fatalf("mapping not equal:\n%s", diff)
+			if diff := cmp.Diff(expTrust, actTrust, protocmp.Transform()); diff != "" {
+				t.Fatalf("trust not equal:\n%s", diff)
 			}
 		})
 
 		t.Run("the trust exists", func(t *testing.T) {
 			expTenantID := uuid.Must(uuid.NewV4()).String()
-			expMapping := trustv1.Trust_builder{
+			expTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Blocked:  new(false),
 				Oidc: oidcv1.OIDC_builder{
@@ -84,26 +84,26 @@ func TestService_ApplyMapping(t *testing.T) {
 			wrapper := &RepoWrapper{Repo: repo}
 			subj := oidctrust.NewModule(wrapper)
 
-			err := subj.ApplyMapping(ctx, expMapping)
+			err := subj.Apply(ctx, expTrust)
 			assert.NoError(t, err)
 
-			expUpdatedMapping := trustv1.Trust_builder{
+			expUpdatedTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Blocked:  new(false),
 				Oidc: oidcv1.OIDC_builder{
-					Issuer:    new(expMapping.GetOidc().GetIssuer()),
+					Issuer:    new(expTrust.GetOidc().GetIssuer()),
 					JwksUri:   new("http://updated-jwks.example.com"),
 					Audiences: []string{requestURI, "http://new-aud.example.com"},
 				}.Build(),
 			}.Build()
 
-			err = subj.ApplyMapping(ctx, expUpdatedMapping)
+			err = subj.Apply(ctx, expUpdatedTrust)
 			assert.NoError(t, err)
 
-			actMapping, err := wrapper.Repo.Get(ctx, expTenantID)
+			actTrust, err := wrapper.Repo.Get(ctx, expTenantID)
 			assert.NoError(t, err)
-			if diff := cmp.Diff(expUpdatedMapping, actMapping, protocmp.Transform()); diff != "" {
-				t.Fatalf("mapping not equal:\n%s", diff)
+			if diff := cmp.Diff(expUpdatedTrust, actTrust, protocmp.Transform()); diff != "" {
+				t.Fatalf("trust not equal:\n%s", diff)
 			}
 		})
 	})
@@ -111,7 +111,7 @@ func TestService_ApplyMapping(t *testing.T) {
 	t.Run("should return error if", func(t *testing.T) {
 		t.Run("Create returns an error", func(t *testing.T) {
 			expTenantID := uuid.Must(uuid.NewV4()).String()
-			expMapping := trustv1.Trust_builder{
+			expTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Oidc: oidcv1.OIDC_builder{
 					Issuer:    new(uuid.Must(uuid.NewV4()).String()),
@@ -124,13 +124,13 @@ func TestService_ApplyMapping(t *testing.T) {
 			noOfCalls := 0
 			wrapper.MockCreate = func(ctx context.Context, trust *trustv1.Trust) error {
 				assert.Equal(t, expTenantID, trust.GetTenantId())
-				assert.Equal(t, expMapping, trust)
+				assert.Equal(t, expTrust, trust)
 				noOfCalls++
 				return assert.AnError
 			}
 
 			subj := oidctrust.NewModule(wrapper)
-			err := subj.ApplyMapping(ctx, expMapping)
+			err := subj.Apply(ctx, expTrust)
 
 			assert.ErrorIs(t, err, assert.AnError)
 			assert.Equal(t, 1, noOfCalls)
@@ -138,7 +138,7 @@ func TestService_ApplyMapping(t *testing.T) {
 
 		t.Run("Update returns an error", func(t *testing.T) {
 			expTenantID := uuid.Must(uuid.NewV4()).String()
-			expMapping := trustv1.Trust_builder{
+			expTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Oidc: oidcv1.OIDC_builder{
 					Issuer:    new(uuid.Must(uuid.NewV4()).String()),
@@ -151,15 +151,15 @@ func TestService_ApplyMapping(t *testing.T) {
 			noOfCalls := 0
 			wrapper.MockUpdate = func(ctx context.Context, trust *trustv1.Trust) error {
 				assert.Equal(t, expTenantID, trust.GetTenantId())
-				assert.Equal(t, expMapping, trust)
+				assert.Equal(t, expTrust, trust)
 				noOfCalls++
 				return assert.AnError
 			}
 			subj := oidctrust.NewModule(wrapper)
 
-			err := subj.ApplyMapping(ctx, expMapping)
+			err := subj.Apply(ctx, expTrust)
 			assert.NoError(t, err)
-			err = subj.ApplyMapping(ctx, expMapping)
+			err = subj.Apply(ctx, expTrust)
 
 			assert.ErrorIs(t, err, assert.AnError)
 			assert.Equal(t, 1, noOfCalls)
@@ -167,14 +167,14 @@ func TestService_ApplyMapping(t *testing.T) {
 	})
 }
 
-func TestService_BlockMapping(t *testing.T) {
+func TestService_Block(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("success if ", func(t *testing.T) {
 		t.Run("the trust is unblocked", func(t *testing.T) {
 			// given
 			expTenantID := uuid.Must(uuid.NewV4()).String()
-			expUnblockedMapping := trustv1.Trust_builder{
+			expUnblockedTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Blocked:  new(false),
 				Oidc: oidcv1.OIDC_builder{
@@ -185,28 +185,28 @@ func TestService_BlockMapping(t *testing.T) {
 			}.Build()
 
 			wrapper := &RepoWrapper{Repo: repo}
-			err := wrapper.Repo.Create(ctx, expUnblockedMapping)
+			err := wrapper.Repo.Create(ctx, expUnblockedTrust)
 			require.NoError(t, err)
 			subj := oidctrust.NewModule(wrapper)
 
 			// when
-			err = subj.BlockMapping(ctx, expTenantID)
+			err = subj.Block(ctx, expTenantID)
 
 			// then
 			assert.NoError(t, err)
 
-			actMapping, err := wrapper.Repo.Get(ctx, expTenantID)
+			actTrust, err := wrapper.Repo.Get(ctx, expTenantID)
 			assert.NoError(t, err)
-			assert.True(t, actMapping.GetBlocked())
-			assert.Equal(t, expUnblockedMapping.GetOidc().GetIssuer(), actMapping.GetOidc().GetIssuer())
-			assert.Equal(t, expUnblockedMapping.GetOidc().GetAudiences(), actMapping.GetOidc().GetAudiences())
-			assert.Equal(t, expUnblockedMapping.GetOidc().GetJwksUri(), actMapping.GetOidc().GetJwksUri())
+			assert.True(t, actTrust.GetBlocked())
+			assert.Equal(t, expUnblockedTrust.GetOidc().GetIssuer(), actTrust.GetOidc().GetIssuer())
+			assert.Equal(t, expUnblockedTrust.GetOidc().GetAudiences(), actTrust.GetOidc().GetAudiences())
+			assert.Equal(t, expUnblockedTrust.GetOidc().GetJwksUri(), actTrust.GetOidc().GetJwksUri())
 		})
 
 		t.Run("the trust is blocked then it should not call Update", func(t *testing.T) {
 			// given
 			expTenantID := uuid.Must(uuid.NewV4()).String()
-			expBlockedMapping := trustv1.Trust_builder{
+			expBlockedTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Blocked:  new(true),
 				Oidc: oidcv1.OIDC_builder{
@@ -216,7 +216,7 @@ func TestService_BlockMapping(t *testing.T) {
 				}.Build(),
 			}.Build()
 			repoWrapper := &RepoWrapper{Repo: repo}
-			err := repoWrapper.Repo.Create(ctx, expBlockedMapping)
+			err := repoWrapper.Repo.Create(ctx, expBlockedTrust)
 			require.NoError(t, err)
 
 			noOfUpdateCalls := 0
@@ -227,20 +227,20 @@ func TestService_BlockMapping(t *testing.T) {
 			subj := oidctrust.NewModule(repoWrapper)
 
 			// when
-			err = subj.BlockMapping(t.Context(), expTenantID)
+			err = subj.Block(t.Context(), expTenantID)
 
 			// then
 			assert.NoError(t, err)
 			assert.Equal(t, 0, noOfUpdateCalls)
 
-			actMapping, err := repoWrapper.Repo.Get(ctx, expTenantID)
+			actTrust, err := repoWrapper.Repo.Get(ctx, expTenantID)
 			assert.NoError(t, err)
-			assert.Equal(t, expBlockedMapping, actMapping)
+			assert.Equal(t, expBlockedTrust, actTrust)
 		})
 		t.Run("the trust is not found during the Update", func(t *testing.T) {
 			// given
 			expTenantID := uuid.Must(uuid.NewV4()).String()
-			expBlockedMapping := trustv1.Trust_builder{
+			expBlockedTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Blocked:  new(false),
 				Oidc: oidcv1.OIDC_builder{
@@ -250,7 +250,7 @@ func TestService_BlockMapping(t *testing.T) {
 				}.Build(),
 			}.Build()
 			repoWrapper := &RepoWrapper{Repo: repo}
-			err := repoWrapper.Repo.Create(ctx, expBlockedMapping)
+			err := repoWrapper.Repo.Create(ctx, expBlockedTrust)
 			require.NoError(t, err)
 
 			noOfUpdateCalls := 0
@@ -264,7 +264,7 @@ func TestService_BlockMapping(t *testing.T) {
 			subj := oidctrust.NewModule(repoWrapper)
 
 			// when
-			err = subj.BlockMapping(t.Context(), expTenantID)
+			err = subj.Block(t.Context(), expTenantID)
 
 			// then
 			assert.NoError(t, err)
@@ -278,7 +278,7 @@ func TestService_BlockMapping(t *testing.T) {
 			subj := oidctrust.NewModule(repoWrapper)
 
 			// when
-			err := subj.BlockMapping(t.Context(), expTenantID)
+			err := subj.Block(t.Context(), expTenantID)
 
 			// then
 			assert.NoError(t, err)
@@ -302,7 +302,7 @@ func TestService_BlockMapping(t *testing.T) {
 			subj := oidctrust.NewModule(repoWrapper)
 
 			// when
-			err := subj.BlockMapping(t.Context(), expTenantID)
+			err := subj.Block(t.Context(), expTenantID)
 
 			// then
 			assert.ErrorIs(t, err, assert.AnError)
@@ -312,7 +312,7 @@ func TestService_BlockMapping(t *testing.T) {
 		t.Run("if Update returns an error", func(t *testing.T) {
 			// given
 			expTenantID := uuid.Must(uuid.NewV4()).String()
-			expMapping := trustv1.Trust_builder{
+			expTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Blocked:  new(false),
 				Oidc: oidcv1.OIDC_builder{
@@ -322,7 +322,7 @@ func TestService_BlockMapping(t *testing.T) {
 				}.Build(),
 			}.Build()
 			repoWrapper := &RepoWrapper{Repo: repo}
-			err := repoWrapper.Repo.Create(ctx, expMapping)
+			err := repoWrapper.Repo.Create(ctx, expTrust)
 			require.NoError(t, err)
 
 			noOfUpdateCalls := 0
@@ -334,27 +334,27 @@ func TestService_BlockMapping(t *testing.T) {
 			subj := oidctrust.NewModule(repoWrapper)
 
 			// when
-			err = subj.BlockMapping(t.Context(), expTenantID)
+			err = subj.Block(t.Context(), expTenantID)
 
 			// then
 			assert.ErrorIs(t, err, assert.AnError)
 			assert.Equal(t, 1, noOfUpdateCalls)
 
-			actMapping, err := repoWrapper.Repo.Get(ctx, expTenantID)
+			actTrust, err := repoWrapper.Repo.Get(ctx, expTenantID)
 			assert.NoError(t, err)
-			assert.Equal(t, expMapping, actMapping)
+			assert.Equal(t, expTrust, actTrust)
 		})
 	})
 }
 
-func TestService_UnblockMapping(t *testing.T) {
+func TestService_Unblock(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("success if ", func(t *testing.T) {
 		t.Run("the trust is blocked", func(t *testing.T) {
 			// given
 			expTenantID := uuid.Must(uuid.NewV4()).String()
-			expBlockedMapping := trustv1.Trust_builder{
+			expBlockedTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Blocked:  new(true),
 				Oidc: oidcv1.OIDC_builder{
@@ -365,28 +365,28 @@ func TestService_UnblockMapping(t *testing.T) {
 			}.Build()
 
 			wrapper := &RepoWrapper{Repo: repo}
-			err := wrapper.Repo.Create(ctx, expBlockedMapping)
+			err := wrapper.Repo.Create(ctx, expBlockedTrust)
 			require.NoError(t, err)
 			subj := oidctrust.NewModule(wrapper)
 
 			// when
-			err = subj.UnblockMapping(t.Context(), expTenantID)
+			err = subj.Unblock(t.Context(), expTenantID)
 
 			// then
 			assert.NoError(t, err)
 
-			actMapping, err := wrapper.Repo.Get(ctx, expTenantID)
+			actTrust, err := wrapper.Repo.Get(ctx, expTenantID)
 			assert.NoError(t, err)
-			assert.False(t, actMapping.GetBlocked())
-			assert.Equal(t, expBlockedMapping.GetOidc().GetIssuer(), actMapping.GetOidc().GetIssuer())
-			assert.Equal(t, expBlockedMapping.GetOidc().GetAudiences(), actMapping.GetOidc().GetAudiences())
-			assert.Equal(t, expBlockedMapping.GetOidc().GetJwksUri(), actMapping.GetOidc().GetJwksUri())
+			assert.False(t, actTrust.GetBlocked())
+			assert.Equal(t, expBlockedTrust.GetOidc().GetIssuer(), actTrust.GetOidc().GetIssuer())
+			assert.Equal(t, expBlockedTrust.GetOidc().GetAudiences(), actTrust.GetOidc().GetAudiences())
+			assert.Equal(t, expBlockedTrust.GetOidc().GetJwksUri(), actTrust.GetOidc().GetJwksUri())
 		})
 
 		t.Run("the trust is unblocked then it should not call Update", func(t *testing.T) {
 			// given
 			expTenantID := uuid.Must(uuid.NewV4()).String()
-			expUnblockedMapping := trustv1.Trust_builder{
+			expUnblockedTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Blocked:  new(false),
 				Oidc: oidcv1.OIDC_builder{
@@ -396,7 +396,7 @@ func TestService_UnblockMapping(t *testing.T) {
 				}.Build(),
 			}.Build()
 			repoWrapper := &RepoWrapper{Repo: repo}
-			err := repoWrapper.Repo.Create(ctx, expUnblockedMapping)
+			err := repoWrapper.Repo.Create(ctx, expUnblockedTrust)
 			require.NoError(t, err)
 
 			noOfUpdateCalls := 0
@@ -407,20 +407,20 @@ func TestService_UnblockMapping(t *testing.T) {
 			subj := oidctrust.NewModule(repoWrapper)
 
 			// when
-			err = subj.UnblockMapping(t.Context(), expTenantID)
+			err = subj.Unblock(t.Context(), expTenantID)
 
 			// then
 			assert.NoError(t, err)
 			assert.Equal(t, 0, noOfUpdateCalls)
 
-			actMapping, err := repoWrapper.Repo.Get(ctx, expTenantID)
+			actTrust, err := repoWrapper.Repo.Get(ctx, expTenantID)
 			assert.NoError(t, err)
-			assert.False(t, actMapping.GetBlocked())
+			assert.False(t, actTrust.GetBlocked())
 		})
 		t.Run("the trust is not found during the Update", func(t *testing.T) {
 			// given
 			expTenantID := uuid.Must(uuid.NewV4()).String()
-			expUnblockedMapping := trustv1.Trust_builder{
+			expUnblockedTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Blocked:  new(true),
 				Oidc: oidcv1.OIDC_builder{
@@ -430,7 +430,7 @@ func TestService_UnblockMapping(t *testing.T) {
 				}.Build(),
 			}.Build()
 			repoWrapper := &RepoWrapper{Repo: repo}
-			err := repoWrapper.Repo.Create(ctx, expUnblockedMapping)
+			err := repoWrapper.Repo.Create(ctx, expUnblockedTrust)
 			require.NoError(t, err)
 
 			noOfUpdateCalls := 0
@@ -444,7 +444,7 @@ func TestService_UnblockMapping(t *testing.T) {
 			subj := oidctrust.NewModule(repoWrapper)
 
 			// when
-			err = subj.UnblockMapping(t.Context(), expTenantID)
+			err = subj.Unblock(t.Context(), expTenantID)
 
 			// then
 			assert.NoError(t, err)
@@ -458,7 +458,7 @@ func TestService_UnblockMapping(t *testing.T) {
 			subj := oidctrust.NewModule(repoWrapper)
 
 			// when
-			err := subj.UnblockMapping(t.Context(), expTenantID)
+			err := subj.Unblock(t.Context(), expTenantID)
 
 			// then
 			assert.NoError(t, err)
@@ -481,7 +481,7 @@ func TestService_UnblockMapping(t *testing.T) {
 			subj := oidctrust.NewModule(mockRepo)
 
 			// when
-			err := subj.UnblockMapping(t.Context(), expTenantID)
+			err := subj.Unblock(t.Context(), expTenantID)
 
 			// then
 			assert.ErrorIs(t, err, assert.AnError)
@@ -491,7 +491,7 @@ func TestService_UnblockMapping(t *testing.T) {
 		t.Run("if Update returns an error", func(t *testing.T) {
 			// given
 			expTenantIDtoUpdate := uuid.Must(uuid.NewV4()).String()
-			expBlockedMapping := trustv1.Trust_builder{
+			expBlockedTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantIDtoUpdate),
 				Blocked:  new(true),
 				Oidc: oidcv1.OIDC_builder{
@@ -501,7 +501,7 @@ func TestService_UnblockMapping(t *testing.T) {
 				}.Build(),
 			}.Build()
 			repoWrapper := &RepoWrapper{Repo: repo}
-			err := repoWrapper.Repo.Create(ctx, expBlockedMapping)
+			err := repoWrapper.Repo.Create(ctx, expBlockedTrust)
 			require.NoError(t, err)
 
 			noOfUpdateCalls := 0
@@ -513,27 +513,27 @@ func TestService_UnblockMapping(t *testing.T) {
 			subj := oidctrust.NewModule(repoWrapper)
 
 			// when
-			err = subj.UnblockMapping(t.Context(), expTenantIDtoUpdate)
+			err = subj.Unblock(t.Context(), expTenantIDtoUpdate)
 
 			// then
 			assert.ErrorIs(t, err, assert.AnError)
 			assert.Equal(t, 1, noOfUpdateCalls)
 
-			actMapping, err := repoWrapper.Repo.Get(ctx, expTenantIDtoUpdate)
+			actTrust, err := repoWrapper.Repo.Get(ctx, expTenantIDtoUpdate)
 			assert.NoError(t, err)
-			assert.Equal(t, expBlockedMapping, actMapping)
+			assert.Equal(t, expBlockedTrust, actTrust)
 		})
 	})
 }
 
-func TestService_RemoveMapping(t *testing.T) {
+func TestService_Remove(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("success if", func(t *testing.T) {
 		t.Run("the trust exists", func(t *testing.T) {
 			// given
 			expTenantID := uuid.Must(uuid.NewV4()).String()
-			expMapping := trustv1.Trust_builder{
+			expTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Oidc: oidcv1.OIDC_builder{
 					Issuer:    new(uuid.Must(uuid.NewV4()).String()),
@@ -543,13 +543,13 @@ func TestService_RemoveMapping(t *testing.T) {
 			}.Build()
 
 			wrapper := &RepoWrapper{Repo: repo}
-			err := wrapper.Repo.Create(ctx, expMapping)
+			err := wrapper.Repo.Create(ctx, expTrust)
 			require.NoError(t, err)
 
 			subj := oidctrust.NewModule(wrapper)
 
 			// when
-			err = subj.RemoveMapping(ctx, expTenantID)
+			err = subj.Remove(ctx, expTenantID)
 
 			// then
 			assert.NoError(t, err)
@@ -568,7 +568,7 @@ func TestService_RemoveMapping(t *testing.T) {
 			subj := oidctrust.NewModule(wrapper)
 
 			// when
-			err := subj.RemoveMapping(ctx, expTenantID)
+			err := subj.Remove(ctx, expTenantID)
 
 			// then
 			assert.Error(t, err)
@@ -589,7 +589,7 @@ func TestService_RemoveMapping(t *testing.T) {
 			subj := oidctrust.NewModule(wrapper)
 
 			// when
-			err := subj.RemoveMapping(ctx, expTenantID)
+			err := subj.Remove(ctx, expTenantID)
 
 			// then
 			assert.ErrorIs(t, err, assert.AnError)

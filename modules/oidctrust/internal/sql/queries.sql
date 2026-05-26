@@ -1,4 +1,4 @@
--- name: GetOIDCMapping :one
+-- name: GetTrust :one
 SELECT
     issuer,
     blocked,
@@ -8,7 +8,7 @@ SELECT
 FROM trust
 WHERE tenant_id = sqlc.arg(tenant_id);
 
--- name: CreateOIDCMapping :exec
+-- name: CreateTrust :exec
 INSERT INTO trust (
     tenant_id,
     blocked,
@@ -24,11 +24,11 @@ VALUES (
     COALESCE(sqlc.arg(audiences)::text[], '{}'::text[]),
     sqlc.arg(client_id));
 
--- name: DeleteOIDCMapping :execrows
+-- name: DeleteTrust :execrows
 DELETE FROM trust
 WHERE tenant_id = sqlc.arg(tenant_id);
 
--- name: UpdateOIDCMapping :execrows
+-- name: UpdateTrust :execrows
 UPDATE trust
 SET
     blocked = sqlc.arg(blocked),

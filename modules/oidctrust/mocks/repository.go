@@ -17,8 +17,8 @@ type Repository struct {
 	getErr, createErr, deleteErr, updateErr error
 }
 
-func WithTrust(mapping *trustv1.Trust) RepositoryOption {
-	return func(r *Repository) { r.tenantTrust[mapping.GetTenantId()] = mapping }
+func WithTrust(trust *trustv1.Trust) RepositoryOption {
+	return func(r *Repository) { r.tenantTrust[trust.GetTenantId()] = trust }
 }
 func WithGetError(err error) RepositoryOption {
 	return func(r *Repository) { r.getErr = err }
@@ -48,8 +48,8 @@ func NewInMemRepository(opts ...RepositoryOption) *Repository {
 }
 
 // TAdd is a helper method for tests to add a trust relationship.
-func (r *Repository) TAdd(mapping *trustv1.Trust) {
-	r.tenantTrust[mapping.GetTenantId()] = mapping
+func (r *Repository) TAdd(trust *trustv1.Trust) {
+	r.tenantTrust[trust.GetTenantId()] = trust
 }
 
 // TGet is a helper method for tests to get a trust relationship.
@@ -61,17 +61,17 @@ func (r *Repository) Get(_ context.Context, tenantID string) (*trustv1.Trust, er
 	if r.getErr != nil {
 		return nil, r.getErr
 	}
-	if mapping, ok := r.tenantTrust[tenantID]; ok {
-		return mapping, nil
+	if trust, ok := r.tenantTrust[tenantID]; ok {
+		return trust, nil
 	}
 	return nil, serviceerr.ErrNotFound
 }
 
-func (r *Repository) Create(_ context.Context, mapping *trustv1.Trust) error {
+func (r *Repository) Create(_ context.Context, trust *trustv1.Trust) error {
 	if r.createErr != nil {
 		return r.createErr
 	}
-	r.tenantTrust[mapping.GetTenantId()] = mapping
+	r.tenantTrust[trust.GetTenantId()] = trust
 	return nil
 }
 
@@ -86,10 +86,10 @@ func (r *Repository) Delete(_ context.Context, tenantID string) error {
 	return nil
 }
 
-func (r *Repository) Update(_ context.Context, mapping *trustv1.Trust) error {
+func (r *Repository) Update(_ context.Context, trust *trustv1.Trust) error {
 	if r.updateErr != nil {
 		return r.updateErr
 	}
-	r.tenantTrust[mapping.GetTenantId()] = mapping
+	r.tenantTrust[trust.GetTenantId()] = trust
 	return nil
 }

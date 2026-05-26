@@ -118,7 +118,7 @@ func NewManager(
 func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, requestURI, errorURI string) (string, string, error) {
 	trust, err := m.trust.Get(ctx, tenantID)
 	if err != nil {
-		return "", "", fmt.Errorf("getting trust mapping: %w", err)
+		return "", "", fmt.Errorf("getting trust: %w", err)
 	}
 
 	oidc := trust.GetOidc()
@@ -231,8 +231,8 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (
 
 	trust, err := m.trust.Get(ctx, state.TenantID)
 	if err != nil {
-		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get trust mapping")
-		return OIDCSessionData{}, fmt.Errorf("getting trust mapping: %w", err)
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get trust")
+		return OIDCSessionData{}, fmt.Errorf("getting trust: %w", err)
 	}
 
 	oidc := trust.GetOidc()
@@ -378,8 +378,8 @@ func (m *Manager) Logout(ctx context.Context, sessionID, postLogoutRedirectURL s
 
 	trust, err := m.trust.Get(ctx, session.TenantID)
 	if err != nil {
-		slogctx.Error(ctx, "failed to get trust mapping for a tenant", "error", err)
-		return "", fmt.Errorf("getting trust mapping: %w", err)
+		slogctx.Error(ctx, "failed to get trust for a tenant", "error", err)
+		return "", fmt.Errorf("getting trust: %w", err)
 	}
 
 	oidc := trust.GetOidc()
@@ -474,7 +474,7 @@ func (m *Manager) BCLogout(ctx context.Context, logoutJWT string) error {
 
 	trust, err := m.trust.Get(ctx, session.TenantID)
 	if err != nil {
-		return fmt.Errorf("getting trust mapping: %w", err)
+		return fmt.Errorf("getting trust: %w", err)
 	}
 
 	oidc := trust.GetOidc()

@@ -113,8 +113,8 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 	trust, err := s.trust.Get(ctx, req.GetTenantId())
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to get an oidc mapping")
-		slogctx.Warn(ctx, "Is this an attack? Could not get trust mapping", "issuer", sess.Issuer, "error", err)
+		span.SetStatus(codes.Error, "failed to get trust")
+		slogctx.Warn(ctx, "Is this an attack? Could not get trust", "issuer", sess.Issuer, "error", err)
 		return &sessionv1.GetSessionResponse{Valid: false}, nil
 	}
 	if trust.GetBlocked() {

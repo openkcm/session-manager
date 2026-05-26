@@ -31,7 +31,7 @@ func TestNewTrustMappingServer(t *testing.T) {
 func TestApplyTrustMapping(t *testing.T) {
 	ctx := t.Context()
 
-	t.Run("success - creates new mapping", func(t *testing.T) {
+	t.Run("success - creates new trust", func(t *testing.T) {
 		repo := mocktrust.NewInMemRepository()
 		svc := newTrust(repo)
 		server := grpc.NewTrustMappingServer(svc)
@@ -54,8 +54,8 @@ func TestApplyTrustMapping(t *testing.T) {
 		assert.Empty(t, resp.GetMessage())
 	})
 
-	t.Run("success - updates existing mapping", func(t *testing.T) {
-		existingMapping := trustv1.Trust_builder{
+	t.Run("success - updates existing trust", func(t *testing.T) {
+		existingTrust := trustv1.Trust_builder{
 			TenantId: new("tenant-123"),
 			Oidc: oidcv1.OIDC_builder{
 				Issuer:    new("https://old-issuer.example.com"),
@@ -64,7 +64,7 @@ func TestApplyTrustMapping(t *testing.T) {
 			}.Build(),
 		}.Build()
 		repo := mocktrust.NewInMemRepository(
-			mocktrust.WithTrust(existingMapping),
+			mocktrust.WithTrust(existingTrust),
 		)
 		svc := newTrust(repo)
 		server := grpc.NewTrustMappingServer(svc)
@@ -136,11 +136,11 @@ func TestApplyTrustMapping(t *testing.T) {
 		st, ok := status.FromError(err)
 		require.True(t, ok)
 		assert.Equal(t, codes.Internal, st.Code())
-		assert.Contains(t, st.Message(), "failed to apply Trust mapping")
+		assert.Contains(t, st.Message(), "failed to apply trust")
 	})
 
 	t.Run("update error - returns grpc error", func(t *testing.T) {
-		existingMapping := trustv1.Trust_builder{
+		existingTrust := trustv1.Trust_builder{
 			TenantId: new("tenant-123"),
 			Oidc: oidcv1.OIDC_builder{
 				Issuer: new("https://issuer.example.com"),
@@ -148,7 +148,7 @@ func TestApplyTrustMapping(t *testing.T) {
 		}.Build()
 		updateErr := errors.New("update failed")
 		repo := mocktrust.NewInMemRepository(
-			mocktrust.WithTrust(existingMapping),
+			mocktrust.WithTrust(existingTrust),
 			mocktrust.WithUpdateError(updateErr),
 		)
 		svc := newTrust(repo)
@@ -177,8 +177,8 @@ func TestApplyTrustMapping(t *testing.T) {
 func TestBlockTrustMapping(t *testing.T) {
 	ctx := t.Context()
 
-	t.Run("success - blocks existing mapping", func(t *testing.T) {
-		existingMapping := trustv1.Trust_builder{
+	t.Run("success - blocks existing trust", func(t *testing.T) {
+		existingTrust := trustv1.Trust_builder{
 			TenantId: new("tenant-123"),
 			Blocked:  new(false),
 			Oidc: oidcv1.OIDC_builder{
@@ -186,7 +186,7 @@ func TestBlockTrustMapping(t *testing.T) {
 			}.Build(),
 		}.Build()
 		repo := mocktrust.NewInMemRepository(
-			mocktrust.WithTrust(existingMapping),
+			mocktrust.WithTrust(existingTrust),
 		)
 		svc := newTrust(repo)
 		server := grpc.NewTrustMappingServer(svc)
@@ -204,7 +204,7 @@ func TestBlockTrustMapping(t *testing.T) {
 	})
 
 	t.Run("success - already blocked", func(t *testing.T) {
-		existingMapping := trustv1.Trust_builder{
+		existingTrust := trustv1.Trust_builder{
 			TenantId: new("tenant-123"),
 			Blocked:  new(true),
 			Oidc: oidcv1.OIDC_builder{
@@ -212,7 +212,7 @@ func TestBlockTrustMapping(t *testing.T) {
 			}.Build(),
 		}.Build()
 		repo := mocktrust.NewInMemRepository(
-			mocktrust.WithTrust(existingMapping),
+			mocktrust.WithTrust(existingTrust),
 		)
 		svc := newTrust(repo)
 		server := grpc.NewTrustMappingServer(svc)
@@ -268,22 +268,22 @@ func TestBlockTrustMapping(t *testing.T) {
 		st, ok := status.FromError(err)
 		require.True(t, ok)
 		assert.Equal(t, codes.Internal, st.Code())
-		assert.Contains(t, st.Message(), "failed to block Trust mapping")
+		assert.Contains(t, st.Message(), "failed to block trust")
 	})
 }
 
 func TestRemoveTrustMapping(t *testing.T) {
 	ctx := t.Context()
 
-	t.Run("success - removes existing mapping", func(t *testing.T) {
-		existingMapping := trustv1.Trust_builder{
+	t.Run("success - removes existing trust", func(t *testing.T) {
+		existingTrust := trustv1.Trust_builder{
 			TenantId: new("tenant-123"),
 			Oidc: oidcv1.OIDC_builder{
 				Issuer: new("https://issuer.example.com"),
 			}.Build(),
 		}.Build()
 		repo := mocktrust.NewInMemRepository(
-			mocktrust.WithTrust(existingMapping),
+			mocktrust.WithTrust(existingTrust),
 		)
 		svc := newTrust(repo)
 		server := grpc.NewTrustMappingServer(svc)
@@ -322,7 +322,7 @@ func TestRemoveTrustMapping(t *testing.T) {
 		st, ok := status.FromError(err)
 		require.True(t, ok)
 		assert.Equal(t, codes.Internal, st.Code())
-		assert.Contains(t, st.Message(), "failed to remove Trust mapping")
+		assert.Contains(t, st.Message(), "failed to remove trust")
 	})
 
 	t.Run("error - delete is indempotent", func(t *testing.T) {
@@ -348,8 +348,8 @@ func TestRemoveTrustMapping(t *testing.T) {
 func TestUnblockTrustMapping(t *testing.T) {
 	ctx := t.Context()
 
-	t.Run("success - unblocks blocked mapping", func(t *testing.T) {
-		existingMapping := trustv1.Trust_builder{
+	t.Run("success - unblocks blocked trust", func(t *testing.T) {
+		existingTrust := trustv1.Trust_builder{
 			TenantId: new("tenant-123"),
 			Blocked:  new(true),
 			Oidc: oidcv1.OIDC_builder{
@@ -357,7 +357,7 @@ func TestUnblockTrustMapping(t *testing.T) {
 			}.Build(),
 		}.Build()
 		repo := mocktrust.NewInMemRepository(
-			mocktrust.WithTrust(existingMapping),
+			mocktrust.WithTrust(existingTrust),
 		)
 		svc := newTrust(repo)
 		server := grpc.NewTrustMappingServer(svc)
@@ -375,7 +375,7 @@ func TestUnblockTrustMapping(t *testing.T) {
 	})
 
 	t.Run("success - already unblocked", func(t *testing.T) {
-		existingMapping := trustv1.Trust_builder{
+		existingTrust := trustv1.Trust_builder{
 			TenantId: new("tenant-123"),
 			Blocked:  new(false),
 			Oidc: oidcv1.OIDC_builder{
@@ -383,7 +383,7 @@ func TestUnblockTrustMapping(t *testing.T) {
 			}.Build(),
 		}.Build()
 		repo := mocktrust.NewInMemRepository(
-			mocktrust.WithTrust(existingMapping),
+			mocktrust.WithTrust(existingTrust),
 		)
 		svc := newTrust(repo)
 		server := grpc.NewTrustMappingServer(svc)
@@ -419,7 +419,7 @@ func TestUnblockTrustMapping(t *testing.T) {
 
 	t.Run("error - returns grpc error with message", func(t *testing.T) {
 		internalErr := errors.New("update failed")
-		existingMapping := trustv1.Trust_builder{
+		existingTrust := trustv1.Trust_builder{
 			TenantId: new("tenant-123"),
 			Blocked:  new(true),
 			Oidc: oidcv1.OIDC_builder{
@@ -427,7 +427,7 @@ func TestUnblockTrustMapping(t *testing.T) {
 			}.Build(),
 		}.Build()
 		repo := mocktrust.NewInMemRepository(
-			mocktrust.WithTrust(existingMapping),
+			mocktrust.WithTrust(existingTrust),
 			mocktrust.WithUpdateError(internalErr),
 		)
 		svc := newTrust(repo)
@@ -447,6 +447,6 @@ func TestUnblockTrustMapping(t *testing.T) {
 		st, ok := status.FromError(err)
 		require.True(t, ok)
 		assert.Equal(t, codes.Internal, st.Code())
-		assert.Contains(t, st.Message(), "failed to unblock Trust mapping")
+		assert.Contains(t, st.Message(), "failed to unblock trust")
 	})
 }

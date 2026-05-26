@@ -30,10 +30,10 @@ func NewRepository(db sessionmanager.Database) *Repository {
 
 func (r *Repository) Get(ctx context.Context, tenantID string) (*trustv1.Trust, error) {
 	tracer := otel.GetTracerProvider()
-	ctx, span := tracer.Tracer("").Start(ctx, "get_oidc_mapping_sql")
+	ctx, span := tracer.Tracer("").Start(ctx, "get_trust_sql")
 	defer span.End()
 
-	row, err := r.queries.GetOIDCMapping(ctx, tenantID)
+	row, err := r.queries.GetTrust(ctx, tenantID)
 	if err != nil {
 		span.RecordError(err)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -68,12 +68,12 @@ func (r *Repository) Get(ctx context.Context, tenantID string) (*trustv1.Trust, 
 
 func (r *Repository) Create(ctx context.Context, trust *trustv1.Trust) error {
 	tracer := otel.GetTracerProvider()
-	ctx, span := tracer.Tracer("").Start(ctx, "create_oidc_mapping_sql")
+	ctx, span := tracer.Tracer("").Start(ctx, "create_trust_sql")
 	defer span.End()
 
 	oidc := trust.GetOidc()
 
-	if err := r.queries.CreateOIDCMapping(ctx, queries.CreateOIDCMappingParams{
+	if err := r.queries.CreateTrust(ctx, queries.CreateTrustParams{
 		TenantID:  trust.GetTenantId(),
 		Blocked:   trust.GetBlocked(),
 		Issuer:    oidc.GetIssuer(),
@@ -94,10 +94,10 @@ func (r *Repository) Create(ctx context.Context, trust *trustv1.Trust) error {
 
 func (r *Repository) Delete(ctx context.Context, tenantID string) error {
 	tracer := otel.GetTracerProvider()
-	ctx, span := tracer.Tracer("").Start(ctx, "delete_oidc_mapping_sql")
+	ctx, span := tracer.Tracer("").Start(ctx, "delete_trust_sql")
 	defer span.End()
 
-	affected, err := r.queries.DeleteOIDCMapping(ctx, tenantID)
+	affected, err := r.queries.DeleteTrust(ctx, tenantID)
 	if err != nil {
 		span.RecordError(err)
 		return fmt.Errorf("executing sql query: %w", err)
@@ -112,12 +112,12 @@ func (r *Repository) Delete(ctx context.Context, tenantID string) error {
 
 func (r *Repository) Update(ctx context.Context, trust *trustv1.Trust) error {
 	tracer := otel.GetTracerProvider()
-	ctx, span := tracer.Tracer("").Start(ctx, "update_oidc_mapping_sql")
+	ctx, span := tracer.Tracer("").Start(ctx, "update_trust_sql")
 	defer span.End()
 
 	oidc := trust.GetOidc()
 
-	affected, err := r.queries.UpdateOIDCMapping(ctx, queries.UpdateOIDCMappingParams{
+	affected, err := r.queries.UpdateTrust(ctx, queries.UpdateTrustParams{
 		Blocked:   trust.GetBlocked(),
 		Issuer:    oidc.GetIssuer(),
 		JwksUri:   oidc.GetJwksUri(),

@@ -123,7 +123,7 @@ func internalMain(ctx *sessionmanager.Context, cfg *config.Config) error {
 	trust := trustMod.(sessionmanager.Trust)
 
 	// Initialize the gRPC servers.
-	oidcmappingsrv := grpc.NewTrustMappingServer(trust)
+	trustsrv := grpc.NewTrustMappingServer(trust)
 	sessionsrv := grpc.NewSessionServer(ctx,
 		sessionRepo,
 		trust,
@@ -132,5 +132,5 @@ func internalMain(ctx *sessionmanager.Context, cfg *config.Config) error {
 		grpc.WithTransportCredentials(credsBuilder),
 	)
 
-	return server.StartGRPCServer(ctx, cfg, oidcmappingsrv, sessionsrv)
+	return server.StartGRPCServer(ctx, cfg, trustsrv, sessionsrv)
 }
