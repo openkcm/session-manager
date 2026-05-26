@@ -161,7 +161,8 @@ k3d-setup:
 	k3d cluster create $(K3D_CLUSTER_NAME) -p "30083:30083@server:0" --api-port 127.0.0.1:6444
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o $(SERVICE_NAME) ./cmd/$(SERVICE_NAME)
 	docker build --no-cache -t localhost/$(SERVICE_NAME):latest -f Dockerfile.dev .
-	k3d image import localhost/$(SERVICE_NAME):latest -c $(K3D_CLUSTER_NAME)
+	docker pull postgres:alpine
+	k3d image import localhost/$(SERVICE_NAME):latest postgres:alpine -c $(K3D_CLUSTER_NAME)
 
 .PHONY: helm-integration-test-run
 helm-integration-test-run:
