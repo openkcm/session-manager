@@ -87,7 +87,8 @@ func setKoanf(v reflect.Value, ko *koanf.Koanf) {
 	}
 
 	elem := reflect.Indirect(v)
-	if elem.Kind() == reflect.Struct {
+	switch elem.Kind() {
+	case reflect.Struct:
 		for field, val := range elem.Fields() {
 			name, _, _ := strings.Cut(field.Tag.Get(koanfUnmarshalConf.Tag), ",")
 			if name == "" {
@@ -101,6 +102,20 @@ func setKoanf(v reflect.Value, ko *koanf.Koanf) {
 			}
 
 			setKoanf(val, ko.Cut(name))
+		}
+	case reflect.Map:
+		// Recurse into string-keyed map values so each entry receives its own
+		// koanf subtree. Map values returned by MapRange are not addressable,
+		// so we only descend when the value type is already a pointer.
+		if elem.Type().Key().Kind() != reflect.String {
+			return
+		}
+		if elem.Type().Elem().Kind() != reflect.Pointer {
+			return
+		}
+		iter := elem.MapRange()
+		for iter.Next() {
+			setKoanf(iter.Value(), ko.Cut(iter.Key().String()))
 		}
 	}
 }

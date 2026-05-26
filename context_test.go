@@ -234,6 +234,124 @@ func TestGetModule_NotLoaded(t *testing.T) {
 	assert.Contains(t, err.Error(), "not loaded")
 }
 
+// appModule is a Module that also satisfies the App interface.
+type appModule struct {
+	stubModule
+
+	started bool
+	stopped bool
+}
+
+func (a *appModule) Start() error {
+	a.started = true
+	return nil
+}
+
+func (a *appModule) Stop() error {
+	a.stopped = true
+	return nil
+}
+
+// closableAppModule is an App that also satisfies io.Closer.
+type closableAppModule struct {
+	appModule
+
+	closed bool
+}
+
+func (a *closableAppModule) Close() error {
+	a.closed = true
+	return nil
+}
+
+func TestLoadApp_Success(t *testing.T) {
+	id := uniqueID(t, "app")
+	am := &appModule{stubModule: stubModule{id: id}}
+
+	sessionmanager.RegisterModule(&customNewModule{
+		id:    id,
+		newFn: func() sessionmanager.Module { return am },
+	})
+
+	ctx, cancel := sessionmanager.NewContext(t.Context())
+	defer cancel(nil)
+
+	app, err := ctx.LoadApp(&simpleExtensionConfig{moduleID: id})
+	require.NoError(t, err)
+	require.NotNil(t, app)
+
+	got, err := ctx.GetApp(id)
+	require.NoError(t, err)
+	assert.Same(t, app, got)
+}
+
+func TestLoadApp_MissingAppInterface(t *testing.T) {
+	id := uniqueID(t, "notapp")
+	sessionmanager.RegisterModule(&customNewModule{
+		id:    id,
+		newFn: func() sessionmanager.Module { return &stubModule{id: id} },
+	})
+
+	ctx, cancel := sessionmanager.NewContext(t.Context())
+	defer cancel(nil)
+
+	_, err := ctx.LoadApp(&simpleExtensionConfig{moduleID: id})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "App interface")
+}
+
+func TestLoadApp_UnknownModule(t *testing.T) {
+	ctx, cancel := sessionmanager.NewContext(t.Context())
+	defer cancel(nil)
+
+	_, err := ctx.LoadApp(&simpleExtensionConfig{moduleID: "no-such-app-module"})
+	require.Error(t, err)
+}
+
+func TestLoadApp_DuplicateReturnsError(t *testing.T) {
+	id := uniqueID(t, "dupapp")
+	sessionmanager.RegisterModule(&customNewModule{
+		id:    id,
+		newFn: func() sessionmanager.Module { return &appModule{stubModule: stubModule{id: id}} },
+	})
+
+	ctx, cancel := sessionmanager.NewContext(t.Context())
+	defer cancel(nil)
+
+	_, err := ctx.LoadApp(&simpleExtensionConfig{moduleID: id})
+	require.NoError(t, err)
+
+	_, err = ctx.LoadApp(&simpleExtensionConfig{moduleID: id})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "already been loaded")
+}
+
+func TestGetApp_NotLoaded(t *testing.T) {
+	ctx, cancel := sessionmanager.NewContext(t.Context())
+	defer cancel(nil)
+
+	_, err := ctx.GetApp("never-loaded")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not loaded")
+}
+
+func TestNewContext_CancelClosesApps(t *testing.T) {
+	id := uniqueID(t, "closableapp")
+	cam := &closableAppModule{appModule: appModule{stubModule: stubModule{id: id}}}
+
+	sessionmanager.RegisterModule(&customNewModule{
+		id:    id,
+		newFn: func() sessionmanager.Module { return cam },
+	})
+
+	ctx, cancel := sessionmanager.NewContext(t.Context())
+	_, err := ctx.LoadApp(&simpleExtensionConfig{moduleID: id})
+	require.NoError(t, err)
+
+	cancel(nil)
+	assert.True(t, cam.closed, "Close() should be called on apps when context is cancelled")
+}
+
 // Ensure stubModule satisfies the Module interface at compile time.
 var _ sessionmanager.Module = (*stubModule)(nil)
 
@@ -242,3 +360,6 @@ var _ sessionmanager.Provisioner = (*provisionableModule)(nil)
 
 // Ensure closableModule satisfies io.Closer at compile time.
 var _ io.Closer = (*closableModule)(nil)
+
+// Ensure appModule satisfies App at compile time.
+var _ sessionmanager.App = (*appModule)(nil)

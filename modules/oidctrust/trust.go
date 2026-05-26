@@ -11,7 +11,7 @@ import (
 	"github.com/openkcm/session-manager/pkg/serviceerr"
 )
 
-// ApplyMapping applies and stores the provided Trust.
+// ApplyMapping implements [sessionmanager.Trust].
 func (m *TrustModule) ApplyMapping(ctx context.Context, trust *trustv1.Trust) error {
 	if _, err := m.repository.Get(ctx, trust.GetTenantId()); err != nil {
 		err = m.repository.Create(ctx, trust)
@@ -28,9 +28,7 @@ func (m *TrustModule) ApplyMapping(ctx context.Context, trust *trustv1.Trust) er
 	return nil
 }
 
-// BlockMapping sets the Blocked flag to true for the OIDC mapping associated with the given tenantID.
-// If the mapping is already blocked, it does nothing.
-// Returns an error if the mapping cannot be retrieved or updated.
+// BlockMapping implements [sessionmanager.Trust].
 func (m *TrustModule) BlockMapping(ctx context.Context, tenantID string) error {
 	trust, err := m.repository.Get(ctx, tenantID)
 	if err != nil {
@@ -53,6 +51,7 @@ func (m *TrustModule) BlockMapping(ctx context.Context, tenantID string) error {
 	return nil
 }
 
+// RemoveMapping implements [sessionmanager.Trust].
 func (m *TrustModule) RemoveMapping(ctx context.Context, tenantID string) error {
 	err := m.repository.Delete(ctx, tenantID)
 	if err != nil {
@@ -62,9 +61,7 @@ func (m *TrustModule) RemoveMapping(ctx context.Context, tenantID string) error 
 	return nil
 }
 
-// UnblockMapping sets the Blocked flag to false for the OIDC mapping associated with the given tenantID.
-// If the mapping is not blocked, it does nothing.
-// Returns an error if the mapping cannot be retrieved or updated.
+// UnblockMapping implements [sessionmanager.Trust].
 func (m *TrustModule) UnblockMapping(ctx context.Context, tenantID string) error {
 	trust, err := m.repository.Get(ctx, tenantID)
 	if err != nil {
@@ -86,7 +83,7 @@ func (m *TrustModule) UnblockMapping(ctx context.Context, tenantID string) error
 	return nil
 }
 
-// Get returns a trust message with optional extensions set.
+// Get implements [sessionmanager.Trust].
 func (m *TrustModule) Get(ctx context.Context, tenantID string) (*trustv1.Trust, error) {
 	trust, err := m.repository.Get(ctx, tenantID)
 	if err != nil {

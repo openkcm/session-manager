@@ -26,6 +26,39 @@ type Config struct {
 	SessionManager SessionManager `yaml:"sessionManager"`
 	Housekeeper    Housekeeper    `yaml:"housekeeper"`
 	Trust          Trust          `yaml:"trust"`
+
+	// Apps configures long-running components that satisfy the sessionmanager.App
+	// interface. The map key is an operator-chosen name. Each entry MUST set
+	// "module:" to the registered module ID; remaining fields are passed to the
+	// module via UnmarshalExtension.
+	Apps map[string]*App `yaml:"apps"`
+	// AppsOrder optionally overrides the start order of apps. Apps not listed
+	// here are started in parser-defined order after the listed ones. At
+	// shutdown, apps are stopped in the reverse of the order in which they were
+	// successfully started.
+	AppsOrder []string `yaml:"appsOrder"`
+}
+
+// App is the per-entry configuration under the top-level apps: section. It
+// implements sessionmanager.ExtensionConfig so it can be passed to LoadApp.
+type App struct {
+	Mod   string `yaml:"module"`
+	koanf *koanf.Koanf
+}
+
+func (c *App) setKoanf(ko *koanf.Koanf) {
+	c.koanf = ko
+}
+
+func (c *App) Module() string {
+	return c.Mod
+}
+
+func (c *App) UnmarshalExtension(into sessionmanager.Module) error {
+	if c.koanf == nil {
+		return nil
+	}
+	return unmarshalExtension(into, c.koanf)
 }
 
 type Trust struct {
