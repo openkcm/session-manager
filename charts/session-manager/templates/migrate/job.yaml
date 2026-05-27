@@ -33,22 +33,8 @@ spec:
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      initContainers:
-        - name: wait-for-postgres
-          image: postgres:alpine
-          imagePullPolicy: IfNotPresent
-          env:
-            - name: PGPASSWORD
-              value: {{ .Values.config.database.password.value | quote }}
-          command:
-            - sh
-            - -c
-            - |
-              until psql -h {{ .Values.config.database.host.value }} -U {{ .Values.config.database.user.value }} -d {{ .Values.config.database.name }} -c "SELECT 1" >/dev/null 2>&1; do
-                echo "Waiting for PostgreSQL database {{ .Values.config.database.name }}..."
-                sleep 2
-              done
       {{- with .Values.extraInitContainers }}
+      initContainers:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
