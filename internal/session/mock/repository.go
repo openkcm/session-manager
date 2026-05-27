@@ -94,6 +94,7 @@ func (r *Repository) StoreState(_ context.Context, state session.State) error {
 	if _, ok := r.states[state.ID]; ok {
 		return serviceerr.ErrConflict
 	}
+	r.states[state.ID] = state
 	return nil
 }
 

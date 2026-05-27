@@ -23,7 +23,10 @@ func (p Source) randString(n int) string {
 
 	ret := make([]byte, n)
 	for i := range n {
-		num, _ := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
+		if err != nil {
+			panic("pkce: crypto/rand unavailable: " + err.Error())
+		}
 		ret[i] = letters[num.Int64()]
 	}
 

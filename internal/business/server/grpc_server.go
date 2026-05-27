@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"net"
+	"time"
 
 	"github.com/openkcm/common-sdk/pkg/commongrpc"
 	"github.com/samber/oops"
@@ -49,11 +50,18 @@ func StartGRPCServer(ctx context.Context, cfg *config.Config,
 
 	<-ctx.Done()
 
-	shutdownCtx, cancel := context.WithTimeout(ctx, cfg.GRPC.ShutdownTimeout)
-	defer cancel()
+	shutdownCh := make(chan struct{})
+	go func() {
+		grpcServer.GracefulStop()
+		close(shutdownCh)
+	}()
 
-	grpcServer.GracefulStop()
-	slogctx.Info(shutdownCtx, "Completed graceful shutdown of gRPC server")
+	select {
+	case <-shutdownCh:
+		slogctx.Info(ctx, "Completed graceful shutdown of the gRPC server")
+	case <-time.After(cfg.GRPC.ShutdownTimeout):
+		slogctx.Warn(ctx, "Failed to complete graceful shutdown", "timeout", cfg.GRPC.ShutdownTimeout.String())
+	}
 
 	return nil
 }

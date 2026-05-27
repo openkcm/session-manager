@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/sha512"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"hash"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -61,7 +63,8 @@ type Manager struct {
 
 	csrfSecret []byte
 
-	allowHttpScheme bool
+	allowHttpScheme         bool
+	allowedRedirectBaseURLs []*url.URL
 
 	// cache well known OpenID configuration results
 	wkocCache *ttlcache.Cache[string, *oidc.Configuration]
@@ -97,6 +100,7 @@ func NewManager(
 		clientID:                cfg.ClientAuth.ClientID,
 		newCreds:                func(clientID string) credentials.TransportCredentials { return credentials.NewInsecure(clientID) },
 		csrfSecret:              cfg.CSRFSecretParsed,
+		allowedRedirectBaseURLs: parseURLs(cfg.AllowedRedirectBaseURLs),
 	}
 
 	for _, opt := range opts {
@@ -130,6 +134,10 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 	stateID := m.pkce.State()
 	pkce := m.pkce.PKCE()
 	csrfToken := csrf.NewToken(stateID, m.csrfSecret)
+
+	if !m.IsValidRequestURI(requestURI) {
+		return "", "", serviceerr.ErrInvalidRequest
+	}
 
 	state := State{
 		ID:             stateID,
@@ -604,11 +612,49 @@ func (m *Manager) verifyAccessToken(accessToken, atHash string, idToken *jwt.JSO
 	h.Write([]byte(accessToken)) // NOSONAR
 	sum := h.Sum(nil)[:h.Size()/2]
 	actual := base64.RawURLEncoding.EncodeToString(sum)
-	if actual != atHash {
+	if subtle.ConstantTimeCompare([]byte(actual), []byte(atHash)) != 1 {
 		return serviceerr.ErrInvalidAtHash
 	}
 
 	return nil
+}
+
+// IsValidRequestURI returns true if the URI is relative (no scheme or host),
+// or if its scheme and host exactly match a configured base URL and its path
+// is rooted under that base path.
+func (m *Manager) IsValidRequestURI(requestURI string) bool {
+	u, err := url.Parse(requestURI)
+	if err != nil {
+		return false
+	}
+	if u.Scheme == "" && u.Host == "" {
+		return true
+	}
+	for _, b := range m.allowedRedirectBaseURLs {
+		if u.Scheme != b.Scheme || u.Host != b.Host {
+			continue
+		}
+
+		uPath := u.Path + "/"
+		bPath := b.Path + "/"
+		if strings.HasPrefix(uPath, bPath) {
+			return true
+		}
+	}
+	return false
+}
+
+func parseURLs(raw []string) []*url.URL {
+	parsed := make([]*url.URL, 0, len(raw))
+	for _, s := range raw {
+		u, err := url.Parse(s)
+		if err != nil {
+			slog.Warn("skipping unparseable allowed redirect base URL", "url", s, "error", err)
+			continue
+		}
+		parsed = append(parsed, u)
+	}
+	return parsed
 }
 
 func (m *Manager) httpClient(mapping trust.OIDCMapping) *http.Client {
