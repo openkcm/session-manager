@@ -146,7 +146,7 @@ func (m *Manager) refreshAccessToken(ctx context.Context, s Session) error {
 
 	s.AccessToken = respData.AccessToken
 	s.RefreshToken = respData.RefreshToken
-	s.AccessTokenExpiry = time.Now().Add(time.Duration(respData.ExpiresIn))
+	s.AccessTokenExpiry = time.Now().Add(time.Duration(respData.ExpiresIn) * time.Second)
 
 	err = m.sessions.StoreSession(ctx, s)
 	if err != nil {
