@@ -2,7 +2,7 @@ module github.com/openkcm/session-manager
 
 go 1.26.0
 
-toolchain go1.26.3
+toolchain go1.26.4
 
 tool (
 	github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
