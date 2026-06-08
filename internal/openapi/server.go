@@ -25,6 +25,12 @@ type ErrorModel struct {
 type AuthParams struct {
 	TenantID   string `form:"tenant_id" json:"tenant_id"`
 	RequestURI string `form:"request_uri" json:"request_uri"`
+
+	// ErrorURI Base URL of the UI error page. When provided and an error occurs during the
+	// auth flow (including the callback), the session manager redirects to this URL
+	// with an appended errorCode query parameter instead of returning a JSON error body.
+	// Example: https://ui.cmk.sap/#/tenantID/forbidden
+	ErrorURI *string `form:"error_uri,omitempty" json:"error_uri,omitempty"`
 }
 
 // BclogoutFormdataBody defines parameters for Bclogout.
@@ -110,6 +116,14 @@ func (siw *ServerInterfaceWrapper) Auth(w http.ResponseWriter, r *http.Request) 
 	err = runtime.BindQueryParameter("form", true, true, "request_uri", r.URL.Query(), &params.RequestURI)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "request_uri", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "error_uri" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "error_uri", r.URL.Query(), &params.ErrorURI)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "error_uri", Err: err})
 		return
 	}
 
