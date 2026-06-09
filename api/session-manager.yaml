@@ -32,9 +32,21 @@ paths:
                   required: true
                   schema:
                       type: string
+                - name: error_uri
+                  in: query
+                  required: false
+                  description: |
+                      Base URL of the UI error page. When provided and an error occurs during the
+                      auth flow (including the callback), the session manager redirects to this URL
+                      with an appended errorCode query parameter instead of returning a JSON error body.
+                      Example: https://openkcm.com/#/tenantID/forbidden
+                  schema:
+                      type: string
             responses:
                 "302":
-                    description: Redirect to the OIDC provider with the login CSRF token cookie set.
+                    description: |
+                        On success: Redirect to the OIDC provider with the login CSRF token cookie set.
+                        On error (when error_uri is provided): Redirect to error_uri with errorCode parameter.
                     headers:
                         Location:
                             schema:
@@ -44,7 +56,7 @@ paths:
                             schema:
                                 type: string
                 default:
-                    description: Unexpected error
+                    description: Unexpected error (returned when error_uri is not provided)
                     content:
                         application/json:
                             schema:
@@ -168,6 +180,7 @@ paths:
                 "302":
                     description: |
                         Redirect to original request URI with session and CSRF cookies set.
+                        On error (when error_uri was provided during /sm/auth): Redirect to error_uri with errorCode parameter.
                         There is a limitation of OpenAPI that does not allow setting multiple cookies
                         with the strict handlers. Therefore, we do not define the Set-Cookie header
                         in the yaml spec. However, in the actual implementation both cookies are set.
@@ -177,13 +190,13 @@ paths:
                             schema:
                                 type: string
                 "403":
-                    description: Fingerprint mismatch
+                    description: Fingerprint mismatch (returned when error_uri is not available)
                     content:
                         application/json:
                             schema:
                                 $ref: "#/components/schemas/ErrorModel"
                 default:
-                    description: Unexpected error
+                    description: Unexpected error (returned when error_uri is not available)
                     content:
                         application/json:
                             schema:

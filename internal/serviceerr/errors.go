@@ -139,6 +139,10 @@ func (e Error) HTTPStatus() int {
 		return http.StatusUnauthorized
 	case CodeEndSessionNotSupported:
 		return http.StatusPreconditionFailed
+	case CodeInvalidCSRFToken:
+		return http.StatusBadRequest
+	case CodeInvalidLoginCSRFToken:
+		return http.StatusBadRequest
 	default:
 		return http.StatusInternalServerError
 	}

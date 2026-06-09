@@ -11,6 +11,7 @@ type State struct {
 	Fingerprint    string    // Fingerprint to bind the login to a specific client
 	PKCEVerifier   string    // PKCE verifier to validate the PKCE challenge
 	RequestURI     string    // Request URI for the eventual redirect
+	ErrorURI       string    // Error URI for redirecting to UI error page on failure (optional)
 	Expiry         time.Time // Expiry time of the login process
 	LoginCSRFToken string    // CSRF token to prevent CSRF attacks
 }
@@ -46,6 +47,7 @@ type OIDCSessionData struct {
 	TenantID   string
 	CSRFToken  string
 	RequestURI string
+	ErrorURI   string // Error URI for redirecting to UI error page on failure (optional)
 }
 
 // tokenResponse represents the response from the token endpoint
