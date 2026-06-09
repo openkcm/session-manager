@@ -142,9 +142,9 @@ func TestError_HTTPStatus(t *testing.T) {
 			expectedHTTPStatus: http.StatusPreconditionFailed,
 		},
 		{
-			name:               "CodeInvalidCSRFToken returns InternalServerError by default",
+			name:               "CodeInvalidCSRFToken returns BadRequest",
 			code:               serviceerr.CodeInvalidCSRFToken,
-			expectedHTTPStatus: http.StatusInternalServerError,
+			expectedHTTPStatus: http.StatusBadRequest,
 		},
 		{
 			name:               "CodeInvalidAtHashToken returns Unauthorized",

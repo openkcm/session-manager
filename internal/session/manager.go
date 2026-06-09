@@ -120,7 +120,7 @@ func NewManager(
 }
 
 // MakeAuthURI returns an OIDC authentication URI.
-func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, requestURI string) (string, string, error) {
+func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, requestURI, errorURI string) (string, string, error) {
 	mapping, err := m.trustRepo.Get(ctx, tenantID)
 	if err != nil {
 		return "", "", fmt.Errorf("getting trust mapping: %w", err)
@@ -145,6 +145,7 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 		Fingerprint:    fingerprint,
 		PKCEVerifier:   pkce.Verifier,
 		RequestURI:     requestURI,
+		ErrorURI:       errorURI,
 		Expiry:         time.Now().Add(m.sessionDuration),
 		LoginCSRFToken: csrfToken,
 	}
@@ -372,6 +373,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		TenantID:   state.TenantID,
 		CSRFToken:  csrfToken,
 		RequestURI: state.RequestURI,
+		ErrorURI:   state.ErrorURI,
 	}, nil
 }
 

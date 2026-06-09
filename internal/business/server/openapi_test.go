@@ -26,18 +26,19 @@ const (
 
 // mockSessionManager is a mock implementation of sessionManager interface for testing
 type mockSessionManager struct {
-	makeAuthURIFunc         func(ctx context.Context, tenantID, fingerprint, requestURI string) (string, string, error)
+	makeAuthURIFunc         func(ctx context.Context, tenantID, fingerprint, requestURI, errorURI string) (string, string, error)
 	finaliseOIDCLoginFunc   func(ctx context.Context, state, code, fingerprint string) (session.OIDCSessionData, error)
 	makeSessionCookieFunc   func(ctx context.Context, tenantID, sessionID string) (*http.Cookie, error)
 	makeCSRFCookieFunc      func(ctx context.Context, tenantID, csrfToken string) (*http.Cookie, error)
 	makeLoginCSRFCookieFunc func(ctx context.Context, csrfToken string) (*http.Cookie, error)
+	loadStateFunc           func(ctx context.Context, stateID string) (session.State, error)
 	logoutFunc              func(ctx context.Context, sessionID, postLogoutRedirectURL string) (string, error)
 	bcLogoutFunc            func(ctx context.Context, logoutToken string) error
 }
 
-func (m *mockSessionManager) MakeAuthURI(ctx context.Context, tenantID, fp, requestURI string) (string, string, error) {
+func (m *mockSessionManager) MakeAuthURI(ctx context.Context, tenantID, fp, requestURI, errorURI string) (string, string, error) {
 	if m.makeAuthURIFunc != nil {
-		return m.makeAuthURIFunc(ctx, tenantID, fp, requestURI)
+		return m.makeAuthURIFunc(ctx, tenantID, fp, requestURI, errorURI)
 	}
 	return "", "", errors.New("not implemented")
 }
@@ -68,6 +69,13 @@ func (m *mockSessionManager) MakeLoginCSRFCookie(ctx context.Context, csrfToken 
 		return m.makeLoginCSRFCookieFunc(ctx, csrfToken)
 	}
 	return nil, errors.New("not implemented")
+}
+
+func (m *mockSessionManager) LoadState(ctx context.Context, stateID string) (session.State, error) {
+	if m.loadStateFunc != nil {
+		return m.loadStateFunc(ctx, stateID)
+	}
+	return session.State{}, errors.New("not implemented")
 }
 
 func (m *mockSessionManager) Logout(ctx context.Context, sessionID, postLogoutRedirectURL string) (string, error) {
@@ -103,7 +111,9 @@ func TestOpenAPIServer_Auth_ContextCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
-	req := openapi.AuthRequestObject{}
+	req := openapi.AuthRequestObject{
+		Params: openapi.AuthParams{RequestURI: allowedBaseURL + "/page"},
+	}
 	resp, err := server.Auth(ctx, req)
 	assert.NoError(t, err)
 
@@ -117,7 +127,9 @@ func TestOpenAPIServer_Auth_ContextCanceled(t *testing.T) {
 func TestOpenAPIServer_Auth_ExtractFingerprint_Failed(t *testing.T) {
 	ctx := t.Context()
 	server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
-	req := openapi.AuthRequestObject{}
+	req := openapi.AuthRequestObject{
+		Params: openapi.AuthParams{RequestURI: allowedBaseURL + "/page"},
+	}
 	resp, err := server.Auth(ctx, req)
 	assert.NoError(t, err)
 
@@ -131,12 +143,14 @@ func TestOpenAPIServer_Auth_ExtractFingerprint_Failed(t *testing.T) {
 func TestOpenAPIServer_Auth_MakeAuthURI_Failed(t *testing.T) {
 	ctx := fingerprint.WithFingerprint(t.Context(), "")
 	mock := &mockSessionManager{
-		makeAuthURIFunc: func(ctx context.Context, tenantID string, fingerprint string, requestURI string) (string, string, error) {
+		makeAuthURIFunc: func(ctx context.Context, tenantID string, fingerprint string, requestURI string, errorURI string) (string, string, error) {
 			return "", "", errors.New("error")
 		},
 	}
 	server := newOpenAPIServer(mock, nil, "", "", []string{allowedBaseURL})
-	req := openapi.AuthRequestObject{}
+	req := openapi.AuthRequestObject{
+		Params: openapi.AuthParams{RequestURI: allowedBaseURL + "/page"},
+	}
 	resp, err := server.Auth(ctx, req)
 	assert.NoError(t, err)
 
@@ -150,7 +164,7 @@ func TestOpenAPIServer_Auth_MakeAuthURI_Failed(t *testing.T) {
 func TestOpenAPIServer_Auth_MakeCSRFCookie_Failed(t *testing.T) {
 	ctx := fingerprint.WithFingerprint(t.Context(), "")
 	mock := &mockSessionManager{
-		makeAuthURIFunc: func(ctx context.Context, tenantID string, fingerprint string, requestURI string) (string, string, error) {
+		makeAuthURIFunc: func(ctx context.Context, tenantID string, fingerprint string, requestURI string, errorURI string) (string, string, error) {
 			return "https://example.com/redirect", "token", nil
 		},
 		makeLoginCSRFCookieFunc: func(ctx context.Context, csrfToken string) (*http.Cookie, error) {
@@ -158,7 +172,9 @@ func TestOpenAPIServer_Auth_MakeCSRFCookie_Failed(t *testing.T) {
 		},
 	}
 	server := newOpenAPIServer(mock, nil, "", "", []string{allowedBaseURL})
-	req := openapi.AuthRequestObject{}
+	req := openapi.AuthRequestObject{
+		Params: openapi.AuthParams{RequestURI: allowedBaseURL + "/page"},
+	}
 	resp, err := server.Auth(ctx, req)
 	assert.NoError(t, err)
 	assert.IsType(t, openapi.AuthdefaultJSONResponse{}, resp)
@@ -171,7 +187,7 @@ func TestOpenAPIServer_Auth_MakeCSRFCookie_Failed(t *testing.T) {
 func TestOpenAPIServer_Auth_MakeAuthURI_Success(t *testing.T) {
 	ctx := fingerprint.WithFingerprint(t.Context(), "")
 	mock := &mockSessionManager{
-		makeAuthURIFunc: func(ctx context.Context, tenantID string, fingerprint string, requestURI string) (string, string, error) {
+		makeAuthURIFunc: func(ctx context.Context, tenantID string, fingerprint string, requestURI string, errorURI string) (string, string, error) {
 			return "https://example.com/redirect", "token", nil
 		},
 		makeLoginCSRFCookieFunc: func(ctx context.Context, csrfToken string) (*http.Cookie, error) {
@@ -366,7 +382,7 @@ func TestOpenAPIServer_Callback_InvalidCsrfToken_Failed(t *testing.T) {
 		assert.IsType(t, openapi.CallbackdefaultJSONResponse{}, resp)
 
 		r, _ := resp.(openapi.CallbackdefaultJSONResponse)
-		assert.Equal(t, string(serviceerr.CodeInvalidRequest), r.Body.Error)
+		assert.Equal(t, string(serviceerr.CodeInvalidLoginCSRFToken), r.Body.Error)
 		assert.Equal(t, http.StatusBadRequest, r.StatusCode)
 	})
 }
@@ -628,7 +644,7 @@ func TestOpenAPIServer_ToErrorModel(t *testing.T) {
 				name:       "invalid CSRF token error",
 				err:        serviceerr.ErrInvalidCSRFToken,
 				wantCode:   serviceerr.CodeInvalidCSRFToken,
-				wantStatus: http.StatusInternalServerError, // Default status since not in switch
+				wantStatus: http.StatusBadRequest,
 			},
 		}
 
@@ -763,6 +779,140 @@ func TestOpenAPIServer_Logout_Success(t *testing.T) {
 			assert.Equal(t, -1, cookie.MaxAge)
 			assert.Empty(t, cookie.Value)
 		}
+	})
+}
+
+func TestOpenAPIServer_BuildErrorRedirectURL(t *testing.T) {
+	server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
+
+	t.Run("returns empty when errorURI is empty", func(t *testing.T) {
+		result := server.buildErrorRedirectURL("", serviceerr.ErrNotFound)
+		assert.Empty(t, result)
+	})
+
+	t.Run("returns empty when errorURI is not in allowed list", func(t *testing.T) {
+		result := server.buildErrorRedirectURL("https://evil.com/error", serviceerr.ErrNotFound)
+		assert.Empty(t, result)
+	})
+
+	t.Run("returns redirect URL with error code for allowed errorURI", func(t *testing.T) {
+		result := server.buildErrorRedirectURL("https://app.example.com/error", serviceerr.ErrNotFound)
+		assert.Contains(t, result, "errorCode=not_found")
+		assert.Contains(t, result, "errorDescription=not+found")
+	})
+
+	t.Run("preserves existing query params and adds errorCode", func(t *testing.T) {
+		result := server.buildErrorRedirectURL("https://app.example.com/error?tenant=x", serviceerr.ErrStateExpired)
+		assert.Contains(t, result, "errorCode=state_expired")
+		assert.Contains(t, result, "tenant=x")
+		assert.Contains(t, result, "https://app.example.com/error?")
+	})
+
+	t.Run("maps unknown error to unknown", func(t *testing.T) {
+		result := server.buildErrorRedirectURL("https://app.example.com/error", errors.New("random"))
+		assert.Contains(t, result, "errorCode=unknown")
+		assert.Contains(t, result, "errorDescription=unknown+error")
+	})
+
+	t.Run("maps fingerprint mismatch to fingerprint_mismatch", func(t *testing.T) {
+		result := server.buildErrorRedirectURL("https://app.example.com/error", serviceerr.ErrFingerprintMismatch)
+		assert.Contains(t, result, "errorCode=fingerprint_mismatch")
+		assert.Contains(t, result, "errorDescription=fingerprint+mismatch")
+	})
+}
+
+func TestOpenAPIServer_GetErrorURIFromState(t *testing.T) {
+	t.Run("returns empty when sManager is nil", func(t *testing.T) {
+		server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
+		result := server.getErrorURIFromState(context.Background(), "some-state")
+		assert.Empty(t, result)
+	})
+
+	t.Run("returns empty when LoadState fails", func(t *testing.T) {
+		mock := &mockSessionManager{
+			loadStateFunc: func(ctx context.Context, stateID string) (session.State, error) {
+				return session.State{}, errors.New("not found")
+			},
+		}
+		server := newOpenAPIServer(mock, nil, "", "", []string{allowedBaseURL})
+		result := server.getErrorURIFromState(context.Background(), "some-state")
+		assert.Empty(t, result)
+	})
+
+	t.Run("returns errorURI from state", func(t *testing.T) {
+		mock := &mockSessionManager{
+			loadStateFunc: func(ctx context.Context, stateID string) (session.State, error) {
+				return session.State{ErrorURI: "https://app.example.com/error"}, nil
+			},
+		}
+		server := newOpenAPIServer(mock, nil, "", "", []string{allowedBaseURL})
+		result := server.getErrorURIFromState(context.Background(), "some-state")
+		assert.Equal(t, "https://app.example.com/error", result)
+	})
+}
+
+func TestOpenAPIServer_AuthErrorResponse(t *testing.T) {
+	t.Run("returns JSON when no errorURI", func(t *testing.T) {
+		server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
+		resp := server.authErrorResponse("", serviceerr.ErrUnknown)
+		assert.IsType(t, openapi.AuthdefaultJSONResponse{}, resp)
+	})
+
+	t.Run("returns redirect when errorURI is valid", func(t *testing.T) {
+		server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
+		resp := server.authErrorResponse("https://app.example.com/error", serviceerr.ErrNotFound)
+		assert.IsType(t, openapi.Auth302Response{}, resp)
+		r, ok := resp.(openapi.Auth302Response)
+		require.True(t, ok)
+		assert.Contains(t, r.Headers.Location, "errorCode=not_found")
+	})
+}
+
+func TestOpenAPIServer_CallbackErrorResponse(t *testing.T) {
+	t.Run("returns JSON when no errorURI", func(t *testing.T) {
+		server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
+		resp := server.callbackErrorResponse("", serviceerr.ErrUnknown)
+		assert.IsType(t, openapi.CallbackdefaultJSONResponse{}, resp)
+	})
+
+	t.Run("returns redirect when errorURI is valid", func(t *testing.T) {
+		server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
+		resp := server.callbackErrorResponse("https://app.example.com/error", serviceerr.ErrStateExpired)
+		assert.IsType(t, openapi.Callback302Response{}, resp)
+		r, ok := resp.(openapi.Callback302Response)
+		require.True(t, ok)
+		assert.Contains(t, r.Headers.Location, "errorCode=state_expired")
+	})
+}
+
+func TestOpenAPIServer_CallbackFinaliseErrorResponse(t *testing.T) {
+	t.Run("returns redirect when errorURI is valid", func(t *testing.T) {
+		server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
+		resp := server.callbackFinaliseErrorResponse("https://app.example.com/error", serviceerr.ErrFingerprintMismatch)
+		assert.IsType(t, openapi.Callback302Response{}, resp)
+		r, ok := resp.(openapi.Callback302Response)
+		require.True(t, ok)
+		assert.Contains(t, r.Headers.Location, "errorCode=fingerprint_mismatch")
+	})
+
+	t.Run("masks 403 to unauthorized when no errorURI", func(t *testing.T) {
+		server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
+		resp := server.callbackFinaliseErrorResponse("", serviceerr.ErrFingerprintMismatch)
+		assert.IsType(t, openapi.CallbackdefaultJSONResponse{}, resp)
+		r, ok := resp.(openapi.CallbackdefaultJSONResponse)
+		require.True(t, ok)
+		assert.Equal(t, string(serviceerr.CodeUnauthorizedClient), r.Body.Error)
+		assert.Equal(t, http.StatusUnauthorized, r.StatusCode)
+	})
+
+	t.Run("returns original error when not 403 and no errorURI", func(t *testing.T) {
+		server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
+		resp := server.callbackFinaliseErrorResponse("", serviceerr.ErrStateExpired)
+		assert.IsType(t, openapi.CallbackdefaultJSONResponse{}, resp)
+		r, ok := resp.(openapi.CallbackdefaultJSONResponse)
+		require.True(t, ok)
+		assert.Equal(t, string(serviceerr.CodeStateExpired), r.Body.Error)
+		assert.Equal(t, http.StatusGone, r.StatusCode)
 	})
 }
 
