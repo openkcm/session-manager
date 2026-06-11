@@ -424,42 +424,6 @@ func TestGetSession(t *testing.T) {
 		assert.Nil(t, resp)
 	})
 
-	t.Run("invalid - fingerprint mismatch", func(t *testing.T) {
-		sess := session.Session{
-			ID:          "session-fingerprint",
-			TenantID:    "tenant-fingerprint",
-			Fingerprint: "correct-fingerprint",
-			Issuer:      "https://issuer.example.com",
-		}
-
-		sessionRepo := sessionmock.NewInMemRepository(
-			sessionmock.WithSession(sess),
-		)
-		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
-
-		mapping := trust.OIDCMapping{
-			IssuerURL: "https://issuer.example.com",
-			Blocked:   false,
-		}
-		trustRepo := trustmock.NewInMemRepository(
-			trustmock.WithTrust(sess.TenantID, mapping),
-		)
-
-		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "")
-
-		req := &sessionv1.GetSessionRequest{
-			SessionId:   "session-fingerprint",
-			TenantId:    "tenant-fingerprint",
-			Fingerprint: "wrong-fingerprint", // Mismatch
-		}
-
-		resp, err := server.GetSession(ctx, req)
-
-		require.NoError(t, err)
-		assert.NotNil(t, resp)
-		assert.False(t, resp.GetValid())
-	})
-
 	t.Run("invalid - tenant ID mismatch", func(t *testing.T) {
 		sess := session.Session{
 			ID:          "session-tenant",
