@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"testing"
 	"time"
 
@@ -100,4 +102,54 @@ func TestCreateHTTPServer(t *testing.T) {
 		assert.NotNil(t, server)
 		assert.Equal(t, "unix:///tmp/test.sock", server.Addr)
 	})
+}
+
+func TestProcessHTTPServerError(t *testing.T) {
+	tests := []struct {
+		name        string
+		err         error
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:    "nil error returns nil",
+			err:     nil,
+			wantErr: false,
+		},
+		{
+			name:    "ErrServerClosed returns nil",
+			err:     http.ErrServerClosed,
+			wantErr: false,
+		},
+		{
+			name:        "other error returns wrapped error",
+			err:         errors.New("connection refused"),
+			wantErr:     true,
+			errContains: "HTTP server failed",
+		},
+		{
+			name:        "wrapped error preserves original",
+			err:         errors.New("bind address already in use"),
+			wantErr:     true,
+			errContains: "bind address already in use",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			err := processHTTPServerError(ctx, tt.err)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errContains)
+				// Verify error wrapping preserves original error
+				if tt.err != nil {
+					assert.ErrorIs(t, err, tt.err)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
