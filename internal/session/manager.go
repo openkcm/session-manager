@@ -120,7 +120,7 @@ func NewManager(
 }
 
 // MakeAuthURI returns an OIDC authentication URI.
-func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, requestURI, errorURI string) (string, string, error) {
+func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, requestURI, errorURI string) (string, string, error) {
 	mapping, err := m.trustRepo.Get(ctx, tenantID)
 	if err != nil {
 		return "", "", fmt.Errorf("getting trust mapping: %w", err)
@@ -142,7 +142,6 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, fingerprint, reques
 	state := State{
 		ID:             stateID,
 		TenantID:       tenantID,
-		Fingerprint:    fingerprint,
 		PKCEVerifier:   pkce.Verifier,
 		RequestURI:     requestURI,
 		ErrorURI:       errorURI,
@@ -214,7 +213,7 @@ func (m *Manager) getProviderKeySet(ctx context.Context, oidcConf *oidc.Configur
 	return &keySet, nil
 }
 
-func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerprint string) (OIDCSessionData, error) {
+func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (OIDCSessionData, error) {
 	state, err := m.sessions.LoadState(ctx, stateID)
 	if err != nil {
 		return OIDCSessionData{}, fmt.Errorf("loading state from the storage: %w", err)
@@ -232,11 +231,6 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 	if time.Now().After(state.Expiry) {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "state expired")
 		return OIDCSessionData{}, serviceerr.ErrStateExpired
-	}
-
-	if state.Fingerprint != fingerprint {
-		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "fingerprint mismatch")
-		return OIDCSessionData{}, serviceerr.ErrFingerprintMismatch
 	}
 
 	mapping, err := m.trustRepo.Get(ctx, state.TenantID)
@@ -261,82 +255,11 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 
 	sessionID := m.pkce.SessionID()
 	csrfToken := csrf.NewToken(sessionID, m.csrfSecret)
-	algs := make([]jose.SignatureAlgorithm, 0, len(openidConf.IDTokenSigningAlgValuesSupported))
-	for _, alg := range openidConf.IDTokenSigningAlgValuesSupported {
-		algs = append(algs, jose.SignatureAlgorithm(alg))
-	}
-	token, err := jwt.ParseSigned(tokens.IDToken, algs)
+
+	session, err := m.buildSessionFromTokens(ctx, openidConf, tokens, mapping, sessionID, csrfToken, state.TenantID)
 	if err != nil {
-		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to parse id token")
-		return OIDCSessionData{}, fmt.Errorf("parsing id token: %w, %s", err, algs)
-	}
-
-	keyset, err := m.getProviderKeySet(ctx, openidConf)
-	if err != nil {
-		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get jwks for provider")
-		return OIDCSessionData{}, fmt.Errorf("getting jwks for a provider: %w", err)
-	}
-
-	type CustomClaims struct {
-		SID        string   `json:"sid"`
-		UserUUID   string   `json:"user_uuid"`
-		GivenName  string   `json:"given_name"`
-		FamilyName string   `json:"family_name"`
-		Email      string   `json:"email"`
-		Groups     []string `json:"groups"`
-	}
-
-	type ExtraClaims struct {
-		AtHash string `json:"at_hash,omitempty"`
-	}
-
-	var standardClaims jwt.Claims
-	var customClaims CustomClaims
-	var extraClaims ExtraClaims
-	err = token.Claims(keyset, &standardClaims, &customClaims, &extraClaims)
-	if err != nil {
-		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get JWT claims")
-		return OIDCSessionData{}, fmt.Errorf("getting JWT claims: %w", err)
-	}
-
-	if extraClaims.AtHash != "" {
-		err := m.verifyAccessToken(tokens.AccessToken, extraClaims.AtHash, token)
-		if err != nil {
-			return OIDCSessionData{}, err
-		}
-	}
-
-	// prepare the auth context used by ExtAuthZ
-	authContext := map[string]string{
-		"issuer":    mapping.IssuerURL,
-		"client_id": m.getClientID(mapping),
-	}
-	for _, parameter := range m.authContextKeys {
-		value, ok := mapping.Properties[parameter]
-		if ok {
-			authContext[parameter] = value
-		}
-	}
-
-	session := Session{
-		ID:          sessionID,
-		TenantID:    state.TenantID,
-		ProviderID:  customClaims.SID,
-		Fingerprint: fingerprint,
-		CSRFToken:   csrfToken,
-		Issuer:      mapping.IssuerURL,
-		Claims: Claims{
-			Subject:    standardClaims.Subject,
-			UserUUID:   customClaims.UserUUID,
-			GivenName:  customClaims.GivenName,
-			FamilyName: customClaims.FamilyName,
-			Email:      customClaims.Email,
-			Groups:     customClaims.Groups,
-		},
-		AccessToken:  tokens.AccessToken,
-		RefreshToken: tokens.RefreshToken,
-		Expiry:       time.Now().Add(m.sessionDuration),
-		AuthContext:  authContext,
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, err.Error())
+		return OIDCSessionData{}, err
 	}
 
 	err = m.sessions.StoreSession(ctx, session)
@@ -375,6 +298,86 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code, fingerpr
 		RequestURI: state.RequestURI,
 		ErrorURI:   state.ErrorURI,
 	}, nil
+}
+
+// buildSessionFromTokens parses the ID token, verifies claims, and constructs a Session object.
+func (m *Manager) buildSessionFromTokens(ctx context.Context, openidConf *oidc.Configuration, tokens tokenResponse, mapping trust.OIDCMapping, sessionID, csrfToken, tenantID string) (Session, error) {
+	algs := make([]jose.SignatureAlgorithm, 0, len(openidConf.IDTokenSigningAlgValuesSupported))
+	for _, alg := range openidConf.IDTokenSigningAlgValuesSupported {
+		algs = append(algs, jose.SignatureAlgorithm(alg))
+	}
+	token, err := jwt.ParseSigned(tokens.IDToken, algs)
+	if err != nil {
+		return Session{}, fmt.Errorf("parsing id token: %w, %s", err, algs)
+	}
+
+	keyset, err := m.getProviderKeySet(ctx, openidConf)
+	if err != nil {
+		return Session{}, fmt.Errorf("getting jwks for a provider: %w", err)
+	}
+
+	type customClaims struct {
+		SID        string   `json:"sid"`
+		UserUUID   string   `json:"user_uuid"`
+		GivenName  string   `json:"given_name"`
+		FamilyName string   `json:"family_name"`
+		Email      string   `json:"email"`
+		Groups     []string `json:"groups"`
+	}
+
+	type extraClaims struct {
+		AtHash string `json:"at_hash,omitempty"`
+	}
+
+	var standardClaims jwt.Claims
+	var custom customClaims
+	var extra extraClaims
+	if err = token.Claims(keyset, &standardClaims, &custom, &extra); err != nil {
+		return Session{}, fmt.Errorf("getting JWT claims: %w", err)
+	}
+
+	if extra.AtHash != "" {
+		if err := m.verifyAccessToken(tokens.AccessToken, extra.AtHash, token); err != nil {
+			return Session{}, err
+		}
+	}
+
+	authContext := m.buildAuthContext(mapping)
+
+	return Session{
+		ID:         sessionID,
+		TenantID:   tenantID,
+		ProviderID: custom.SID,
+		CSRFToken:  csrfToken,
+		Issuer:     mapping.IssuerURL,
+		Claims: Claims{
+			Subject:    standardClaims.Subject,
+			UserUUID:   custom.UserUUID,
+			GivenName:  custom.GivenName,
+			FamilyName: custom.FamilyName,
+			Email:      custom.Email,
+			Groups:     custom.Groups,
+		},
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
+		Expiry:       time.Now().Add(m.sessionDuration),
+		AuthContext:  authContext,
+	}, nil
+}
+
+// buildAuthContext prepares the authentication context map used by ExtAuthZ.
+func (m *Manager) buildAuthContext(mapping trust.OIDCMapping) map[string]string {
+	authContext := map[string]string{
+		"issuer":    mapping.IssuerURL,
+		"client_id": m.getClientID(mapping),
+	}
+	for _, parameter := range m.authContextKeys {
+		value, ok := mapping.Properties[parameter]
+		if ok {
+			authContext[parameter] = value
+		}
+	}
+	return authContext
 }
 
 func (m *Manager) Logout(ctx context.Context, sessionID, postLogoutRedirectURL string) (string, error) {

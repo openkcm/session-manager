@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/openkcm/common-sdk/pkg/csrf"
-	"github.com/openkcm/common-sdk/pkg/fingerprint"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 
@@ -24,8 +23,8 @@ import (
 // sessionManager defines the interface for session management operations
 // used by the OpenAPI server.
 type sessionManager interface {
-	MakeAuthURI(ctx context.Context, tenantID, fingerprint, requestURI, errorURI string) (string, string, error)
-	FinaliseOIDCLogin(ctx context.Context, state, code, fingerprint string) (session.OIDCSessionData, error)
+	MakeAuthURI(ctx context.Context, tenantID, requestURI, errorURI string) (string, string, error)
+	FinaliseOIDCLogin(ctx context.Context, state, code string) (session.OIDCSessionData, error)
 	MakeSessionCookie(ctx context.Context, tenantID, sessionID string) (*http.Cookie, error)
 	MakeCSRFCookie(ctx context.Context, tenantID, csrfToken string) (*http.Cookie, error)
 	MakeLoginCSRFCookie(ctx context.Context, csrfToken string) (*http.Cookie, error)
@@ -88,15 +87,7 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 		return s.authErrorResponse(errorURI, serviceerr.ErrInvalidRequest), nil
 	}
 
-	fingerprint, err := fingerprint.ExtractFingerprint(ctx)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to extract fingerprint")
-		slogctx.Error(ctx, "Failed to extract fingerprint", "error", err)
-		return s.authErrorResponse(errorURI, serviceerr.ErrUnknown), nil
-	}
-
-	url, csrfToken, err := s.sManager.MakeAuthURI(ctx, request.Params.TenantID, fingerprint, request.Params.RequestURI, errorURI)
+	url, csrfToken, err := s.sManager.MakeAuthURI(ctx, request.Params.TenantID, request.Params.RequestURI, errorURI)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to build auth URI")
@@ -146,14 +137,6 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 	// Try to load error_uri from state (best-effort, for error redirect)
 	errorURI := s.getErrorURIFromState(ctx, req.Params.State)
 
-	currentFingerprint, err := fingerprint.ExtractFingerprint(ctx)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed extract fingerprint")
-		slogctx.Error(ctx, "Failed to extract fingerprint", "error", err)
-		return s.callbackErrorResponse(errorURI, serviceerr.ErrUnknown), nil
-	}
-
 	// Get the response writer from the context
 	rw, err := middleware.ResponseWriterFromContext(ctx)
 	if err != nil {
@@ -170,7 +153,7 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 		return s.callbackErrorResponse(errorURI, err), nil
 	}
 
-	result, err := s.sManager.FinaliseOIDCLogin(ctx, req.Params.State, req.Params.Code, currentFingerprint)
+	result, err := s.sManager.FinaliseOIDCLogin(ctx, req.Params.State, req.Params.Code)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to finalise OIDC login")
@@ -227,7 +210,7 @@ func (s *openAPIServer) callbackErrorResponse(errorURI string, err error) openap
 }
 
 // callbackFinaliseErrorResponse handles the error case after FinaliseOIDCLogin fails,
-// masking fingerprint mismatch details when no error redirect is available.
+// masking sensitive details when no error redirect is available.
 func (s *openAPIServer) callbackFinaliseErrorResponse(errorURI string, err error) openapi.CallbackResponseObject {
 	if redirectURL := s.buildErrorRedirectURL(errorURI, err); redirectURL != "" {
 		return openapi.Callback302Response{
@@ -237,8 +220,7 @@ func (s *openAPIServer) callbackFinaliseErrorResponse(errorURI string, err error
 
 	body, status := s.toErrorModel(err)
 	if status == 403 {
-		// return generic Unauthorized for 403 Forbidden to avoid leaking information on
-		// fingerprint mismatch in the original error body
+		// return generic Unauthorized for 403 Forbidden to avoid leaking sensitive information
 		body, status = s.toErrorModel(serviceerr.ErrUnauthorized)
 	}
 	return openapi.CallbackdefaultJSONResponse{

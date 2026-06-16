@@ -29,7 +29,7 @@ type AuthParams struct {
 	// ErrorURI Base URL of the UI error page. When provided and an error occurs during the
 	// auth flow (including the callback), the session manager redirects to this URL
 	// with an appended errorCode query parameter instead of returning a JSON error body.
-	// Example: https://ui.cmk.sap/#/tenantID/forbidden
+	// Example: https://openkcm.com/#/tenantID/forbidden
 	ErrorURI *string `form:"error_uri,omitempty" json:"error_uri,omitempty"`
 }
 
@@ -508,15 +508,6 @@ func (response Callback302Response) VisitCallbackResponse(w http.ResponseWriter)
 	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
 	w.WriteHeader(302)
 	return nil
-}
-
-type Callback403JSONResponse ErrorModel
-
-func (response Callback403JSONResponse) VisitCallbackResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-
-	return json.NewEncoder(w).Encode(response)
 }
 
 type CallbackdefaultJSONResponse struct {

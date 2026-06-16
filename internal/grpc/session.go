@@ -137,13 +137,6 @@ func (s *SessionServer) GetSession(ctx context.Context, req *sessionv1.GetSessio
 		return nil, dt.Err()
 	}
 
-	// Compare fingerprints
-	if sess.Fingerprint != req.GetFingerprint() {
-		span.SetStatus(codes.Ok, "fingerprint mismatch")
-		slogctx.Warn(ctx, "Is this an attack? Fingerprints do not match", "sessionFingerprint", sess.Fingerprint, "requestFingerprint", req.GetFingerprint())
-		return &sessionv1.GetSessionResponse{Valid: false}, nil
-	}
-
 	// Compare tenant IDs
 	if sess.TenantID != req.GetTenantId() {
 		span.SetStatus(codes.Ok, "tenant id mismatch")

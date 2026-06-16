@@ -95,7 +95,6 @@ func TestGetSession(t *testing.T) {
 		sess := session.Session{
 			ID:          "session-123",
 			TenantID:    "tenant-123",
-			Fingerprint: "fingerprint-123",
 			Issuer:      testServer.URL,
 			AccessToken: "access-token-123",
 			Claims: session.Claims{
@@ -128,9 +127,8 @@ func TestGetSession(t *testing.T) {
 		)
 
 		req := &sessionv1.GetSessionRequest{
-			SessionId:   "session-123",
-			TenantId:    "tenant-123",
-			Fingerprint: "fingerprint-123",
+			SessionId: "session-123",
+			TenantId:  "tenant-123",
 		}
 
 		resp, err := server.GetSession(ctx, req)
@@ -171,7 +169,6 @@ func TestGetSession(t *testing.T) {
 		sess := session.Session{
 			ID:          "session-groups",
 			TenantID:    "tenant-groups",
-			Fingerprint: "fingerprint-groups",
 			Issuer:      testServer.URL,
 			AccessToken: "access-token-groups",
 			Claims: session.Claims{
@@ -199,9 +196,8 @@ func TestGetSession(t *testing.T) {
 		)
 
 		req := &sessionv1.GetSessionRequest{
-			SessionId:   "session-groups",
-			TenantId:    "tenant-groups",
-			Fingerprint: "fingerprint-groups",
+			SessionId: "session-groups",
+			TenantId:  "tenant-groups",
 		}
 
 		resp, err := server.GetSession(ctx, req)
@@ -227,10 +223,9 @@ func TestGetSession(t *testing.T) {
 		defer testServer.Close()
 
 		sess := session.Session{
-			ID:          "session-456",
-			TenantID:    "tenant-456",
-			Fingerprint: "fingerprint-456",
-			Issuer:      testServer.URL,
+			ID:       "session-456",
+			TenantID: "tenant-456",
+			Issuer:   testServer.URL,
 			Claims: session.Claims{
 				Subject: "user-456",
 			},
@@ -255,9 +250,8 @@ func TestGetSession(t *testing.T) {
 		)
 
 		req := &sessionv1.GetSessionRequest{
-			SessionId:   "session-456",
-			TenantId:    "tenant-456",
-			Fingerprint: "fingerprint-456",
+			SessionId: "session-456",
+			TenantId:  "tenant-456",
 		}
 
 		resp, err := server.GetSession(ctx, req)
@@ -277,9 +271,8 @@ func TestGetSession(t *testing.T) {
 		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "")
 
 		req := &sessionv1.GetSessionRequest{
-			SessionId:   "session-123",
-			TenantId:    "tenant-123",
-			Fingerprint: "fingerprint-123",
+			SessionId: "session-123",
+			TenantId:  "tenant-123",
 		}
 
 		resp, err := server.GetSession(ctx, req)
@@ -291,9 +284,8 @@ func TestGetSession(t *testing.T) {
 
 	t.Run("invalid - session not active", func(t *testing.T) {
 		sess := session.Session{
-			ID:          "session-789",
-			TenantID:    "tenant-789",
-			Fingerprint: "fingerprint-789",
+			ID:       "session-789",
+			TenantID: "tenant-789",
 		}
 
 		sessionRepo := sessionmock.NewInMemRepository(
@@ -306,9 +298,8 @@ func TestGetSession(t *testing.T) {
 		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "")
 
 		req := &sessionv1.GetSessionRequest{
-			SessionId:   "session-789",
-			TenantId:    "tenant-789",
-			Fingerprint: "fingerprint-789",
+			SessionId: "session-789",
+			TenantId:  "tenant-789",
 		}
 
 		resp, err := server.GetSession(ctx, req)
@@ -333,9 +324,8 @@ func TestGetSession(t *testing.T) {
 		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "")
 
 		req := &sessionv1.GetSessionRequest{
-			SessionId:   "session-fail",
-			TenantId:    "tenant-123",
-			Fingerprint: "fingerprint-123",
+			SessionId: "session-fail",
+			TenantId:  "tenant-123",
 		}
 
 		resp, err := server.GetSession(ctx, req)
@@ -347,10 +337,9 @@ func TestGetSession(t *testing.T) {
 
 	t.Run("invalid - trust mapping not found", func(t *testing.T) {
 		sess := session.Session{
-			ID:          "session-no-provider",
-			TenantID:    "tenant-no-provider",
-			Fingerprint: "fingerprint-123",
-			Issuer:      "https://issuer.example.com",
+			ID:       "session-no-provider",
+			TenantID: "tenant-no-provider",
+			Issuer:   "https://issuer.example.com",
 		}
 
 		sessionRepo := sessionmock.NewInMemRepository(
@@ -364,9 +353,8 @@ func TestGetSession(t *testing.T) {
 		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "")
 
 		req := &sessionv1.GetSessionRequest{
-			SessionId:   "session-no-provider",
-			TenantId:    "tenant-no-provider",
-			Fingerprint: "fingerprint-123",
+			SessionId: "session-no-provider",
+			TenantId:  "tenant-no-provider",
 		}
 
 		resp, err := server.GetSession(ctx, req)
@@ -378,10 +366,9 @@ func TestGetSession(t *testing.T) {
 
 	t.Run("invalid - trust mapping is blocked", func(t *testing.T) {
 		sess := session.Session{
-			ID:          "session-blocked",
-			TenantID:    "tenant-blocked",
-			Fingerprint: "fingerprint-123",
-			Issuer:      "https://issuer.example.com",
+			ID:       "session-blocked",
+			TenantID: "tenant-blocked",
+			Issuer:   "https://issuer.example.com",
 		}
 
 		sessionRepo := sessionmock.NewInMemRepository(
@@ -400,9 +387,8 @@ func TestGetSession(t *testing.T) {
 		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "")
 
 		req := &sessionv1.GetSessionRequest{
-			SessionId:   "session-blocked",
-			TenantId:    "tenant-blocked",
-			Fingerprint: "fingerprint-123",
+			SessionId: "session-blocked",
+			TenantId:  "tenant-blocked",
 		}
 
 		resp, err := server.GetSession(ctx, req)
@@ -424,48 +410,11 @@ func TestGetSession(t *testing.T) {
 		assert.Nil(t, resp)
 	})
 
-	t.Run("invalid - fingerprint mismatch", func(t *testing.T) {
-		sess := session.Session{
-			ID:          "session-fingerprint",
-			TenantID:    "tenant-fingerprint",
-			Fingerprint: "correct-fingerprint",
-			Issuer:      "https://issuer.example.com",
-		}
-
-		sessionRepo := sessionmock.NewInMemRepository(
-			sessionmock.WithSession(sess),
-		)
-		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
-
-		mapping := trust.OIDCMapping{
-			IssuerURL: "https://issuer.example.com",
-			Blocked:   false,
-		}
-		trustRepo := trustmock.NewInMemRepository(
-			trustmock.WithTrust(sess.TenantID, mapping),
-		)
-
-		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "")
-
-		req := &sessionv1.GetSessionRequest{
-			SessionId:   "session-fingerprint",
-			TenantId:    "tenant-fingerprint",
-			Fingerprint: "wrong-fingerprint", // Mismatch
-		}
-
-		resp, err := server.GetSession(ctx, req)
-
-		require.NoError(t, err)
-		assert.NotNil(t, resp)
-		assert.False(t, resp.GetValid())
-	})
-
 	t.Run("invalid - tenant ID mismatch", func(t *testing.T) {
 		sess := session.Session{
-			ID:          "session-tenant",
-			TenantID:    "correct-tenant",
-			Fingerprint: "fingerprint-123",
-			Issuer:      "https://issuer.example.com",
+			ID:       "session-tenant",
+			TenantID: "correct-tenant",
+			Issuer:   "https://issuer.example.com",
 		}
 
 		sessionRepo := sessionmock.NewInMemRepository(
@@ -484,9 +433,8 @@ func TestGetSession(t *testing.T) {
 		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "")
 
 		req := &sessionv1.GetSessionRequest{
-			SessionId:   "session-tenant",
-			TenantId:    "wrong-tenant", // Mismatch
-			Fingerprint: "fingerprint-123",
+			SessionId: "session-tenant",
+			TenantId:  "wrong-tenant", // Mismatch
 		}
 
 		resp, err := server.GetSession(ctx, req)
@@ -498,10 +446,9 @@ func TestGetSession(t *testing.T) {
 
 	t.Run("error - GetOpenIDConfig fails", func(t *testing.T) {
 		sess := session.Session{
-			ID:          "session-config-fail",
-			TenantID:    "tenant-config-fail",
-			Fingerprint: "fingerprint-123",
-			Issuer:      "https://invalid-issuer-no-server.example.com",
+			ID:       "session-config-fail",
+			TenantID: "tenant-config-fail",
+			Issuer:   "https://invalid-issuer-no-server.example.com",
 		}
 
 		sessionRepo := sessionmock.NewInMemRepository(
@@ -520,9 +467,8 @@ func TestGetSession(t *testing.T) {
 		server := grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, "")
 
 		req := &sessionv1.GetSessionRequest{
-			SessionId:   "session-config-fail",
-			TenantId:    "tenant-config-fail",
-			Fingerprint: "fingerprint-123",
+			SessionId: "session-config-fail",
+			TenantId:  "tenant-config-fail",
 		}
 
 		resp, err := server.GetSession(ctx, req)
@@ -551,7 +497,6 @@ func TestGetSession(t *testing.T) {
 		sess := session.Session{
 			ID:          "session-introspect-fail",
 			TenantID:    "tenant-introspect-fail",
-			Fingerprint: "fingerprint-123",
 			Issuer:      testServer.URL,
 			AccessToken: "access-token-123",
 		}
@@ -574,9 +519,8 @@ func TestGetSession(t *testing.T) {
 		)
 
 		req := &sessionv1.GetSessionRequest{
-			SessionId:   "session-introspect-fail",
-			TenantId:    "tenant-introspect-fail",
-			Fingerprint: "fingerprint-123",
+			SessionId: "session-introspect-fail",
+			TenantId:  "tenant-introspect-fail",
 		}
 
 		resp, err := server.GetSession(ctx, req)
@@ -607,7 +551,6 @@ func TestGetSession(t *testing.T) {
 		sess := session.Session{
 			ID:          "session-inactive-token",
 			TenantID:    "tenant-inactive-token",
-			Fingerprint: "fingerprint-123",
 			Issuer:      testServer.URL,
 			AccessToken: "expired-token",
 		}
@@ -630,9 +573,8 @@ func TestGetSession(t *testing.T) {
 		)
 
 		req := &sessionv1.GetSessionRequest{
-			SessionId:   "session-inactive-token",
-			TenantId:    "tenant-inactive-token",
-			Fingerprint: "fingerprint-123",
+			SessionId: "session-inactive-token",
+			TenantId:  "tenant-inactive-token",
 		}
 
 		resp, err := server.GetSession(ctx, req)
@@ -654,10 +596,9 @@ func TestGetSession(t *testing.T) {
 		defer testServer.Close()
 
 		sess := session.Session{
-			ID:          "session-bump-fail",
-			TenantID:    "tenant-bump-fail",
-			Fingerprint: "fingerprint-123",
-			Issuer:      testServer.URL,
+			ID:       "session-bump-fail",
+			TenantID: "tenant-bump-fail",
+			Issuer:   testServer.URL,
 		}
 
 		sessionRepo := sessionmock.NewInMemRepository(
@@ -679,9 +620,8 @@ func TestGetSession(t *testing.T) {
 		)
 
 		req := &sessionv1.GetSessionRequest{
-			SessionId:   "session-bump-fail",
-			TenantId:    "tenant-bump-fail",
-			Fingerprint: "fingerprint-123",
+			SessionId: "session-bump-fail",
+			TenantId:  "tenant-bump-fail",
 		}
 
 		resp, err := server.GetSession(ctx, req)

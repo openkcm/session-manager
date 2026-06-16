@@ -44,9 +44,8 @@ func TestSessionGRPC(t *testing.T) {
 
 	t.Run("GetSession - session not found", func(t *testing.T) {
 		resp, err := sessionClient.GetSession(ctx, &sessionv1.GetSessionRequest{
-			SessionId:   "non-existent-session",
-			TenantId:    "tenant-123",
-			Fingerprint: "fingerprint-123",
+			SessionId: "non-existent-session",
+			TenantId:  "tenant-123",
 		})
 		assert.NoError(t, err)
 		assert.NotNil(t, resp)
@@ -58,7 +57,6 @@ func TestSessionGRPC(t *testing.T) {
 		sess := session.Session{
 			ID:          uuid.Must(uuid.NewV4()).String(),
 			TenantID:    "tenant-inactive",
-			Fingerprint: "fingerprint-inactive",
 			Issuer:      "https://issuer.example.com",
 			ProviderID:  "provider-123",
 			AccessToken: "token-123",
@@ -71,9 +69,8 @@ func TestSessionGRPC(t *testing.T) {
 		require.NoError(t, err)
 
 		resp, err := sessionClient.GetSession(ctx, &sessionv1.GetSessionRequest{
-			SessionId:   sess.ID,
-			TenantId:    sess.TenantID,
-			Fingerprint: sess.Fingerprint,
+			SessionId: sess.ID,
+			TenantId:  sess.TenantID,
 		})
 		assert.NoError(t, err)
 		assert.NotNil(t, resp)
@@ -85,7 +82,6 @@ func TestSessionGRPC(t *testing.T) {
 		sess := session.Session{
 			ID:          uuid.Must(uuid.NewV4()).String(),
 			TenantID:    "tenant-active",
-			Fingerprint: "fingerprint-active",
 			Issuer:      "https://issuer.example.com",
 			ProviderID:  "provider-active",
 			AccessToken: "token-active",
@@ -109,9 +105,8 @@ func TestSessionGRPC(t *testing.T) {
 		// Note: This test will fail validation because there's no trust mapping configured
 		// but it tests the session retrieval path
 		resp, err := sessionClient.GetSession(ctx, &sessionv1.GetSessionRequest{
-			SessionId:   sess.ID,
-			TenantId:    sess.TenantID,
-			Fingerprint: sess.Fingerprint,
+			SessionId: sess.ID,
+			TenantId:  sess.TenantID,
 		})
 		assert.NoError(t, err)
 		assert.NotNil(t, resp)
@@ -119,37 +114,10 @@ func TestSessionGRPC(t *testing.T) {
 		assert.False(t, resp.GetValid())
 	})
 
-	t.Run("GetSession - fingerprint mismatch", func(t *testing.T) {
-		sess := session.Session{
-			ID:          uuid.Must(uuid.NewV4()).String(),
-			TenantID:    "tenant-fingerprint",
-			Fingerprint: "correct-fingerprint",
-			Issuer:      "https://issuer.example.com",
-			ProviderID:  "provider-fp",
-			AccessToken: "token-fp",
-			Expiry:      time.Now().Add(1 * time.Hour),
-		}
-		err := sessionRepo.StoreSession(ctx, sess)
-		require.NoError(t, err)
-
-		err = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
-		require.NoError(t, err)
-
-		resp, err := sessionClient.GetSession(ctx, &sessionv1.GetSessionRequest{
-			SessionId:   sess.ID,
-			TenantId:    sess.TenantID,
-			Fingerprint: "wrong-fingerprint",
-		})
-		assert.NoError(t, err)
-		assert.NotNil(t, resp)
-		assert.False(t, resp.GetValid())
-	})
-
 	t.Run("GetSession - tenant ID mismatch", func(t *testing.T) {
 		sess := session.Session{
 			ID:          uuid.Must(uuid.NewV4()).String(),
 			TenantID:    "correct-tenant",
-			Fingerprint: "fingerprint-tenant",
 			Issuer:      "https://issuer.example.com",
 			ProviderID:  "provider-tenant",
 			AccessToken: "token-tenant",
@@ -162,9 +130,8 @@ func TestSessionGRPC(t *testing.T) {
 		require.NoError(t, err)
 
 		resp, err := sessionClient.GetSession(ctx, &sessionv1.GetSessionRequest{
-			SessionId:   sess.ID,
-			TenantId:    "wrong-tenant",
-			Fingerprint: sess.Fingerprint,
+			SessionId: sess.ID,
+			TenantId:  "wrong-tenant",
 		})
 		assert.NoError(t, err)
 		assert.NotNil(t, resp)

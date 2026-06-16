@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/openkcm/common-sdk/pkg/csrf"
-	"github.com/openkcm/common-sdk/pkg/fingerprint"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -26,8 +25,8 @@ const (
 
 // mockSessionManager is a mock implementation of sessionManager interface for testing
 type mockSessionManager struct {
-	makeAuthURIFunc         func(ctx context.Context, tenantID, fingerprint, requestURI, errorURI string) (string, string, error)
-	finaliseOIDCLoginFunc   func(ctx context.Context, state, code, fingerprint string) (session.OIDCSessionData, error)
+	makeAuthURIFunc         func(ctx context.Context, tenantID, requestURI, errorURI string) (string, string, error)
+	finaliseOIDCLoginFunc   func(ctx context.Context, state, code string) (session.OIDCSessionData, error)
 	makeSessionCookieFunc   func(ctx context.Context, tenantID, sessionID string) (*http.Cookie, error)
 	makeCSRFCookieFunc      func(ctx context.Context, tenantID, csrfToken string) (*http.Cookie, error)
 	makeLoginCSRFCookieFunc func(ctx context.Context, csrfToken string) (*http.Cookie, error)
@@ -36,16 +35,16 @@ type mockSessionManager struct {
 	bcLogoutFunc            func(ctx context.Context, logoutToken string) error
 }
 
-func (m *mockSessionManager) MakeAuthURI(ctx context.Context, tenantID, fp, requestURI, errorURI string) (string, string, error) {
+func (m *mockSessionManager) MakeAuthURI(ctx context.Context, tenantID, requestURI, errorURI string) (string, string, error) {
 	if m.makeAuthURIFunc != nil {
-		return m.makeAuthURIFunc(ctx, tenantID, fp, requestURI, errorURI)
+		return m.makeAuthURIFunc(ctx, tenantID, requestURI, errorURI)
 	}
 	return "", "", errors.New("not implemented")
 }
 
-func (m *mockSessionManager) FinaliseOIDCLogin(ctx context.Context, state, code, fp string) (session.OIDCSessionData, error) {
+func (m *mockSessionManager) FinaliseOIDCLogin(ctx context.Context, state, code string) (session.OIDCSessionData, error) {
 	if m.finaliseOIDCLoginFunc != nil {
-		return m.finaliseOIDCLoginFunc(ctx, state, code, fp)
+		return m.finaliseOIDCLoginFunc(ctx, state, code)
 	}
 	return session.OIDCSessionData{}, errors.New("not implemented")
 }
@@ -107,26 +106,14 @@ func TestNewOpenAPIServer(t *testing.T) {
 	})
 }
 
-func TestOpenAPIServer_Auth_ContextCanceled(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
-	req := openapi.AuthRequestObject{
-		Params: openapi.AuthParams{RequestURI: allowedBaseURL + "/page"},
+func TestOpenAPIServer_Auth_MakeAuthURI_NilManager(t *testing.T) {
+	mock := &mockSessionManager{
+		makeAuthURIFunc: func(ctx context.Context, tenantID, requestURI, errorURI string) (string, string, error) {
+			return "", "", errors.New("context canceled")
+		},
 	}
-	resp, err := server.Auth(ctx, req)
-	assert.NoError(t, err)
-
-	assert.IsType(t, openapi.AuthdefaultJSONResponse{}, resp)
-
-	r, _ := resp.(openapi.AuthdefaultJSONResponse)
-	assert.Equal(t, string(serviceerr.CodeUnknown), r.Body.Error)
-	assert.Equal(t, http.StatusInternalServerError, r.StatusCode)
-}
-
-func TestOpenAPIServer_Auth_ExtractFingerprint_Failed(t *testing.T) {
 	ctx := t.Context()
-	server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
+	server := newOpenAPIServer(mock, nil, "", "", []string{allowedBaseURL})
 	req := openapi.AuthRequestObject{
 		Params: openapi.AuthParams{RequestURI: allowedBaseURL + "/page"},
 	}
@@ -141,12 +128,12 @@ func TestOpenAPIServer_Auth_ExtractFingerprint_Failed(t *testing.T) {
 }
 
 func TestOpenAPIServer_Auth_MakeAuthURI_Failed(t *testing.T) {
-	ctx := fingerprint.WithFingerprint(t.Context(), "")
 	mock := &mockSessionManager{
-		makeAuthURIFunc: func(ctx context.Context, tenantID string, fingerprint string, requestURI string, errorURI string) (string, string, error) {
+		makeAuthURIFunc: func(ctx context.Context, tenantID, requestURI, errorURI string) (string, string, error) {
 			return "", "", errors.New("error")
 		},
 	}
+	ctx := t.Context()
 	server := newOpenAPIServer(mock, nil, "", "", []string{allowedBaseURL})
 	req := openapi.AuthRequestObject{
 		Params: openapi.AuthParams{RequestURI: allowedBaseURL + "/page"},
@@ -162,15 +149,15 @@ func TestOpenAPIServer_Auth_MakeAuthURI_Failed(t *testing.T) {
 }
 
 func TestOpenAPIServer_Auth_MakeCSRFCookie_Failed(t *testing.T) {
-	ctx := fingerprint.WithFingerprint(t.Context(), "")
 	mock := &mockSessionManager{
-		makeAuthURIFunc: func(ctx context.Context, tenantID string, fingerprint string, requestURI string, errorURI string) (string, string, error) {
+		makeAuthURIFunc: func(ctx context.Context, tenantID, requestURI, errorURI string) (string, string, error) {
 			return "https://example.com/redirect", "token", nil
 		},
 		makeLoginCSRFCookieFunc: func(ctx context.Context, csrfToken string) (*http.Cookie, error) {
 			return nil, errors.New("error")
 		},
 	}
+	ctx := t.Context()
 	server := newOpenAPIServer(mock, nil, "", "", []string{allowedBaseURL})
 	req := openapi.AuthRequestObject{
 		Params: openapi.AuthParams{RequestURI: allowedBaseURL + "/page"},
@@ -185,15 +172,15 @@ func TestOpenAPIServer_Auth_MakeCSRFCookie_Failed(t *testing.T) {
 }
 
 func TestOpenAPIServer_Auth_MakeAuthURI_Success(t *testing.T) {
-	ctx := fingerprint.WithFingerprint(t.Context(), "")
 	mock := &mockSessionManager{
-		makeAuthURIFunc: func(ctx context.Context, tenantID string, fingerprint string, requestURI string, errorURI string) (string, string, error) {
+		makeAuthURIFunc: func(ctx context.Context, tenantID, requestURI, errorURI string) (string, string, error) {
 			return "https://example.com/redirect", "token", nil
 		},
 		makeLoginCSRFCookieFunc: func(ctx context.Context, csrfToken string) (*http.Cookie, error) {
 			return &http.Cookie{Name: "csrf-token", Value: csrfToken}, nil
 		},
 	}
+	ctx := t.Context()
 	server := newOpenAPIServer(mock, nil, "", "", []string{"https://example.com"})
 	req := openapi.AuthRequestObject{
 		Params: openapi.AuthParams{
@@ -251,10 +238,9 @@ func TestOpenAPIServer_Callback_ExtractFingerprint_Failed(t *testing.T) {
 }
 
 func TestOpenAPIServer_Callback_NoResponseWriter(t *testing.T) {
-	t.Run("returns an error when fingerprint is not in the context", func(t *testing.T) {
-		ctx := fingerprint.WithFingerprint(t.Context(), "fingerprint")
-
+	t.Run("returns error when no response writer", func(t *testing.T) {
 		server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
+		ctx := t.Context()
 
 		callbackReq := openapi.CallbackRequestObject{
 			Params: openapi.CallbackParams{
@@ -277,16 +263,15 @@ func TestOpenAPIServer_Callback_NoResponseWriter(t *testing.T) {
 
 func TestOpenAPIServer_Callback_FinaliseOIDCLogin_Failed(t *testing.T) {
 	t.Run("returns an error when FinaliseOIDCLogin failed", func(t *testing.T) {
-		ctx := fingerprint.WithFingerprint(t.Context(), "fingerprint")
 		w := httptest.NewRecorder()
-		ctx = context.WithValue(ctx, middleware.ResponseWriterKey, w)
+		ctx := context.WithValue(t.Context(), middleware.ResponseWriterKey, w)
 
 		csrfSecret := []byte("test-secret")
 		state := "state"
 		loginCsrfToken := csrf.NewToken(state, csrfSecret)
 
 		mock := &mockSessionManager{
-			finaliseOIDCLoginFunc: func(ctx context.Context, state, code, fingerprint string) (session.OIDCSessionData, error) {
+			finaliseOIDCLoginFunc: func(ctx context.Context, state, code string) (session.OIDCSessionData, error) {
 				return session.OIDCSessionData{}, serviceerr.ErrAccessDenied
 			},
 		}
@@ -314,16 +299,15 @@ func TestOpenAPIServer_Callback_FinaliseOIDCLogin_Failed(t *testing.T) {
 
 func TestOpenAPIServer_Callback_MakeSessionCookie_Failed(t *testing.T) {
 	t.Run("returns an error when MakeSessionCookie failed", func(t *testing.T) {
-		ctx := fingerprint.WithFingerprint(t.Context(), "fingerprint")
 		w := httptest.NewRecorder()
-		ctx = context.WithValue(ctx, middleware.ResponseWriterKey, w)
+		ctx := context.WithValue(t.Context(), middleware.ResponseWriterKey, w)
 
 		csrfSecret := []byte("test-secret")
 		state := "state"
 		loginCsrfToken := csrf.NewToken(state, csrfSecret)
 
 		mock := &mockSessionManager{
-			finaliseOIDCLoginFunc: func(ctx context.Context, state, code, fingerprint string) (session.OIDCSessionData, error) {
+			finaliseOIDCLoginFunc: func(ctx context.Context, state, code string) (session.OIDCSessionData, error) {
 				return session.OIDCSessionData{
 					SessionID:  "s-id",
 					TenantID:   "t-id",
@@ -359,9 +343,8 @@ func TestOpenAPIServer_Callback_MakeSessionCookie_Failed(t *testing.T) {
 }
 func TestOpenAPIServer_Callback_InvalidCsrfToken_Failed(t *testing.T) {
 	t.Run("returns an error when login CSRF token is invalid", func(t *testing.T) {
-		ctx := fingerprint.WithFingerprint(t.Context(), "fingerprint")
 		w := httptest.NewRecorder()
-		ctx = context.WithValue(ctx, middleware.ResponseWriterKey, w)
+		ctx := context.WithValue(t.Context(), middleware.ResponseWriterKey, w)
 
 		csrfSecret := []byte("test-secret")
 
@@ -389,16 +372,15 @@ func TestOpenAPIServer_Callback_InvalidCsrfToken_Failed(t *testing.T) {
 
 func TestOpenAPIServer_Callback_MakeCSRFCookie_Failed(t *testing.T) {
 	t.Run("returns an error when MakeCSRFCookie failed", func(t *testing.T) {
-		ctx := fingerprint.WithFingerprint(t.Context(), "fingerprint")
 		w := httptest.NewRecorder()
-		ctx = context.WithValue(ctx, middleware.ResponseWriterKey, w)
+		ctx := context.WithValue(t.Context(), middleware.ResponseWriterKey, w)
 
 		csrfSecret := []byte("test-secret")
 		state := "state"
 		loginCsrfToken := csrf.NewToken(state, csrfSecret)
 
 		mock := &mockSessionManager{
-			finaliseOIDCLoginFunc: func(ctx context.Context, state, code, fingerprint string) (session.OIDCSessionData, error) {
+			finaliseOIDCLoginFunc: func(ctx context.Context, state, code string) (session.OIDCSessionData, error) {
 				return session.OIDCSessionData{
 					SessionID:  "s-id",
 					TenantID:   "t-id",
@@ -438,16 +420,15 @@ func TestOpenAPIServer_Callback_MakeCSRFCookie_Failed(t *testing.T) {
 
 func TestOpenAPIServer_Callback_Success(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		ctx := fingerprint.WithFingerprint(t.Context(), "fingerprint")
 		w := httptest.NewRecorder()
-		ctx = context.WithValue(ctx, middleware.ResponseWriterKey, w)
+		ctx := context.WithValue(t.Context(), middleware.ResponseWriterKey, w)
 
 		csrfSecret := []byte("test-secret")
 		state := "state"
 		loginCsrfToken := csrf.NewToken(state, csrfSecret)
 
 		mock := &mockSessionManager{
-			finaliseOIDCLoginFunc: func(ctx context.Context, state, code, fingerprint string) (session.OIDCSessionData, error) {
+			finaliseOIDCLoginFunc: func(ctx context.Context, state, code string) (session.OIDCSessionData, error) {
 				return session.OIDCSessionData{
 					SessionID:  "s-id",
 					TenantID:   "t-id",
@@ -814,10 +795,9 @@ func TestOpenAPIServer_BuildErrorRedirectURL(t *testing.T) {
 		assert.Contains(t, result, "errorDescription=unknown+error")
 	})
 
-	t.Run("maps fingerprint mismatch to fingerprint_mismatch", func(t *testing.T) {
-		result := server.buildErrorRedirectURL("https://app.example.com/error", serviceerr.ErrFingerprintMismatch)
-		assert.Contains(t, result, "errorCode=fingerprint_mismatch")
-		assert.Contains(t, result, "errorDescription=fingerprint+mismatch")
+	t.Run("handles access denied error", func(t *testing.T) {
+		result := server.buildErrorRedirectURL("https://app.example.com/error", serviceerr.ErrAccessDenied)
+		assert.Contains(t, result, "errorCode=access_denied")
 	})
 }
 
@@ -888,16 +868,15 @@ func TestOpenAPIServer_CallbackErrorResponse(t *testing.T) {
 func TestOpenAPIServer_CallbackFinaliseErrorResponse(t *testing.T) {
 	t.Run("returns redirect when errorURI is valid", func(t *testing.T) {
 		server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
-		resp := server.callbackFinaliseErrorResponse("https://app.example.com/error", serviceerr.ErrFingerprintMismatch)
+		resp := server.callbackFinaliseErrorResponse("https://app.example.com/error", serviceerr.ErrAccessDenied)
 		assert.IsType(t, openapi.Callback302Response{}, resp)
-		r, ok := resp.(openapi.Callback302Response)
+		_, ok := resp.(openapi.Callback302Response)
 		require.True(t, ok)
-		assert.Contains(t, r.Headers.Location, "errorCode=fingerprint_mismatch")
 	})
 
 	t.Run("masks 403 to unauthorized when no errorURI", func(t *testing.T) {
 		server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
-		resp := server.callbackFinaliseErrorResponse("", serviceerr.ErrFingerprintMismatch)
+		resp := server.callbackFinaliseErrorResponse("", serviceerr.ErrAccessDenied)
 		assert.IsType(t, openapi.CallbackdefaultJSONResponse{}, resp)
 		r, ok := resp.(openapi.CallbackdefaultJSONResponse)
 		require.True(t, ok)
@@ -917,10 +896,8 @@ func TestOpenAPIServer_CallbackFinaliseErrorResponse(t *testing.T) {
 }
 
 // Note: Auth and Callback functions have lower unit test coverage because they depend on
-// fingerprint.ExtractFingerprint() from the common-sdk package, which requires proper
 // HTTP middleware setup. These functions are more thoroughly tested in integration tests
 // where the full HTTP middleware stack is available. The current unit tests cover:
-// - Error handling when fingerprint extraction fails
 // - Error handling when response writer is not in context
 // - Error model conversion
 // For full coverage of success paths and session manager interactions, see integration tests.

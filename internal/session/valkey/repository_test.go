@@ -66,7 +66,6 @@ func TestRepository_LoadState(t *testing.T) {
 	prepareState(t, prefix, session.State{
 		ID:           "stateid-one",
 		TenantID:     "tenant1-id",
-		Fingerprint:  "fingerprint-one",
 		PKCEVerifier: "verifier-one",
 		RequestURI:   "http://localhost",
 		Expiry:       testTime,
@@ -86,7 +85,6 @@ func TestRepository_LoadState(t *testing.T) {
 			wantState: session.State{
 				ID:           "stateid-one",
 				TenantID:     "tenant1-id",
-				Fingerprint:  "fingerprint-one",
 				PKCEVerifier: "verifier-one",
 				RequestURI:   "http://localhost",
 				Expiry:       testTime,
@@ -121,7 +119,6 @@ func TestRepository_StoreState(t *testing.T) {
 	upsertState := session.State{
 		ID:           "stateid-to-upsert",
 		TenantID:     upsertTenantID,
-		Fingerprint:  "fingerprint-upsert",
 		PKCEVerifier: "verifier",
 		RequestURI:   "example.com",
 		Expiry:       testTime,
@@ -141,7 +138,6 @@ func TestRepository_StoreState(t *testing.T) {
 			state: session.State{
 				ID:           "state-id-store-success",
 				TenantID:     "tenant-id-store-success",
-				Fingerprint:  "fingerprint",
 				PKCEVerifier: "verifier",
 				RequestURI:   "http://example.com",
 				Expiry:       testTime,
@@ -154,7 +150,6 @@ func TestRepository_StoreState(t *testing.T) {
 			state: session.State{
 				ID:           upsertState.ID,
 				TenantID:     upsertState.TenantID,
-				Fingerprint:  "fingerprint-upsert",
 				PKCEVerifier: "verifier-upsert",
 				RequestURI:   "upsert.example.com",
 				Expiry:       testTime,
@@ -184,7 +179,6 @@ func TestRepository_LoadSession(t *testing.T) {
 	prepareSession(t, prefix, session.Session{
 		ID:                "sessionid-one",
 		TenantID:          "tenant1-id",
-		Fingerprint:       "fingerprint-one",
 		AccessToken:       "access-token-one",
 		RefreshToken:      "refresh-token-one",
 		Expiry:            testTime,
@@ -205,7 +199,6 @@ func TestRepository_LoadSession(t *testing.T) {
 			wantSession: session.Session{
 				ID:                "sessionid-one",
 				TenantID:          "tenant1-id",
-				Fingerprint:       "fingerprint-one",
 				AccessToken:       "access-token-one",
 				RefreshToken:      "refresh-token-one",
 				Expiry:            testTime,
@@ -241,7 +234,6 @@ func TestRepository_StoreSession_Success(t *testing.T) {
 	upsertSession := session.Session{
 		ID:                "sessionid-to-upsert",
 		TenantID:          upsertTenantID,
-		Fingerprint:       "fingerprint-upsert",
 		AccessToken:       "access-token-upsert",
 		RefreshToken:      "refresh-token-upsert",
 		Expiry:            testTime,
@@ -262,7 +254,6 @@ func TestRepository_StoreSession_Success(t *testing.T) {
 			session: session.Session{
 				ID:                "sessionid-id-store-session-success",
 				TenantID:          "tenant-id-store-session-success",
-				Fingerprint:       "fingerprint-one",
 				AccessToken:       "access-token-one",
 				RefreshToken:      "refresh-token-one",
 				AccessTokenExpiry: testTime,
@@ -275,7 +266,6 @@ func TestRepository_StoreSession_Success(t *testing.T) {
 			session: session.Session{
 				ID:                upsertSession.ID,
 				TenantID:          upsertSession.TenantID,
-				Fingerprint:       "fingerprint-upsert-new",
 				AccessToken:       "access-token-upsert-new",
 				RefreshToken:      "refresh-token-upsert-new",
 				AccessTokenExpiry: testTime,
@@ -327,7 +317,6 @@ func TestRepository_StoreSession_Fail(t *testing.T) {
 			session: session.Session{
 				ID:                "sessionid-id-store-session-successful-cleanup",
 				TenantID:          "tenant-id-store-session-successful-cleanup",
-				Fingerprint:       "fingerprint-upsert-new",
 				AccessToken:       "access-token-upsert-new",
 				RefreshToken:      "refresh-token-upsert-new",
 				Expiry:            time.Now().Add(-100 * time.Second).UTC(),
@@ -359,7 +348,6 @@ func TestRepository_ListSessions(t *testing.T) {
 	prepareSession(t, prefix, session.Session{
 		ID:                "sessionid-one",
 		TenantID:          "tenant1-id",
-		Fingerprint:       "fingerprint-one",
 		AccessToken:       "access-token-one",
 		RefreshToken:      "refresh-token-one",
 		Expiry:            testTime,
@@ -368,7 +356,6 @@ func TestRepository_ListSessions(t *testing.T) {
 	prepareSession(t, prefix, session.Session{
 		ID:                "sessionid-two",
 		TenantID:          "tenant2-id",
-		Fingerprint:       "fingerprint-two",
 		AccessToken:       "access-token-two",
 		RefreshToken:      "refresh-token-two",
 		Expiry:            testTime,
@@ -377,7 +364,6 @@ func TestRepository_ListSessions(t *testing.T) {
 	prepareSession(t, prefix, session.Session{
 		ID:                "sessionid-three",
 		TenantID:          "tenant3-id",
-		Fingerprint:       "fingerprint-three",
 		AccessToken:       "access-token-three",
 		RefreshToken:      "refresh-token-three",
 		Expiry:            testTime,
@@ -397,7 +383,6 @@ func TestRepository_ListSessions(t *testing.T) {
 				{
 					ID:                "sessionid-one",
 					TenantID:          "tenant1-id",
-					Fingerprint:       "fingerprint-one",
 					AccessToken:       "access-token-one",
 					RefreshToken:      "refresh-token-one",
 					Expiry:            testTime,
@@ -406,7 +391,6 @@ func TestRepository_ListSessions(t *testing.T) {
 				{
 					ID:                "sessionid-two",
 					TenantID:          "tenant2-id",
-					Fingerprint:       "fingerprint-two",
 					AccessToken:       "access-token-two",
 					RefreshToken:      "refresh-token-two",
 					Expiry:            testTime,
@@ -415,7 +399,6 @@ func TestRepository_ListSessions(t *testing.T) {
 				{
 					ID:                "sessionid-three",
 					TenantID:          "tenant3-id",
-					Fingerprint:       "fingerprint-three",
 					AccessToken:       "access-token-three",
 					RefreshToken:      "refresh-token-three",
 					Expiry:            testTime,
@@ -448,10 +431,9 @@ func TestRepository_DeleteState(t *testing.T) {
 	const prefix = "session-manager-delete-state-test"
 
 	state := session.State{
-		ID:          stateID,
-		TenantID:    tenantID,
-		Fingerprint: "fingerprint-delete",
-		Expiry:      testTime,
+		ID:       stateID,
+		TenantID: tenantID,
+		Expiry:   testTime,
 	}
 
 	prepareState(t, prefix, state)
