@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/openkcm/common-sdk/pkg/fingerprint"
-
 	commonmiddleware "github.com/openkcm/common-sdk/pkg/middleware"
 	slogctx "github.com/veqryn/slog-context"
 
@@ -35,7 +33,7 @@ func createHTTPServer(_ context.Context, cfg *config.Config, sManager *session.M
 		},
 	)
 
-	handler := fingerprint.FingerprintCtxMiddleware(openapi.Handler(strictHandler))
+	handler := openapi.Handler(strictHandler)
 	handler = middleware.ResponseWriterMiddleware(handler)
 	handler = commonmiddleware.SecurityHeadersMiddleware(handler, map[string]string{
 		"Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none';",

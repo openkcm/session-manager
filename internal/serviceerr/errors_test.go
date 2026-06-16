@@ -127,11 +127,6 @@ func TestError_HTTPStatus(t *testing.T) {
 			expectedHTTPStatus: http.StatusNotFound,
 		},
 		{
-			name:               "CodeFingerprintMismatch returns Forbidden",
-			code:               serviceerr.CodeFingerprintMismatch,
-			expectedHTTPStatus: http.StatusForbidden,
-		},
-		{
 			name:               "CodeStateExpired returns Gone",
 			code:               serviceerr.CodeStateExpired,
 			expectedHTTPStatus: http.StatusGone,
@@ -197,7 +192,6 @@ func TestPredefinedErrors(t *testing.T) {
 		{name: "ErrUnknown", err: serviceerr.ErrUnknown, expectedErr: serviceerr.CodeUnknown, hasDesc: true},
 		{name: "ErrConflict", err: serviceerr.ErrConflict, expectedErr: serviceerr.CodeConflict, hasDesc: true},
 		{name: "ErrNotFound", err: serviceerr.ErrNotFound, expectedErr: serviceerr.CodeNotFound, hasDesc: true},
-		{name: "ErrFingerprintMismatch", err: serviceerr.ErrFingerprintMismatch, expectedErr: serviceerr.CodeFingerprintMismatch, hasDesc: true},
 		{name: "ErrStateExpired", err: serviceerr.ErrStateExpired, expectedErr: serviceerr.CodeStateExpired, hasDesc: true},
 		{name: "ErrInvalidOIDCProvider", err: serviceerr.ErrInvalidOIDCProvider, expectedErr: serviceerr.CodeInvalidOIDCProvider, hasDesc: true},
 		{name: "ErrInvalidCSRFToken", err: serviceerr.ErrInvalidCSRFToken, expectedErr: serviceerr.CodeInvalidCSRFToken, hasDesc: true},
@@ -246,7 +240,6 @@ func TestErrorCodes(t *testing.T) {
 		{name: "CodeUnknown", code: serviceerr.CodeUnknown, expected: "unknown"},
 		{name: "CodeConflict", code: serviceerr.CodeConflict, expected: "conflict"},
 		{name: "CodeNotFound", code: serviceerr.CodeNotFound, expected: "not_found"},
-		{name: "CodeFingerprintMismatch", code: serviceerr.CodeFingerprintMismatch, expected: "fingerprint_mismatch"},
 		{name: "CodeStateExpired", code: serviceerr.CodeStateExpired, expected: "state_expired"},
 		{name: "CodeInvalidOIDCProvider", code: serviceerr.CodeInvalidOIDCProvider, expected: "invalid_oidc_provider"},
 		{name: "CodeInvalidCSRFToken", code: serviceerr.CodeInvalidCSRFToken, expected: "invalid_csrf_token"},

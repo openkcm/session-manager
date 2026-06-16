@@ -33,7 +33,6 @@ const (
 	CodeUnknown                Code = "unknown"
 	CodeConflict               Code = "conflict"
 	CodeNotFound               Code = "not_found"
-	CodeFingerprintMismatch    Code = "fingerprint_mismatch"
 	CodeStateExpired           Code = "state_expired"
 	CodeInvalidOIDCProvider    Code = "invalid_oidc_provider"
 	CodeInvalidCSRFToken       Code = "invalid_csrf_token"
@@ -68,7 +67,6 @@ var (
 	ErrUnknown               = newErr("unknown error", CodeUnknown)
 	ErrConflict              = newErr("already exists", CodeConflict)
 	ErrNotFound              = newErr("not found", CodeNotFound)
-	ErrFingerprintMismatch   = newErr("fingerprint mismatch", CodeFingerprintMismatch)
 	ErrStateExpired          = newErr("state expired", CodeStateExpired)
 	ErrInvalidOIDCProvider   = newErr("invalid OIDC provider", CodeInvalidOIDCProvider)
 	ErrInvalidCSRFToken      = newErr("invalid CSRF token", CodeInvalidCSRFToken)
@@ -129,8 +127,6 @@ func (e Error) HTTPStatus() int {
 		return http.StatusConflict
 	case CodeNotFound:
 		return http.StatusNotFound
-	case CodeFingerprintMismatch:
-		return http.StatusForbidden
 	case CodeStateExpired:
 		return http.StatusGone
 	case CodeInvalidOIDCProvider:

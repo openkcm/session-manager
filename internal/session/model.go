@@ -8,7 +8,6 @@ import "time"
 type State struct {
 	ID             string    // State ID to align the auth request with the callback
 	TenantID       string    // Tenant ID for which the login is done
-	Fingerprint    string    // Fingerprint to bind the login to a specific client
 	PKCEVerifier   string    // PKCE verifier to validate the PKCE challenge
 	RequestURI     string    // Request URI for the eventual redirect
 	ErrorURI       string    // Error URI for redirecting to UI error page on failure (optional)
@@ -21,7 +20,6 @@ type Session struct {
 	ID                string            // Session ID in our system
 	TenantID          string            // Tenant ID for which the session is created
 	ProviderID        string            // Provider session ID defined by the OIDC provider (`sid` claim)
-	Fingerprint       string            // Fingerprint to bind the session to a specific client
 	CSRFToken         string            // CSRF token to prevent CSRF attacks
 	Issuer            string            // Issuer of the OIDC tokens
 	Claims            Claims            // Claims from the ID token

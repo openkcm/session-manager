@@ -61,16 +61,15 @@ func TestManager_Auth(t *testing.T) {
 	}
 
 	tests := []struct {
-		name        string
-		oidc        *trustmock.Repository
-		sessions    *sessionmock.Repository
-		requestURI  string
-		cfg         *config.SessionManager
-		tenantID    string
-		fingerprint string
-		wantURL     string
-		errAssert   assert.ErrorAssertionFunc
-		mapping     trust.OIDCMapping
+		name       string
+		oidc       *trustmock.Repository
+		sessions   *sessionmock.Repository
+		requestURI string
+		cfg        *config.SessionManager
+		tenantID   string
+		wantURL    string
+		errAssert  assert.ErrorAssertionFunc
+		mapping    trust.OIDCMapping
 	}{
 		{
 			name:       "Success",
@@ -87,10 +86,9 @@ func TestManager_Auth(t *testing.T) {
 				},
 				CSRFSecretParsed: []byte(testCSRFSecret),
 			},
-			tenantID:    tenantID,
-			fingerprint: "fingerprint",
-			wantURL:     oidcServer.URL + "/oauth2/authorize?client_id=my-client-id&code_challenge=someChallenge&code_challenge_method=S256&redirect_uri=" + callbackURL + "&response_type=code&scope=openid+profile+email+groups&state=someState&paramAuth1=paramAuth1",
-			errAssert:   assert.NoError,
+			tenantID:  tenantID,
+			wantURL:   oidcServer.URL + "/oauth2/authorize?client_id=my-client-id&code_challenge=someChallenge&code_challenge_method=S256&redirect_uri=" + callbackURL + "&response_type=code&scope=openid+profile+email+groups&state=someState&paramAuth1=paramAuth1",
+			errAssert: assert.NoError,
 		},
 		{
 			name: "Get trust mapping error",
@@ -105,10 +103,9 @@ func TestManager_Auth(t *testing.T) {
 				CallbackURL:      callbackURL,
 				CSRFSecretParsed: []byte(testCSRFSecret),
 			},
-			tenantID:    tenantID,
-			fingerprint: "fingerprint",
-			wantURL:     "",
-			errAssert:   assert.Error,
+			tenantID:  tenantID,
+			wantURL:   "",
+			errAssert: assert.Error,
 		},
 		{
 			name:       "Save state error",
@@ -120,10 +117,9 @@ func TestManager_Auth(t *testing.T) {
 				CallbackURL:      callbackURL,
 				CSRFSecretParsed: []byte(testCSRFSecret),
 			},
-			tenantID:    tenantID,
-			fingerprint: "fingerprint",
-			wantURL:     "",
-			errAssert:   assert.Error,
+			tenantID:  tenantID,
+			wantURL:   "",
+			errAssert: assert.Error,
 		},
 	}
 	for _, tt := range tests {
@@ -150,7 +146,7 @@ func TestManager_Auth(t *testing.T) {
 				session.WithAllowHttpScheme(true),
 			)
 			require.NoError(t, err)
-			got, _, err := m.MakeAuthURI(t.Context(), tt.tenantID, tt.fingerprint, tt.requestURI, "")
+			got, _, err := m.MakeAuthURI(t.Context(), tt.tenantID, tt.requestURI, "")
 
 			if !tt.errAssert(t, err, fmt.Sprintf("Manager.Auth() error = %v", err)) || err != nil {
 				return
@@ -200,14 +196,12 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 		tenantID     = "tenant-id"
 		stateID      = "test-state-id"
 		code         = "auth-code"
-		fingerprint  = "test-fingerprint"
 		pkceVerifier = "test-verifier"
 	)
 
 	validState := session.State{
 		ID:           stateID,
 		TenantID:     tenantID,
-		Fingerprint:  fingerprint,
 		PKCEVerifier: pkceVerifier,
 		RequestURI:   requestURI,
 		Expiry:       time.Now().Add(time.Hour),
@@ -216,19 +210,9 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 	expiredState := session.State{
 		ID:           stateID,
 		TenantID:     tenantID,
-		Fingerprint:  fingerprint,
 		PKCEVerifier: pkceVerifier,
 		RequestURI:   requestURI,
 		Expiry:       time.Now().Add(-time.Hour),
-	}
-
-	mismatchState := session.State{
-		ID:           stateID,
-		TenantID:     tenantID,
-		Fingerprint:  "different-fingerprint",
-		PKCEVerifier: pkceVerifier,
-		RequestURI:   requestURI,
-		Expiry:       time.Now().Add(time.Hour),
 	}
 
 	tests := []struct {
@@ -237,7 +221,6 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 		sessions        *sessionmock.Repository
 		stateID         string
 		code            string
-		fingerprint     string
 		cfg             *config.SessionManager
 		oidcServerFail  bool
 		wantSessionID   bool
@@ -246,12 +229,11 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 		errAssert       assert.ErrorAssertionFunc
 	}{
 		{
-			name:        "Success",
-			oidc:        trustmock.NewInMemRepository(),
-			sessions:    sessionmock.NewInMemRepository(sessionmock.WithState(validState)),
-			stateID:     stateID,
-			code:        code,
-			fingerprint: fingerprint,
+			name:     "Success",
+			oidc:     trustmock.NewInMemRepository(),
+			sessions: sessionmock.NewInMemRepository(sessionmock.WithState(validState)),
+			stateID:  stateID,
+			code:     code,
 			cfg: &config.SessionManager{
 				SessionDuration:                time.Hour,
 				CallbackURL:                    callbackURL,
@@ -265,12 +247,11 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			errAssert:       assert.NoError,
 		},
 		{
-			name:        "State load error",
-			oidc:        trustmock.NewInMemRepository(),
-			sessions:    sessionmock.NewInMemRepository(sessionmock.WithLoadStateError(errors.New("state not found"))),
-			stateID:     stateID,
-			code:        code,
-			fingerprint: fingerprint,
+			name:     "State load error",
+			oidc:     trustmock.NewInMemRepository(),
+			sessions: sessionmock.NewInMemRepository(sessionmock.WithLoadStateError(errors.New("state not found"))),
+			stateID:  stateID,
+			code:     code,
 			cfg: &config.SessionManager{
 				SessionDuration:  time.Hour,
 				CSRFSecretParsed: []byte(testCSRFSecret),
@@ -281,12 +262,11 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			errAssert:       assert.Error,
 		},
 		{
-			name:        "State expired",
-			oidc:        trustmock.NewInMemRepository(),
-			sessions:    sessionmock.NewInMemRepository(sessionmock.WithState(expiredState)),
-			stateID:     stateID,
-			code:        code,
-			fingerprint: fingerprint,
+			name:     "State expired",
+			oidc:     trustmock.NewInMemRepository(),
+			sessions: sessionmock.NewInMemRepository(sessionmock.WithState(expiredState)),
+			stateID:  stateID,
+			code:     code,
 			cfg: &config.SessionManager{
 				CSRFSecretParsed: []byte(testCSRFSecret),
 			},
@@ -296,12 +276,11 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			errAssert:       assert.Error,
 		},
 		{
-			name:        "Fingerprint mismatch",
-			oidc:        trustmock.NewInMemRepository(),
-			sessions:    sessionmock.NewInMemRepository(sessionmock.WithState(mismatchState)),
-			stateID:     stateID,
-			code:        code,
-			fingerprint: fingerprint,
+			name:     "Trust mapping get error",
+			oidc:     trustmock.NewInMemRepository(trustmock.WithGetError(errors.New("trust mapping not found"))),
+			sessions: sessionmock.NewInMemRepository(sessionmock.WithState(validState)),
+			stateID:  stateID,
+			code:     code,
 			cfg: &config.SessionManager{
 				CSRFSecretParsed: []byte(testCSRFSecret),
 			},
@@ -311,27 +290,11 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			errAssert:       assert.Error,
 		},
 		{
-			name:        "Trust mapping get error",
-			oidc:        trustmock.NewInMemRepository(trustmock.WithGetError(errors.New("trust mapping not found"))),
-			sessions:    sessionmock.NewInMemRepository(sessionmock.WithState(validState)),
-			stateID:     stateID,
-			code:        code,
-			fingerprint: fingerprint,
-			cfg: &config.SessionManager{
-				CSRFSecretParsed: []byte(testCSRFSecret),
-			},
-			wantSessionID:   false,
-			wantCSRFToken:   false,
-			wantRedirectURI: "",
-			errAssert:       assert.Error,
-		},
-		{
-			name:        "Token exchange error",
-			oidc:        trustmock.NewInMemRepository(),
-			sessions:    sessionmock.NewInMemRepository(sessionmock.WithState(validState)),
-			stateID:     stateID,
-			code:        code,
-			fingerprint: fingerprint,
+			name:     "Token exchange error",
+			oidc:     trustmock.NewInMemRepository(),
+			sessions: sessionmock.NewInMemRepository(sessionmock.WithState(validState)),
+			stateID:  stateID,
+			code:     code,
 			cfg: &config.SessionManager{
 				CSRFSecretParsed: []byte(testCSRFSecret),
 			},
@@ -380,7 +343,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			)
 			require.NoError(t, err)
 
-			result, err := m.FinaliseOIDCLogin(context.Background(), tt.stateID, tt.code, tt.fingerprint)
+			result, err := m.FinaliseOIDCLogin(context.Background(), tt.stateID, tt.code)
 
 			if !tt.errAssert(t, err, fmt.Sprintf("Manager.Callback() error = %v", err)) {
 				return
