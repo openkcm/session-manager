@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -49,4 +50,49 @@ func TestStartGRPCServer_ContextCancellation(t *testing.T) {
 			t.Fatal("Server did not shut down within timeout")
 		}
 	})
+}
+
+func TestProcessGRPCServerError(t *testing.T) {
+	tests := []struct {
+		name        string
+		err         error
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:    "nil error returns nil",
+			err:     nil,
+			wantErr: false,
+		},
+		{
+			name:        "non-nil error returns wrapped error",
+			err:         errors.New("connection refused"),
+			wantErr:     true,
+			errContains: "gRPC server failed",
+		},
+		{
+			name:        "wrapped error preserves original",
+			err:         errors.New("bind address already in use"),
+			wantErr:     true,
+			errContains: "bind address already in use",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			err := processGRPCServerError(ctx, tt.err)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errContains)
+				// Verify error wrapping preserves original error
+				if tt.err != nil {
+					assert.ErrorIs(t, err, tt.err)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }

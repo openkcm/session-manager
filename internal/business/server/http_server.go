@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/openkcm/common-sdk/pkg/fingerprint"
-	"github.com/samber/oops"
 
 	commonmiddleware "github.com/openkcm/common-sdk/pkg/middleware"
 	slogctx "github.com/veqryn/slog-context"
@@ -76,36 +75,35 @@ func StartHTTPServer(ctx context.Context, cfg *config.Config, sManager *session.
 	listener, err := new(net.ListenConfig).Listen(ctx, network, server.Addr)
 	if err != nil {
 		slogctx.Error(ctx, "failed to create a listener", "error", err, "network", network, "address", server.Addr)
-		return oops.In("HTTP Server").
-			WithContext(ctx).
-			Wrapf(err, "Failed to create a listener")
+		return fmt.Errorf("failed to create a listener: %w", err)
 	}
 
 	slogctx.Info(ctx, "A listener started", "address", listener.Addr().String())
 
+	serverErr := make(chan error, 1)
 	go func() {
-		slogctx.Info(ctx, "Serving an HTTP server", "address", listener.Addr().String())
-		err := server.Serve(listener)
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slogctx.Error(ctx, "Failed to serve an HTTP server", "error", err)
-		}
-
-		slogctx.Info(ctx, "Stopped an HTTP server")
+		slogctx.Info(ctx, "Starting HTTP server", "address", listener.Addr().String())
+		serverErr <- server.Serve(listener)
 	}()
 
-	<-ctx.Done()
-
-	shutdownCtx, shutdownRelease := context.WithTimeout(ctx, cfg.HTTP.ShutdownTimeout)
-	defer shutdownRelease()
-
-	err = server.Shutdown(shutdownCtx)
-	if err != nil {
-		return oops.In("HTTP Server").
-			WithContext(ctx).
-			Wrapf(err, "Failed shutting down HTTP server")
+	select {
+	case <-ctx.Done():
+		shutdownCtx, shutdownRelease := context.WithTimeout(context.Background(), cfg.HTTP.ShutdownTimeout)
+		defer shutdownRelease()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("failed to gracefully shutdown HTTP server: %w", err)
+		}
+		return processHTTPServerError(ctx, <-serverErr)
+	case err := <-serverErr:
+		return processHTTPServerError(ctx, err)
 	}
+}
 
-	slogctx.Info(ctx, "Completed graceful shutdown of HTTP server")
-
+func processHTTPServerError(ctx context.Context, err error) error {
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		slogctx.Error(ctx, "Error serving HTTP endpoint", "error", err)
+		return fmt.Errorf("HTTP server failed: %w", err)
+	}
+	slogctx.Info(ctx, "HTTP server stopped")
 	return nil
 }

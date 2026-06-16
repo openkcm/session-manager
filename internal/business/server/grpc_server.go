@@ -2,11 +2,11 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"time"
 
 	"github.com/openkcm/common-sdk/pkg/commongrpc"
-	"github.com/samber/oops"
 
 	oidcmappingv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/oidcmapping/v1"
 	sessionv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/session/v1"
@@ -31,37 +31,43 @@ func StartGRPCServer(ctx context.Context, cfg *config.Config,
 
 	listener, err := new(net.ListenConfig).Listen(ctx, "tcp", cfg.GRPC.Address)
 	if err != nil {
-		return oops.In("gRPC Server").
-			WithContext(ctx).
-			Wrapf(err, "creating listener")
+		return fmt.Errorf("failed to create a listener: %w", err)
 	}
 
 	slogctx.Info(ctx, "A listener started", "address", listener.Addr().String())
 
+	serverErr := make(chan error, 1)
 	go func() {
-		slogctx.Info(ctx, "Serving a gRPC server", "address", listener.Addr().String())
-		err := grpcServer.Serve(listener)
-		if err != nil {
-			slogctx.Error(ctx, "Failed to serve gRPC endpoint", "error", err)
-		}
-
-		slogctx.Info(ctx, "Stopped gRPC server")
-	}()
-
-	<-ctx.Done()
-
-	shutdownCh := make(chan struct{})
-	go func() {
-		grpcServer.GracefulStop()
-		close(shutdownCh)
+		slogctx.Info(ctx, "Starting gRPC server", "address", listener.Addr().String())
+		serverErr <- grpcServer.Serve(listener)
 	}()
 
 	select {
-	case <-shutdownCh:
-		slogctx.Info(ctx, "Completed graceful shutdown of the gRPC server")
-	case <-time.After(cfg.GRPC.ShutdownTimeout):
-		slogctx.Warn(ctx, "Failed to complete graceful shutdown", "timeout", cfg.GRPC.ShutdownTimeout.String())
-	}
+	case <-ctx.Done():
+		shutdownCh := make(chan struct{})
+		go func() {
+			grpcServer.GracefulStop()
+			close(shutdownCh)
+		}()
 
+		select {
+		case <-shutdownCh:
+			slogctx.Info(ctx, "Completed graceful shutdown of the gRPC server")
+		case <-time.After(cfg.GRPC.ShutdownTimeout):
+			slogctx.Warn(ctx, "Failed to complete graceful shutdown", "timeout", cfg.GRPC.ShutdownTimeout.String())
+			grpcServer.Stop()
+		}
+		return processGRPCServerError(ctx, <-serverErr)
+	case err := <-serverErr:
+		return processGRPCServerError(ctx, err)
+	}
+}
+
+func processGRPCServerError(ctx context.Context, err error) error {
+	if err != nil {
+		slogctx.Error(ctx, "Error serving gRPC endpoint", "error", err)
+		return fmt.Errorf("gRPC server failed: %w", err)
+	}
+	slogctx.Info(ctx, "gRPC server stopped")
 	return nil
 }

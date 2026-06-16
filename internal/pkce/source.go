@@ -23,10 +23,12 @@ func (p Source) randString(n int) string {
 
 	ret := make([]byte, n)
 	for i := range n {
-		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
-		if err != nil {
-			panic("pkce: crypto/rand unavailable: " + err.Error())
-		}
+		// The following line ignores any error because:
+		// - `crypto/rand.Read()` never returns an error - it crashes irrecoverably if it fails
+		// - `crypto/rand.Int()` returns an error only if `rand.Read` fails, which never happens with `rand.Reader`
+		//   The Go stdlib example uses `_, _ := rand.Int(rand.Reader, ...)` with the comment
+		//   "Int cannot return an error when using rand.Reader"
+		num, _ := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
 		ret[i] = letters[num.Int64()]
 	}
 

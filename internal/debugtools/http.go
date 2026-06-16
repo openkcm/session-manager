@@ -21,14 +21,20 @@ func NewTransport(base http.RoundTripper) http.RoundTripper {
 
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	ctx := req.Context()
-	reqDump, _ := httputil.DumpRequestOut(req, true)
-	ctx = slogctx.With(ctx, "request", string(reqDump))
+	reqDump, dumpError := httputil.DumpRequestOut(req, true)
+	ctx = slogctx.With(ctx,
+		"request", string(reqDump),
+		"dumpError", dumpError,
+	)
 	resp, err := t.base.RoundTrip(req)
 	if err != nil {
 		slogctx.Debug(ctx, "http request executed with an error")
 	} else {
-		respDump, _ := httputil.DumpResponse(resp, true)
-		slogctx.Debug(ctx, "http request executed successfully", "response", string(respDump))
+		respDump, dumpError := httputil.DumpResponse(resp, true)
+		slogctx.Debug(ctx, "http request executed successfully",
+			"response", string(respDump),
+			"dumpError", dumpError,
+		)
 	}
 
 	return resp, err
