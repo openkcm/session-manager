@@ -21,7 +21,7 @@ require (
 	github.com/jellydator/ttlcache/v3 v3.4.0
 	github.com/moby/moby/api v1.54.2
 	github.com/oapi-codegen/runtime v1.4.1
-	github.com/openkcm/api-sdk v0.17.0
+	github.com/openkcm/api-sdk v0.18.0
 	github.com/openkcm/common-sdk v1.16.1
 	github.com/pressly/goose/v3 v3.27.1
 	github.com/samber/oops v1.22.0
@@ -34,7 +34,7 @@ require (
 	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/metric v1.44.0
 	go.opentelemetry.io/otel/trace v1.44.0
-	golang.org/x/sync v0.20.0
+	golang.org/x/sync v0.21.0
 	google.golang.org/grpc v1.81.1
 )
 
