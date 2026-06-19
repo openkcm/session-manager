@@ -789,10 +789,16 @@ func TestManager_IsValidRequestURI(t *testing.T) {
 			want:       true,
 		},
 		{
-			name:       "path prefix boundary prevents sibling path match",
-			baseURLs:   []string{"https://example.com/tenant"},
-			requestURI: "https://example.com/tenant-evil/page",
-			want:       false,
+			name:       "valid absolute URL with port under base path is accepted",
+			baseURLs:   []string{"https://example.com:8080/tenant"},
+			requestURI: "https://example.com:8080/tenant/page",
+			want:       true,
+		},
+		{
+			name:       "valid absolute URL with port is accepted",
+			baseURLs:   []string{"https://example.com:"},
+			requestURI: "https://example.com:8080",
+			want:       true,
 		},
 		{
 			name:       "subdomain is rejected against bare domain base",

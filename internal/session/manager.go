@@ -636,13 +636,7 @@ func (m *Manager) IsValidRequestURI(requestURI string) bool {
 		return true
 	}
 	for _, b := range m.allowedRedirectBaseURLs {
-		if u.Scheme != b.Scheme || u.Host != b.Host {
-			continue
-		}
-
-		uPath := u.Path + "/"
-		bPath := b.Path + "/"
-		if strings.HasPrefix(uPath, bPath) {
+		if strings.HasPrefix(requestURI, b.String()) {
 			return true
 		}
 	}
