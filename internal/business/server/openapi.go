@@ -424,10 +424,24 @@ func (s *openAPIServer) buildErrorRedirectURL(errorURI string, err error) string
 		return ""
 	}
 
-	q := u.Query()
-	q.Set("errorCode", string(errorCode))
-	q.Set("errorDescription", serviceErr.Description)
-	u.RawQuery = q.Encode()
+	// If the URL has a fragment (hash-based SPA routing like #/tenantId/login),
+	// append error params to the fragment's query string so the SPA router can read them.
+	// Go's url.Parse treats # as a fragment separator per RFC 3986, so u.Query()
+	// only operates on the part before #, which would place query params before the
+	// fragment and break routing.
+	if u.Fragment != "" {
+		separator := "?"
+		if strings.Contains(u.Fragment, "?") {
+			separator = "&"
+		}
+		u.Fragment += separator + "errorCode=" + url.QueryEscape(string(errorCode)) +
+			"&errorDescription=" + url.QueryEscape(serviceErr.Description)
+	} else {
+		q := u.Query()
+		q.Set("errorCode", string(errorCode))
+		q.Set("errorDescription", serviceErr.Description)
+		u.RawQuery = q.Encode()
+	}
 
 	return u.String()
 }
