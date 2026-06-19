@@ -84,7 +84,7 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "request URI does not match an allowed redirect base URL")
 		slogctx.Error(ctx, "Request URI does not match an allowed redirect base URL", "requestURI", request.Params.RequestURI)
-		return s.authErrorResponse(errorURI, serviceerr.ErrInvalidRequest), nil
+		return s.authErrorResponse(ctx, errorURI, serviceerr.ErrInvalidRequest), nil
 	}
 
 	url, csrfToken, err := s.sManager.MakeAuthURI(ctx, request.Params.TenantID, request.Params.RequestURI, errorURI)
@@ -92,14 +92,14 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to build auth URI")
 		slogctx.Error(ctx, "Failed build auth URI", "error", err)
-		return s.authErrorResponse(errorURI, err), nil
+		return s.authErrorResponse(ctx, errorURI, err), nil
 	}
 
 	loginCsrfCookie, err := s.sManager.MakeLoginCSRFCookie(ctx, csrfToken)
 	if err != nil {
 		span.RecordError(err)
 		slogctx.Error(ctx, "Failed to make CSRF cookie", "error", err)
-		return s.authErrorResponse(errorURI, err), nil
+		return s.authErrorResponse(ctx, errorURI, err), nil
 	}
 
 	span.SetStatus(codes.Ok, "")
@@ -112,8 +112,8 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 }
 
 // authErrorResponse returns either a redirect to the error page or a JSON error response for the Auth endpoint.
-func (s *openAPIServer) authErrorResponse(errorURI string, err error) openapi.AuthResponseObject {
-	if redirectURL := s.buildErrorRedirectURL(errorURI, err); redirectURL != "" {
+func (s *openAPIServer) authErrorResponse(ctx context.Context, errorURI string, err error) openapi.AuthResponseObject {
+	if redirectURL := s.buildErrorRedirectURL(ctx, errorURI, err); redirectURL != "" {
 		return openapi.Auth302Response{
 			Headers: openapi.Auth302ResponseHeaders{Location: redirectURL},
 		}
@@ -143,14 +143,14 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to get response writer from context")
 		slogctx.Error(ctx, "Failed to get response writer from context", "error", err)
-		return s.callbackErrorResponse(errorURI, serviceerr.ErrUnknown), nil
+		return s.callbackErrorResponse(ctx, errorURI, serviceerr.ErrUnknown), nil
 	}
 
 	if !csrf.Validate(req.Params.UnderscoreUnderscoreHostLoginCSRF, req.Params.State, s.csrfSecret) {
 		err := serviceerr.ErrInvalidLoginCSRFToken
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
-		return s.callbackErrorResponse(errorURI, err), nil
+		return s.callbackErrorResponse(ctx, errorURI, err), nil
 	}
 
 	result, err := s.sManager.FinaliseOIDCLogin(ctx, req.Params.State, req.Params.Code)
@@ -158,7 +158,7 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to finalise OIDC login")
 		slogctx.Error(ctx, "Failed to finalise OIDC login", "error", err)
-		return s.callbackFinaliseErrorResponse(errorURI, err), nil
+		return s.callbackFinaliseErrorResponse(ctx, errorURI, err), nil
 	}
 
 	// Session cookie
@@ -167,7 +167,7 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to create session cookie")
 		slogctx.Error(ctx, "Failed to create session cookie", "error", err)
-		return s.callbackErrorResponse(result.ErrorURI, serviceerr.ErrUnknown), nil
+		return s.callbackErrorResponse(ctx, result.ErrorURI, serviceerr.ErrUnknown), nil
 	}
 
 	// CSRF cookie
@@ -176,7 +176,7 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to create CSRF cookie")
 		slogctx.Error(ctx, "Failed to create CSRF cookie", "error", err)
-		return s.callbackErrorResponse(result.ErrorURI, serviceerr.ErrUnknown), nil
+		return s.callbackErrorResponse(ctx, result.ErrorURI, serviceerr.ErrUnknown), nil
 	}
 
 	// There is a limitation of OpenAPI that does not allow setting multiple cookies
@@ -196,8 +196,8 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 }
 
 // callbackErrorResponse returns either a redirect to the error page or a JSON error response.
-func (s *openAPIServer) callbackErrorResponse(errorURI string, err error) openapi.CallbackResponseObject {
-	if redirectURL := s.buildErrorRedirectURL(errorURI, err); redirectURL != "" {
+func (s *openAPIServer) callbackErrorResponse(ctx context.Context, errorURI string, err error) openapi.CallbackResponseObject {
+	if redirectURL := s.buildErrorRedirectURL(ctx, errorURI, err); redirectURL != "" {
 		return openapi.Callback302Response{
 			Headers: openapi.Callback302ResponseHeaders{Location: redirectURL},
 		}
@@ -211,8 +211,8 @@ func (s *openAPIServer) callbackErrorResponse(errorURI string, err error) openap
 
 // callbackFinaliseErrorResponse handles the error case after FinaliseOIDCLogin fails,
 // masking sensitive details when no error redirect is available.
-func (s *openAPIServer) callbackFinaliseErrorResponse(errorURI string, err error) openapi.CallbackResponseObject {
-	if redirectURL := s.buildErrorRedirectURL(errorURI, err); redirectURL != "" {
+func (s *openAPIServer) callbackFinaliseErrorResponse(ctx context.Context, errorURI string, err error) openapi.CallbackResponseObject {
+	if redirectURL := s.buildErrorRedirectURL(ctx, errorURI, err); redirectURL != "" {
 		return openapi.Callback302Response{
 			Headers: openapi.Callback302ResponseHeaders{Location: redirectURL},
 		}
@@ -394,7 +394,7 @@ func newBadRequest(description string) (model openapi.ErrorModel, httpStatus int
 
 // buildErrorRedirectURL constructs a redirect URL to the UI error page with the error code.
 // Returns empty string if errorURI is not provided or not allowed (backward-compatible fallback to JSON).
-func (s *openAPIServer) buildErrorRedirectURL(errorURI string, err error) string {
+func (s *openAPIServer) buildErrorRedirectURL(ctx context.Context, errorURI string, err error) string {
 	if errorURI == "" {
 		return ""
 	}
@@ -411,24 +411,40 @@ func (s *openAPIServer) buildErrorRedirectURL(errorURI string, err error) string
 
 	errorCode := serviceErr.Err
 
-	// Log the original error so that it doesn't get lost when redirecting to the error page
-	slogctx.Error(context.Background(), "Redirecting to error page",
+	redirect := urlWithErrorCodeAndDescription(errorURI, string(errorCode), serviceErr.Description)
+	slogctx.Error(ctx, "Redirecting to error page",
 		"errorCode", string(errorCode),
-		"errorURI", errorURI,
 		"originalError", err.Error(),
+		"errorURI", errorURI,
+		"redirect", redirect,
 	)
+	return redirect
+}
 
-	// Parse the error URI and add the error code as a query parameter
-	u, parseErr := url.Parse(errorURI)
-	if parseErr != nil {
+func urlWithErrorCodeAndDescription(s, code, desc string) string {
+	if s == "" {
 		return ""
 	}
 
-	q := u.Query()
-	q.Set("errorCode", string(errorCode))
-	q.Set("errorDescription", serviceErr.Description)
-	u.RawQuery = q.Encode()
+	// Parse the string as URL
+	u, err := url.Parse(s)
+	if err != nil {
+		return ""
+	}
 
+	// If it has a fragment, try to add error code and description there.
+	// This is for SPA # based routing e.g. https://my.domain/#/errorpage
+	f := urlWithErrorCodeAndDescription(u.Fragment, code, desc)
+	if f != "" {
+		u.Fragment = f
+		return u.String()
+	}
+
+	// Otherwise add error code and description to the URL itself
+	q := u.Query()
+	q.Set("errorCode", code)
+	q.Set("errorDescription", desc)
+	u.RawQuery = q.Encode()
 	return u.String()
 }
 
