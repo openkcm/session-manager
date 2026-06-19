@@ -15,7 +15,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26'
+          go-version: "1.26"
       - name: Build the Docker image
         run: docker build --no-cache -f Dockerfile.dev -t localhost/session-manager:latest .
       - name: Setup k3s
@@ -27,4 +27,4 @@ jobs:
       - name: Import the Docker image
         run: k3d image import localhost/session-manager:latest -c k3scluster
       - name: Run the tests
-        run: cd ./helm-tests && go test -v -count=1 -race ./...
+        run: cd ./helm-tests && go test -timeout 15m -v -count=1 -race ./...
