@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -80,25 +79,23 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 	}
 
 	if !s.isAllowedRedirectBaseURL(request.Params.RequestURI) {
-		err := fmt.Errorf("request URI does not match an allowed redirect base URL: %s", request.Params.RequestURI)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "request URI does not match an allowed redirect base URL")
-		slogctx.Error(ctx, "Request URI does not match an allowed redirect base URL", "requestURI", request.Params.RequestURI)
-		return s.authErrorResponse(ctx, errorURI, serviceerr.ErrInvalidRequest), nil
+		svcerr := &serviceerr.Error{
+			Err:         serviceerr.CodeInvalidRequest,
+			Description: "request URI does not match an allowed redirect base URL",
+		}
+		serviceerr.RecordAndLogError(ctx, span, svcerr, "requestURI", request.Params.RequestURI)
+		return s.authErrorResponse(ctx, errorURI, svcerr), nil
 	}
 
 	url, csrfToken, err := s.sManager.MakeAuthURI(ctx, request.Params.TenantID, request.Params.RequestURI, errorURI)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to build auth URI")
-		slogctx.Error(ctx, "Failed build auth URI", "error", err)
+		serviceerr.RecordAndLogError(ctx, span, err, "error", err)
 		return s.authErrorResponse(ctx, errorURI, err), nil
 	}
 
 	loginCsrfCookie, err := s.sManager.MakeLoginCSRFCookie(ctx, csrfToken)
 	if err != nil {
-		span.RecordError(err)
-		slogctx.Error(ctx, "Failed to make CSRF cookie", "error", err)
+		serviceerr.RecordAndLogError(ctx, span, err, "error", err)
 		return s.authErrorResponse(ctx, errorURI, err), nil
 	}
 
@@ -140,42 +137,33 @@ func (s *openAPIServer) Callback(ctx context.Context, req openapi.CallbackReques
 	// Get the response writer from the context
 	rw, err := middleware.ResponseWriterFromContext(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to get response writer from context")
-		slogctx.Error(ctx, "Failed to get response writer from context", "error", err)
+		serviceerr.RecordAndLogError(ctx, span, err, "error", err)
 		return s.callbackErrorResponse(ctx, errorURI, serviceerr.ErrUnknown), nil
 	}
 
 	if !csrf.Validate(req.Params.UnderscoreUnderscoreHostLoginCSRF, req.Params.State, s.csrfSecret) {
-		err := serviceerr.ErrInvalidLoginCSRFToken
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return s.callbackErrorResponse(ctx, errorURI, err), nil
+		svcerr := serviceerr.ErrInvalidLoginCSRFToken
+		serviceerr.RecordAndLogError(ctx, span, svcerr)
+		return s.callbackErrorResponse(ctx, errorURI, svcerr), nil
 	}
 
 	result, err := s.sManager.FinaliseOIDCLogin(ctx, req.Params.State, req.Params.Code)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to finalise OIDC login")
-		slogctx.Error(ctx, "Failed to finalise OIDC login", "error", err)
+		serviceerr.RecordAndLogError(ctx, span, err, "error", err)
 		return s.callbackFinaliseErrorResponse(ctx, errorURI, err), nil
 	}
 
 	// Session cookie
 	sessionCookie, err := s.sManager.MakeSessionCookie(ctx, result.TenantID, result.SessionID)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to create session cookie")
-		slogctx.Error(ctx, "Failed to create session cookie", "error", err)
+		serviceerr.RecordAndLogError(ctx, span, err, "error", err)
 		return s.callbackErrorResponse(ctx, result.ErrorURI, serviceerr.ErrUnknown), nil
 	}
 
 	// CSRF cookie
 	csrfCookie, err := s.sManager.MakeCSRFCookie(ctx, result.TenantID, result.CSRFToken)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to create CSRF cookie")
-		slogctx.Error(ctx, "Failed to create CSRF cookie", "error", err)
+		serviceerr.RecordAndLogError(ctx, span, err, "error", err)
 		return s.callbackErrorResponse(ctx, result.ErrorURI, serviceerr.ErrUnknown), nil
 	}
 
@@ -239,12 +227,12 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 	defer slogctx.Debug(ctx, "Logout() completed")
 
 	if !s.isAllowedRedirectBaseURL(request.Params.PostLogoutRedirectURI) {
-		err := fmt.Errorf("post logout redirect URI does not match an allowed redirect base URL: %s", request.Params.PostLogoutRedirectURI)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "post logout redirect URI does not match an allowed redirect base URL")
-		slogctx.Error(ctx, "Post logout redirect URI does not match an allowed redirect base URL", "postLogoutRedirectURI", request.Params.PostLogoutRedirectURI)
-
-		body, status := s.toErrorModel(err)
+		svcerr := &serviceerr.Error{
+			Err:         serviceerr.CodeInvalidRequest,
+			Description: "post logout redirect URI does not match an allowed redirect base URL",
+		}
+		serviceerr.RecordAndLogError(ctx, span, svcerr, "postLogoutRedirectURI", request.Params.PostLogoutRedirectURI)
+		body, status := s.toErrorModel(svcerr)
 		return openapi.LogoutdefaultJSONResponse{
 			Body:       body,
 			StatusCode: status,
@@ -253,10 +241,7 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 
 	rw, err := middleware.ResponseWriterFromContext(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to get response writer from context")
-		slogctx.Error(ctx, "Failed to get response writer from context", "error", err)
-
+		serviceerr.RecordAndLogError(ctx, span, err, "error", err)
 		body, status := s.toErrorModel(serviceerr.ErrUnknown)
 		return openapi.LogoutdefaultJSONResponse{
 			Body:       body,
@@ -266,10 +251,7 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 
 	cookies, err := http.ParseCookie(request.Params.Cookie)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to parse 'Cookie' header")
-		slogctx.Warn(ctx, "failed to parse 'Cookie' header", "error", err)
-
+		serviceerr.RecordAndLogError(ctx, span, err, "error", err)
 		body, status := newBadRequest("invalid 'Cookie' header")
 		return openapi.LogoutdefaultJSONResponse{
 			Body:       body,
@@ -311,8 +293,12 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 	}
 
 	if sessionCookieValue == "" {
-		body, status := newBadRequest("missing session id in the cookies")
-		slogctx.Warn(ctx, "missing session id in the cookies")
+		svcerr := &serviceerr.Error{
+			Err:         serviceerr.CodeInvalidRequest,
+			Description: "missing session id in the cookies",
+		}
+		serviceerr.RecordAndLogError(ctx, span, svcerr)
+		body, status := s.toErrorModel(svcerr)
 		return openapi.LogoutdefaultJSONResponse{
 			Body:       body,
 			StatusCode: status,
@@ -321,10 +307,7 @@ func (s *openAPIServer) Logout(ctx context.Context, request openapi.LogoutReques
 
 	logoutURL, err := s.sManager.Logout(ctx, sessionCookieValue, request.Params.PostLogoutRedirectURI)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to logout user")
-		slogctx.Error(ctx, "failed to logout user", "error", err)
-
+		serviceerr.RecordAndLogError(ctx, span, err, "error", err)
 		body, status := s.toErrorModel(err)
 		return openapi.LogoutdefaultJSONResponse{
 			Body:       body,
@@ -353,9 +336,7 @@ func (s *openAPIServer) Bclogout(ctx context.Context, request openapi.BclogoutRe
 	defer slogctx.Debug(ctx, "Bclogout() completed")
 
 	if err := s.sManager.BCLogout(ctx, request.Body.LogoutToken); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "back channel logout failed")
-		slogctx.Error(ctx, "back-channel logout failed", "error", err)
+		serviceerr.RecordAndLogError(ctx, span, err, "error", err)
 		body, _ := s.toErrorModel(err)
 		return openapi.Bclogout400JSONResponse(body), nil
 	}

@@ -483,7 +483,8 @@ func TestOpenAPIServer_Logout_NoResponseWriter(t *testing.T) {
 
 		logoutReq := openapi.LogoutRequestObject{
 			Params: openapi.LogoutParams{
-				Cookie: "session-id=123",
+				PostLogoutRedirectURI: postLogoutURL,
+				Cookie:                "session-id=123",
 			},
 		}
 
