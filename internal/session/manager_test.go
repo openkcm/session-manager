@@ -20,14 +20,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	oidcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/v1"
+	trustv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/v1"
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/credentials"
 	"github.com/openkcm/session-manager/internal/session"
 	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
-	"github.com/openkcm/session-manager/internal/trust"
-	"github.com/openkcm/session-manager/internal/trust/trustmock"
+	mocktrust "github.com/openkcm/session-manager/modules/oidctrust/mocks"
 )
 
 const (
@@ -49,52 +50,50 @@ func TestManager_Auth(t *testing.T) {
 	auditServer := StartAuditServer(t)
 	defer auditServer.Close()
 
-	oidcMapping := trust.OIDCMapping{
-		IssuerURL: oidcServer.URL,
-		Blocked:   false,
-		JWKSURI:   "http://jwks.example.com",
-		Audiences: []string{requestURI},
-		Properties: map[string]string{
-			"paramAuth1":  "paramAuth1",
-			"paramToken1": "paramToken1",
-		},
-	}
+	oidcTrust := trustv1.Trust_builder{
+		TenantId: new(tenantID),
+		Blocked:  new(false),
+		Oidc: oidcv1.OIDC_builder{
+			Issuer:    new(oidcServer.URL),
+			JwksUri:   new("http://jwks.example.com"),
+			Audiences: []string{requestURI},
+		}.Build(),
+	}.Build()
 
 	tests := []struct {
 		name       string
-		oidc       *trustmock.Repository
+		oidc       *mocktrust.Repository
 		sessions   *sessionmock.Repository
 		requestURI string
 		cfg        *config.SessionManager
 		tenantID   string
 		wantURL    string
 		errAssert  assert.ErrorAssertionFunc
-		mapping    trust.OIDCMapping
+		trust      *trustv1.Trust
 	}{
 		{
 			name:       "Success",
-			oidc:       trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, oidcMapping)),
+			oidc:       mocktrust.NewInMemRepository(mocktrust.WithTrust(oidcTrust)),
 			sessions:   sessionmock.NewInMemRepository(),
 			requestURI: requestURI,
 			cfg: &config.SessionManager{
-				SessionDuration:                    time.Hour,
-				CallbackURL:                        callbackURL,
-				AdditionalQueryParametersAuthorize: []string{"paramAuth1"},
-				AllowedRedirectBaseURLs:            []string{"http://localhost"},
+				SessionDuration:         time.Hour,
+				CallbackURL:             callbackURL,
+				AllowedRedirectBaseURLs: []string{"http://localhost"},
 				ClientAuth: config.ClientAuth{
 					ClientID: testClientID,
 				},
 				CSRFSecretParsed: []byte(testCSRFSecret),
 			},
 			tenantID:  tenantID,
-			wantURL:   oidcServer.URL + "/oauth2/authorize?client_id=my-client-id&code_challenge=someChallenge&code_challenge_method=S256&redirect_uri=" + callbackURL + "&response_type=code&scope=openid+profile+email+groups&state=someState&paramAuth1=paramAuth1",
+			wantURL:   oidcServer.URL + "/oauth2/authorize?client_id=my-client-id&code_challenge=someChallenge&code_challenge_method=S256&redirect_uri=" + callbackURL + "&response_type=code&scope=openid+profile+email+groups&state=someState",
 			errAssert: assert.NoError,
 		},
 		{
-			name: "Get trust mapping error",
-			oidc: trustmock.NewInMemRepository(
-				trustmock.WithTrust(tenantID, oidcMapping),
-				trustmock.WithGetError(errors.New("failed to get trust mapping")),
+			name: "Get trust error",
+			oidc: mocktrust.NewInMemRepository(
+				mocktrust.WithTrust(oidcTrust),
+				mocktrust.WithGetError(errors.New("failed to get trust")),
 			),
 			sessions:   sessionmock.NewInMemRepository(),
 			requestURI: requestURI,
@@ -109,7 +108,7 @@ func TestManager_Auth(t *testing.T) {
 		},
 		{
 			name:       "Save state error",
-			oidc:       trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, oidcMapping)),
+			oidc:       mocktrust.NewInMemRepository(mocktrust.WithTrust(oidcTrust)),
 			sessions:   sessionmock.NewInMemRepository(sessionmock.WithStoreStateError(errors.New("failed to save state"))),
 			requestURI: requestURI,
 			cfg: &config.SessionManager{
@@ -140,7 +139,7 @@ func TestManager_Auth(t *testing.T) {
 
 			m, err := session.NewManager(ctx,
 				tt.cfg,
-				tt.oidc,
+				newTrust(tt.oidc),
 				tt.sessions,
 				auditLogger,
 				session.WithAllowHttpScheme(true),
@@ -153,7 +152,7 @@ func TestManager_Auth(t *testing.T) {
 			}
 
 			// Validate that the data has been inserted into the repository
-			assert.Equal(t, oidcMapping, tt.oidc.TGet(tt.tenantID), "Trust mapping has not been inserted")
+			assert.Equal(t, oidcTrust, tt.oidc.TGet(tt.tenantID), "Trust has not been inserted")
 
 			// Check the returned URL
 			u, err := url.Parse(got)
@@ -217,7 +216,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 
 	tests := []struct {
 		name            string
-		oidc            *trustmock.Repository
+		oidc            *mocktrust.Repository
 		sessions        *sessionmock.Repository
 		stateID         string
 		code            string
@@ -230,16 +229,14 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 	}{
 		{
 			name:     "Success",
-			oidc:     trustmock.NewInMemRepository(),
+			oidc:     mocktrust.NewInMemRepository(),
 			sessions: sessionmock.NewInMemRepository(sessionmock.WithState(validState)),
 			stateID:  stateID,
 			code:     code,
 			cfg: &config.SessionManager{
-				SessionDuration:                time.Hour,
-				CallbackURL:                    callbackURL,
-				AdditionalQueryParametersToken: []string{"queryParamToken1"},
-				AdditionalAuthContextKeys:      []string{"authContextKey1"},
-				CSRFSecretParsed:               []byte(testCSRFSecret),
+				SessionDuration:  time.Hour,
+				CallbackURL:      callbackURL,
+				CSRFSecretParsed: []byte(testCSRFSecret),
 			},
 			wantSessionID:   true,
 			wantCSRFToken:   true,
@@ -248,7 +245,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 		},
 		{
 			name:     "State load error",
-			oidc:     trustmock.NewInMemRepository(),
+			oidc:     mocktrust.NewInMemRepository(),
 			sessions: sessionmock.NewInMemRepository(sessionmock.WithLoadStateError(errors.New("state not found"))),
 			stateID:  stateID,
 			code:     code,
@@ -263,7 +260,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 		},
 		{
 			name:     "State expired",
-			oidc:     trustmock.NewInMemRepository(),
+			oidc:     mocktrust.NewInMemRepository(),
 			sessions: sessionmock.NewInMemRepository(sessionmock.WithState(expiredState)),
 			stateID:  stateID,
 			code:     code,
@@ -276,8 +273,8 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			errAssert:       assert.Error,
 		},
 		{
-			name:     "Trust mapping get error",
-			oidc:     trustmock.NewInMemRepository(trustmock.WithGetError(errors.New("trust mapping not found"))),
+			name:     "Trust get error",
+			oidc:     mocktrust.NewInMemRepository(mocktrust.WithGetError(errors.New("trust not found"))),
 			sessions: sessionmock.NewInMemRepository(sessionmock.WithState(validState)),
 			stateID:  stateID,
 			code:     code,
@@ -291,7 +288,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 		},
 		{
 			name:     "Token exchange error",
-			oidc:     trustmock.NewInMemRepository(),
+			oidc:     mocktrust.NewInMemRepository(),
 			sessions: sessionmock.NewInMemRepository(sessionmock.WithState(validState)),
 			stateID:  stateID,
 			code:     code,
@@ -321,22 +318,21 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			jwksURI, err := url.JoinPath(oidcServer.URL, "/.well-known/jwks.json")
 			require.NoError(t, err)
 
-			localOIDCMapping := trust.OIDCMapping{
-				IssuerURL: oidcServer.URL,
-				Blocked:   false,
-				JWKSURI:   jwksURI,
-				Audiences: []string{requestURI},
-				Properties: map[string]string{
-					"queryParamToken1": "queryParamToken1",
-					"authContextKey1":  "authContextValue1",
-				},
-			}
+			localOIDCTrust := trustv1.Trust_builder{
+				TenantId: new(tenantID),
+				Blocked:  new(false),
+				Oidc: oidcv1.OIDC_builder{
+					Issuer:    new(oidcServer.URL),
+					JwksUri:   new(jwksURI),
+					Audiences: []string{requestURI},
+				}.Build(),
+			}.Build()
 
-			tt.oidc.TAdd(tenantID, localOIDCMapping)
+			tt.oidc.TAdd(localOIDCTrust)
 
 			m, err := session.NewManager(ctx,
 				tt.cfg,
-				tt.oidc,
+				newTrust(tt.oidc),
 				tt.sessions,
 				auditLogger,
 				session.WithAllowHttpScheme(true),
@@ -428,7 +424,7 @@ func TestManager_BCLogout(t *testing.T) {
 		name      string
 		cfg       *config.SessionManager
 		jwt       string
-		setupMock func(*trustmock.Repository, *sessionmock.Repository)
+		setupMock func(*mocktrust.Repository, *sessionmock.Repository)
 		errAssert assert.ErrorAssertionFunc
 	}{
 		{
@@ -442,10 +438,13 @@ func TestManager_BCLogout(t *testing.T) {
 				Events:    map[string]struct{}{"http://schemas.openid.net/event/backchannel-logout": {}},
 				SessionID: "sid-1",
 			}),
-			setupMock: func(oidcs *trustmock.Repository, sessions *sessionmock.Repository) {
-				_ = oidcs.Create(context.Background(), "tid-1", trust.OIDCMapping{
-					IssuerURL: jwksSrv.URL,
-				})
+			setupMock: func(oidcs *mocktrust.Repository, sessions *sessionmock.Repository) {
+				_ = oidcs.Create(context.Background(), trustv1.Trust_builder{
+					TenantId: new("tid-1"),
+					Oidc: oidcv1.OIDC_builder{
+						Issuer: new(jwksSrv.URL),
+					}.Build(),
+				}.Build())
 				_ = sessions.StoreSession(context.Background(), session.Session{ID: "sid-1", TenantID: "tid-1"})
 			},
 			errAssert: assert.NoError,
@@ -463,7 +462,8 @@ func TestManager_BCLogout(t *testing.T) {
 			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
 			require.NoError(t, err)
 
-			oidcMock := trustmock.NewInMemRepository()
+			oidcMock := mocktrust.NewInMemRepository()
+			trust := newTrust(oidcMock)
 			sessionMock := sessionmock.NewInMemRepository()
 
 			rt := localRoundTripper{
@@ -486,7 +486,7 @@ func TestManager_BCLogout(t *testing.T) {
 
 			m, err := session.NewManager(ctx,
 				tt.cfg,
-				oidcMock,
+				trust,
 				sessionMock,
 				auditLogger,
 				session.WithTransportCredentials(newTCBuilder(rt)),
@@ -511,13 +511,13 @@ func TestManager_LogoutEdgeCases(t *testing.T) {
 	tests := []struct {
 		name      string
 		sessionID string
-		setupMock func(*trustmock.Repository, *sessionmock.Repository)
+		setupMock func(*mocktrust.Repository, *sessionmock.Repository)
 		errAssert assert.ErrorAssertionFunc
 	}{
 		{
 			name:      "Session not found",
 			sessionID: "non-existent",
-			setupMock: func(oidcs *trustmock.Repository, sessions *sessionmock.Repository) {
+			setupMock: func(oidcs *mocktrust.Repository, sessions *sessionmock.Repository) {
 				_ = sessions.StoreSession(context.Background(), session.Session{
 					ID:       sessionID,
 					TenantID: tenantID,
@@ -526,9 +526,9 @@ func TestManager_LogoutEdgeCases(t *testing.T) {
 			errAssert: assert.Error,
 		},
 		{
-			name:      "Trust mapping not found",
+			name:      "Trust not found",
 			sessionID: sessionID,
-			setupMock: func(oidcs *trustmock.Repository, sessions *sessionmock.Repository) {
+			setupMock: func(oidcs *mocktrust.Repository, sessions *sessionmock.Repository) {
 				_ = sessions.StoreSession(context.Background(), session.Session{
 					ID:       sessionID,
 					TenantID: tenantID,
@@ -548,7 +548,8 @@ func TestManager_LogoutEdgeCases(t *testing.T) {
 			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
 			require.NoError(t, err)
 
-			oidcMock := trustmock.NewInMemRepository()
+			oidcMock := mocktrust.NewInMemRepository()
+			trust := newTrust(oidcMock)
 			sessionMock := sessionmock.NewInMemRepository()
 
 			tt.setupMock(oidcMock, sessionMock)
@@ -560,7 +561,7 @@ func TestManager_LogoutEdgeCases(t *testing.T) {
 				},
 			}
 
-			m, err := session.NewManager(ctx, cfg, oidcMock, sessionMock, auditLogger)
+			m, err := session.NewManager(ctx, cfg, trust, sessionMock, auditLogger)
 			require.NoError(t, err)
 
 			_, err = m.Logout(ctx, tt.sessionID, postLogoutURL)
@@ -608,13 +609,13 @@ func TestManager_BCLogout_ErrorCases(t *testing.T) {
 	tests := []struct {
 		name      string
 		jwt       string
-		setupMock func(*trustmock.Repository, *sessionmock.Repository)
+		setupMock func(*mocktrust.Repository, *sessionmock.Repository)
 		errAssert assert.ErrorAssertionFunc
 	}{
 		{
 			name: "Invalid JWT",
 			jwt:  "invalid.jwt.token",
-			setupMock: func(oidcs *trustmock.Repository, sessions *sessionmock.Repository) {
+			setupMock: func(oidcs *mocktrust.Repository, sessions *sessionmock.Repository) {
 			},
 			errAssert: assert.Error,
 		},
@@ -627,7 +628,7 @@ func TestManager_BCLogout_ErrorCases(t *testing.T) {
 				Events:    map[string]struct{}{"http://invalid-event": {}},
 				SessionID: "sid-1",
 			}),
-			setupMock: func(oidcs *trustmock.Repository, sessions *sessionmock.Repository) {
+			setupMock: func(oidcs *mocktrust.Repository, sessions *sessionmock.Repository) {
 			},
 			errAssert: assert.Error,
 		},
@@ -638,7 +639,7 @@ func TestManager_BCLogout_ErrorCases(t *testing.T) {
 			}{
 				Events: map[string]struct{}{"http://schemas.openid.net/event/backchannel-logout": {}},
 			}),
-			setupMock: func(oidcs *trustmock.Repository, sessions *sessionmock.Repository) {
+			setupMock: func(oidcs *mocktrust.Repository, sessions *sessionmock.Repository) {
 			},
 			errAssert: assert.Error,
 		},
@@ -651,7 +652,7 @@ func TestManager_BCLogout_ErrorCases(t *testing.T) {
 				Events:    map[string]struct{}{"http://schemas.openid.net/event/backchannel-logout": {}},
 				SessionID: "non-existent-session",
 			}),
-			setupMock: func(oidcs *trustmock.Repository, sessions *sessionmock.Repository) {
+			setupMock: func(oidcs *mocktrust.Repository, sessions *sessionmock.Repository) {
 			},
 			errAssert: assert.NoError,
 		},
@@ -667,7 +668,8 @@ func TestManager_BCLogout_ErrorCases(t *testing.T) {
 			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
 			require.NoError(t, err)
 
-			oidcMock := trustmock.NewInMemRepository()
+			oidcMock := mocktrust.NewInMemRepository()
+			trust := newTrust(oidcMock)
 			sessionMock := sessionmock.NewInMemRepository()
 
 			rt := localRoundTripper{
@@ -686,7 +688,7 @@ func TestManager_BCLogout_ErrorCases(t *testing.T) {
 				CSRFSecretParsed: []byte(testCSRFSecret),
 			}
 
-			m, err := session.NewManager(ctx, cfg, oidcMock, sessionMock, auditLogger, session.WithTransportCredentials(newTCBuilder(rt)))
+			m, err := session.NewManager(ctx, cfg, trust, sessionMock, auditLogger, session.WithTransportCredentials(newTCBuilder(rt)))
 			require.NoError(t, err)
 
 			err = m.BCLogout(ctx, tt.jwt)
@@ -708,7 +710,9 @@ func TestManager_NewManager_Error(t *testing.T) {
 		CSRFSecretParsed: []byte(testCSRFSecret),
 	}
 
-	m, err := session.NewManager(ctx, cfg, trustmock.NewInMemRepository(), sessionmock.NewInMemRepository(), auditLogger)
+	trust := newTrust(mocktrust.NewInMemRepository())
+
+	m, err := session.NewManager(ctx, cfg, trust, sessionmock.NewInMemRepository(), auditLogger)
 	assert.Error(t, err)
 	assert.Nil(t, m)
 	assert.Contains(t, err.Error(), "parsing callback URL")
@@ -829,7 +833,7 @@ func newTestManager(t *testing.T, allowedRedirectBaseURLs []string) *session.Man
 			CSRFSecretParsed:        []byte(testCSRFSecret),
 			AllowedRedirectBaseURLs: allowedRedirectBaseURLs,
 		},
-		trustmock.NewInMemRepository(),
+		newTrust(mocktrust.NewInMemRepository()),
 		sessionmock.NewInMemRepository(),
 		auditLogger,
 	)

@@ -17,7 +17,7 @@ import (
 
 	slogctx "github.com/veqryn/slog-context"
 
-	migrations "github.com/openkcm/session-manager/sql"
+	"github.com/openkcm/session-manager/modules/oidctrust/migrations"
 )
 
 const (
@@ -112,9 +112,9 @@ func prepareDB(ctx context.Context, dbPool *pgxpool.Pool, port network.Port) {
 	migrateDB(ctx, port)
 
 	b := new(pgx.Batch)
-	b.Queue(`INSERT INTO trust (tenant_id, blocked, issuer, jwks_uri, audiences, properties) VALUES ('tenant1-id', false, 'url-one', '', '{}', '{}');`)
-	b.Queue(`INSERT INTO trust (tenant_id, blocked, issuer, jwks_uri, audiences, properties) VALUES ('tenant2-id', false, 'url-two', '', '{}', '{}');`)
-	b.Queue(`INSERT INTO trust (tenant_id, blocked, issuer, jwks_uri, audiences, properties) VALUES ('tenant3-id', false, 'url-three', '', '{}', '{}');`)
+	b.Queue(`INSERT INTO trust (tenant_id, blocked, issuer, jwks_uri, audiences) VALUES ('tenant1-id', false, 'url-one', '', '{}');`)
+	b.Queue(`INSERT INTO trust (tenant_id, blocked, issuer, jwks_uri, audiences) VALUES ('tenant2-id', false, 'url-two', '', '{}');`)
+	b.Queue(`INSERT INTO trust (tenant_id, blocked, issuer, jwks_uri, audiences) VALUES ('tenant3-id', false, 'url-three', '', '{}');`)
 
 	res := dbPool.SendBatch(ctx, b)
 	err := res.Close()

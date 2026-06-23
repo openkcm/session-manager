@@ -4,8 +4,11 @@ package integration_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -14,33 +17,76 @@ import (
 	"github.com/stretchr/testify/require"
 
 	sessionv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/session/v1"
-	slogctx "github.com/veqryn/slog-context"
-	stdgrpc "google.golang.org/grpc"
 
-	"github.com/openkcm/session-manager/internal/dbtest/postgrestest"
-	"github.com/openkcm/session-manager/internal/dbtest/valkeytest"
-	"github.com/openkcm/session-manager/internal/grpc"
 	"github.com/openkcm/session-manager/internal/session"
 	sessionvalkey "github.com/openkcm/session-manager/internal/session/valkey"
-	"github.com/openkcm/session-manager/internal/trust/trustsql"
 )
 
 func TestSessionGRPC(t *testing.T) {
+	const cmdName = "api-server"
+	const port = 9092
+
 	// given
 	ctx := t.Context()
-	port := 9092
 
-	// create grpc server with session support
-	srv, sessionRepo, terminateFn, err := startSessionServer(t, port)
-	require.NoError(t, err)
-	defer srv.Stop()
-	defer terminateFn(ctx)
+	istat := initInfra(t)
+	defer istat.Close(ctx)
+
+	istat.Cfg.GRPC.Address = fmt.Sprintf(":%d", port)
+
+	istat.PreparePostgres(t)
+	valkeyClient := istat.PrepareValKey(t)
+	istat.PrepareConfig(t)
+
+	sessionRepo := sessionvalkey.NewRepository(valkeyClient, "session")
+
+	currdir, err := os.Getwd()
+	require.NoError(t, err, "failed to get wd")
+
+	t.Chdir(istat.Procdir)
+
+	commandCtx, cancelCommand := context.WithCancel(ctx)
+	defer cancelCommand()
+
+	cmd := exec.CommandContext(commandCtx, filepath.Join(currdir, "./session-manager"), cmdName)
+	cmd.WaitDelay = 5 * time.Second
+	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+
+	cmdOutPath := filepath.Join(currdir, "session-grpc.log")
+	cmdOut, err := os.Create(cmdOutPath)
+	if err != nil {
+		t.Fatalf("failed to create an log file")
+	}
+	defer cmdOut.Close()
+
+	cmd.Stdout = cmdOut
+	cmd.Stderr = cmdOut
+
+	t.Logf("starting an app process. Logs will be saved into %s", cmdOutPath)
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start the server: %s", err)
+	}
+
+	errCh := make(chan error)
+	go func() {
+		if err := cmd.Wait(); err != nil && !errors.Is(err, context.Canceled) {
+			errCh <- fmt.Errorf("executing command: %w", err)
+		}
+		close(errCh)
+	}()
 
 	// grpc client connection
-	conn, err := createClientConn(t, port)
+	cc, err := createClientConn(t, port)
 	require.NoError(t, err)
-	defer conn.Close()
-	sessionClient := sessionv1.NewServiceClient(conn)
+	defer cc.Close()
+
+	waitCtx, cancelWait := context.WithTimeout(commandCtx, 10*time.Second)
+	defer cancelWait()
+	if err := waitGRPCServerReady(waitCtx, cc); err != nil {
+		t.Fatalf("waiting for the server readiness: %s", err)
+	}
+
+	sessionClient := sessionv1.NewServiceClient(cc)
 
 	t.Run("GetSession - session not found", func(t *testing.T) {
 		resp, err := sessionClient.GetSession(ctx, &sessionv1.GetSessionRequest{
@@ -102,7 +148,7 @@ func TestSessionGRPC(t *testing.T) {
 		err = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 		require.NoError(t, err)
 
-		// Note: This test will fail validation because there's no trust mapping configured
+		// Note: This test will fail validation because there's no trust configured
 		// but it tests the session retrieval path
 		resp, err := sessionClient.GetSession(ctx, &sessionv1.GetSessionRequest{
 			SessionId: sess.ID,
@@ -110,7 +156,7 @@ func TestSessionGRPC(t *testing.T) {
 		})
 		assert.NoError(t, err)
 		assert.NotNil(t, resp)
-		// Will be false because trust mapping is not configured, but tests the flow
+		// Will be false because trust is not configured, but tests the flow
 		assert.False(t, resp.GetValid())
 	})
 
@@ -137,44 +183,4 @@ func TestSessionGRPC(t *testing.T) {
 		assert.NotNil(t, resp)
 		assert.False(t, resp.GetValid())
 	})
-}
-
-func startSessionServer(t *testing.T, port int) (*stdgrpc.Server, session.Repository, func(context.Context), error) {
-	t.Helper()
-	ctx := t.Context()
-
-	// start postgres
-	db, _, terminatePG := postgrestest.Start(ctx)
-
-	// start valkey
-	valkeyClient, _, terminateValkey := valkeytest.Start(ctx)
-
-	terminateFn := func(ctx context.Context) {
-		terminatePG(ctx)
-		terminateValkey(ctx)
-		db.Close()
-		valkeyClient.Close()
-	}
-
-	trustRepo := trustsql.NewRepository(db)
-	sessionRepo := sessionvalkey.NewRepository(valkeyClient, "session")
-
-	lstConf := net.ListenConfig{}
-	lis, err := lstConf.Listen(ctx, "tcp", fmt.Sprintf("localhost:%d", port))
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	srv := stdgrpc.NewServer()
-	sessionv1.RegisterServiceServer(srv, grpc.NewSessionServer(ctx, sessionRepo, trustRepo, 90*time.Minute, ""))
-
-	// start
-	go func() {
-		err = srv.Serve(lis)
-		if err != nil {
-			slogctx.Error(ctx, "error while starting session server", "error", err)
-		}
-	}()
-
-	return srv, sessionRepo, terminateFn, nil
 }

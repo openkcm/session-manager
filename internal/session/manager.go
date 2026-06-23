@@ -21,16 +21,19 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/openkcm/common-sdk/pkg/csrf"
 	"github.com/openkcm/common-sdk/pkg/oidc"
+	"google.golang.org/protobuf/proto"
 
+	flowv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/flow/v1"
+	oidcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/v1"
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 	slogctx "github.com/veqryn/slog-context"
 
+	sessionmanager "github.com/openkcm/session-manager"
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/credentials"
 	"github.com/openkcm/session-manager/internal/debugtools"
 	"github.com/openkcm/session-manager/internal/pkce"
-	"github.com/openkcm/session-manager/internal/serviceerr"
-	"github.com/openkcm/session-manager/internal/trust"
+	"github.com/openkcm/session-manager/pkg/serviceerr"
 )
 
 const defaultWKOCCacheExpiration = 30 * time.Minute
@@ -42,20 +45,16 @@ const (
 )
 
 type Manager struct {
-	trustRepo trust.OIDCMappingRepository
-	sessions  Repository
-	pkce      pkce.Source
-	audit     *otlpaudit.AuditLogger
-	newCreds  credentials.Builder
+	trust    sessionmanager.Trust
+	sessions Repository
+	pkce     pkce.Source
+	audit    *otlpaudit.AuditLogger
+	newCreds credentials.Builder
 
-	sessionDuration       time.Duration
-	idleSessionTimeout    time.Duration
-	callbackURL           *url.URL
-	clientID              string
-	queryParametersAuth   []string
-	queryParametersToken  []string
-	authContextKeys       []string
-	queryParametersLogout []string
+	sessionDuration    time.Duration
+	idleSessionTimeout time.Duration
+	callbackURL        *url.URL
+	clientID           string
 
 	sessionCookieTemplate   config.CookieTemplate
 	csrfCookieTemplate      config.CookieTemplate
@@ -73,7 +72,7 @@ type Manager struct {
 func NewManager(
 	ctx context.Context,
 	cfg *config.SessionManager,
-	trustRepo trust.OIDCMappingRepository,
+	trust sessionmanager.Trust,
 	sessionsRepo Repository,
 	auditLogger *otlpaudit.AuditLogger,
 	opts ...ManagerOption,
@@ -84,15 +83,11 @@ func NewManager(
 	}
 
 	m := &Manager{
-		trustRepo:               trustRepo,
+		trust:                   trust,
 		sessions:                sessionsRepo,
 		audit:                   auditLogger,
 		sessionDuration:         cfg.SessionDuration,
 		idleSessionTimeout:      cfg.IdleSessionTimeout,
-		queryParametersAuth:     cfg.AdditionalQueryParametersAuthorize,
-		queryParametersToken:    cfg.AdditionalQueryParametersToken,
-		authContextKeys:         cfg.AdditionalAuthContextKeys,
-		queryParametersLogout:   cfg.AdditionalQueryParametersLogout,
 		sessionCookieTemplate:   cfg.SessionCookieTemplate,
 		csrfCookieTemplate:      cfg.CSRFCookieTemplate,
 		loginCSRFCookieTemplate: cfg.LoginCSRFCookieTemplate,
@@ -121,12 +116,14 @@ func NewManager(
 
 // MakeAuthURI returns an OIDC authentication URI.
 func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, requestURI, errorURI string) (string, string, error) {
-	mapping, err := m.trustRepo.Get(ctx, tenantID)
+	trust, err := m.trust.Get(ctx, tenantID)
 	if err != nil {
-		return "", "", fmt.Errorf("getting trust mapping: %w", err)
+		return "", "", fmt.Errorf("getting trust: %w", err)
 	}
 
-	openidConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL)
+	oidc := trust.GetOidc()
+
+	openidConf, err := m.getOpenIDConfig(ctx, oidc.GetIssuer())
 	if err != nil {
 		return "", "", fmt.Errorf("getting an openid config: %w", err)
 	}
@@ -154,7 +151,7 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, requestURI, errorUR
 		return "", "", fmt.Errorf("storing session: %w", err)
 	}
 
-	u, err := m.authURI(openidConf, state, pkce, mapping)
+	u, err := m.authURI(openidConf, state, pkce, oidc)
 	if err != nil {
 		return "", "", fmt.Errorf("generating auth uri: %w", err)
 	}
@@ -166,7 +163,7 @@ func (m *Manager) LoadState(ctx context.Context, stateID string) (State, error) 
 	return m.sessions.LoadState(ctx, stateID)
 }
 
-func (m *Manager) authURI(openidConf *oidc.Configuration, state State, pkce pkce.PKCE, mapping trust.OIDCMapping) (string, error) {
+func (m *Manager) authURI(openidConf *oidc.Configuration, state State, pkce pkce.PKCE, oidc *oidcv1.OIDC) (string, error) {
 	u, err := url.Parse(openidConf.AuthorizationEndpoint)
 	if err != nil {
 		return "", fmt.Errorf("parsing authorisation endpoint url: %w", err)
@@ -175,16 +172,15 @@ func (m *Manager) authURI(openidConf *oidc.Configuration, state State, pkce pkce
 	q := u.Query()
 	q.Set("scope", "openid profile email groups")
 	q.Set("response_type", "code")
-	q.Set("client_id", m.getClientID(mapping))
+	q.Set("client_id", m.getClientID(oidc))
 	q.Set("state", state.ID)
 	q.Set("code_challenge", pkce.Challenge)
 	q.Set("code_challenge_method", pkce.Method)
 	q.Set("redirect_uri", m.callbackURL.String())
-	for _, parameter := range m.queryParametersAuth {
-		value, ok := mapping.Properties[parameter]
-		if ok {
-			q.Set(parameter, value)
-		}
+
+	//nolint:forcetypeassert
+	for _, param := range proto.GetExtension(oidc, flowv1.E_AuthAttributes).([]*flowv1.Attribute) {
+		q.Set(param.GetKey(), param.GetValue())
 	}
 
 	u.RawQuery = q.Encode()
@@ -233,19 +229,21 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (
 		return OIDCSessionData{}, serviceerr.ErrStateExpired
 	}
 
-	mapping, err := m.trustRepo.Get(ctx, state.TenantID)
+	trust, err := m.trust.Get(ctx, state.TenantID)
 	if err != nil {
-		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get trust mapping")
-		return OIDCSessionData{}, fmt.Errorf("getting trust mapping: %w", err)
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get trust")
+		return OIDCSessionData{}, fmt.Errorf("getting trust: %w", err)
 	}
 
-	openidConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL)
+	oidc := trust.GetOidc()
+
+	openidConf, err := m.getOpenIDConfig(ctx, oidc.GetIssuer())
 	if err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get openid configuration")
 		return OIDCSessionData{}, fmt.Errorf("getting openid configuration: %w", err)
 	}
 
-	tokens, err := m.exchangeCode(ctx, openidConf, code, state.PKCEVerifier, mapping)
+	tokens, err := m.exchangeCode(ctx, openidConf, code, state.PKCEVerifier, oidc)
 	if err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to exchange code for tokens")
 		return OIDCSessionData{}, fmt.Errorf("exchanging code for tokens: %w", err)
@@ -255,11 +253,80 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (
 
 	sessionID := m.pkce.SessionID()
 	csrfToken := csrf.NewToken(sessionID, m.csrfSecret)
-
-	session, err := m.buildSessionFromTokens(ctx, openidConf, tokens, mapping, sessionID, csrfToken, state.TenantID)
+	algs := make([]jose.SignatureAlgorithm, 0, len(openidConf.IDTokenSigningAlgValuesSupported))
+	for _, alg := range openidConf.IDTokenSigningAlgValuesSupported {
+		algs = append(algs, jose.SignatureAlgorithm(alg))
+	}
+	token, err := jwt.ParseSigned(tokens.IDToken, algs)
 	if err != nil {
-		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, err.Error())
-		return OIDCSessionData{}, err
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to parse id token")
+		return OIDCSessionData{}, fmt.Errorf("parsing id token: %w, %s", err, algs)
+	}
+
+	keyset, err := m.getProviderKeySet(ctx, openidConf)
+	if err != nil {
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get jwks for provider")
+		return OIDCSessionData{}, fmt.Errorf("getting jwks for a provider: %w", err)
+	}
+
+	type CustomClaims struct {
+		SID        string   `json:"sid"`
+		UserUUID   string   `json:"user_uuid"`
+		GivenName  string   `json:"given_name"`
+		FamilyName string   `json:"family_name"`
+		Email      string   `json:"email"`
+		Groups     []string `json:"groups"`
+	}
+
+	type ExtraClaims struct {
+		AtHash string `json:"at_hash,omitempty"`
+	}
+
+	var standardClaims jwt.Claims
+	var customClaims CustomClaims
+	var extraClaims ExtraClaims
+	err = token.Claims(keyset, &standardClaims, &customClaims, &extraClaims)
+	if err != nil {
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get JWT claims")
+		return OIDCSessionData{}, fmt.Errorf("getting JWT claims: %w", err)
+	}
+
+	if extraClaims.AtHash != "" {
+		err := m.verifyAccessToken(tokens.AccessToken, extraClaims.AtHash, token)
+		if err != nil {
+			return OIDCSessionData{}, err
+		}
+	}
+
+	// prepare the auth context used by ExtAuthZ
+	authContext := map[string]string{
+		"issuer":    oidc.GetIssuer(),
+		"client_id": m.getClientID(oidc),
+	}
+
+	//nolint:forcetypeassert
+	for _, param := range proto.GetExtension(oidc, flowv1.E_AuthContext).([]*flowv1.Attribute) {
+		authContext[param.GetKey()] = param.GetValue()
+	}
+
+	session := Session{
+		ID:         sessionID,
+		TenantID:   state.TenantID,
+		ProviderID: customClaims.SID,
+		CSRFToken:  csrfToken,
+		Issuer:     oidc.GetIssuer(),
+		Claims: Claims{
+			Subject:    standardClaims.Subject,
+			UserUUID:   customClaims.UserUUID,
+			GivenName:  customClaims.GivenName,
+			FamilyName: customClaims.FamilyName,
+			Email:      customClaims.Email,
+			Groups:     customClaims.Groups,
+		},
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
+		Expiry:       time.Now().Add(m.sessionDuration),
+		AuthContext:  authContext,
 	}
 
 	err = m.sessions.StoreSession(ctx, session)
@@ -300,86 +367,6 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (
 	}, nil
 }
 
-// buildSessionFromTokens parses the ID token, verifies claims, and constructs a Session object.
-func (m *Manager) buildSessionFromTokens(ctx context.Context, openidConf *oidc.Configuration, tokens tokenResponse, mapping trust.OIDCMapping, sessionID, csrfToken, tenantID string) (Session, error) {
-	algs := make([]jose.SignatureAlgorithm, 0, len(openidConf.IDTokenSigningAlgValuesSupported))
-	for _, alg := range openidConf.IDTokenSigningAlgValuesSupported {
-		algs = append(algs, jose.SignatureAlgorithm(alg))
-	}
-	token, err := jwt.ParseSigned(tokens.IDToken, algs)
-	if err != nil {
-		return Session{}, fmt.Errorf("parsing id token: %w, %s", err, algs)
-	}
-
-	keyset, err := m.getProviderKeySet(ctx, openidConf)
-	if err != nil {
-		return Session{}, fmt.Errorf("getting jwks for a provider: %w", err)
-	}
-
-	type customClaims struct {
-		SID        string   `json:"sid"`
-		UserUUID   string   `json:"user_uuid"`
-		GivenName  string   `json:"given_name"`
-		FamilyName string   `json:"family_name"`
-		Email      string   `json:"email"`
-		Groups     []string `json:"groups"`
-	}
-
-	type extraClaims struct {
-		AtHash string `json:"at_hash,omitempty"`
-	}
-
-	var standardClaims jwt.Claims
-	var custom customClaims
-	var extra extraClaims
-	if err = token.Claims(keyset, &standardClaims, &custom, &extra); err != nil {
-		return Session{}, fmt.Errorf("getting JWT claims: %w", err)
-	}
-
-	if extra.AtHash != "" {
-		if err := m.verifyAccessToken(tokens.AccessToken, extra.AtHash, token); err != nil {
-			return Session{}, err
-		}
-	}
-
-	authContext := m.buildAuthContext(mapping)
-
-	return Session{
-		ID:         sessionID,
-		TenantID:   tenantID,
-		ProviderID: custom.SID,
-		CSRFToken:  csrfToken,
-		Issuer:     mapping.IssuerURL,
-		Claims: Claims{
-			Subject:    standardClaims.Subject,
-			UserUUID:   custom.UserUUID,
-			GivenName:  custom.GivenName,
-			FamilyName: custom.FamilyName,
-			Email:      custom.Email,
-			Groups:     custom.Groups,
-		},
-		AccessToken:  tokens.AccessToken,
-		RefreshToken: tokens.RefreshToken,
-		Expiry:       time.Now().Add(m.sessionDuration),
-		AuthContext:  authContext,
-	}, nil
-}
-
-// buildAuthContext prepares the authentication context map used by ExtAuthZ.
-func (m *Manager) buildAuthContext(mapping trust.OIDCMapping) map[string]string {
-	authContext := map[string]string{
-		"issuer":    mapping.IssuerURL,
-		"client_id": m.getClientID(mapping),
-	}
-	for _, parameter := range m.authContextKeys {
-		value, ok := mapping.Properties[parameter]
-		if ok {
-			authContext[parameter] = value
-		}
-	}
-	return authContext
-}
-
 func (m *Manager) Logout(ctx context.Context, sessionID, postLogoutRedirectURL string) (string, error) {
 	session, err := m.sessions.LoadSession(ctx, sessionID)
 	if err != nil {
@@ -389,15 +376,16 @@ func (m *Manager) Logout(ctx context.Context, sessionID, postLogoutRedirectURL s
 
 	ctx = slogctx.With(ctx, "tenantId", session.TenantID)
 
-	mapping, err := m.trustRepo.Get(ctx, session.TenantID)
+	trust, err := m.trust.Get(ctx, session.TenantID)
 	if err != nil {
-		slogctx.Error(ctx, "failed to get trust mapping for a tenant", "error", err)
-		return "", fmt.Errorf("getting trust mapping: %w", err)
+		slogctx.Error(ctx, "failed to get trust for a tenant", "error", err)
+		return "", fmt.Errorf("getting trust: %w", err)
 	}
 
-	ctx = slogctx.With(ctx, "issuerUrl", mapping.IssuerURL)
+	oidc := trust.GetOidc()
+	ctx = slogctx.With(ctx, "issuer", oidc.GetIssuer())
 
-	oidcConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL)
+	oidcConf, err := m.getOpenIDConfig(ctx, oidc.GetIssuer())
 	if err != nil {
 		slogctx.Warn(ctx, "failed to get oidc configuration", "error", err)
 		return "", fmt.Errorf("getting oidc configuration: %w", err)
@@ -420,14 +408,12 @@ func (m *Manager) Logout(ctx context.Context, sessionID, postLogoutRedirectURL s
 	}
 
 	vals := make(url.Values, 2)
-	vals.Set("client_id", m.getClientID(mapping))
+	vals.Set("client_id", m.getClientID(oidc))
 	vals.Set("post_logout_redirect_uri", postLogoutRedirectURL)
 
-	for _, parameter := range m.queryParametersLogout {
-		value, ok := mapping.Properties[parameter]
-		if ok {
-			vals.Set(parameter, value)
-		}
+	//nolint:forcetypeassert
+	for _, param := range proto.GetExtension(oidc, flowv1.E_LogoutAttributes).([]*flowv1.Attribute) {
+		vals.Set(param.GetKey(), param.GetValue())
 	}
 
 	redirectURL.RawQuery = vals.Encode()
@@ -486,12 +472,14 @@ func (m *Manager) BCLogout(ctx context.Context, logoutJWT string) error {
 		return nil
 	}
 
-	mapping, err := m.trustRepo.Get(ctx, session.TenantID)
+	trust, err := m.trust.Get(ctx, session.TenantID)
 	if err != nil {
-		return fmt.Errorf("getting trust mapping: %w", err)
+		return fmt.Errorf("getting trust: %w", err)
 	}
 
-	oidcConf, err := m.getOpenIDConfig(ctx, mapping.IssuerURL)
+	oidc := trust.GetOidc()
+
+	oidcConf, err := m.getOpenIDConfig(ctx, oidc.GetIssuer())
 	if err != nil {
 		return fmt.Errorf("getting oidc config: %w", err)
 	}
@@ -656,8 +644,8 @@ func parseURLs(raw []string) []*url.URL {
 	return parsed
 }
 
-func (m *Manager) httpClient(mapping trust.OIDCMapping) *http.Client {
-	creds := m.newCreds(m.getClientID(mapping))
+func (m *Manager) httpClient(oidc *oidcv1.OIDC) *http.Client {
+	creds := m.newCreds(m.getClientID(oidc))
 	transport := creds.Transport()
 	if debugSettingSMDumpTransport.Value() == "1" {
 		transport = debugtools.NewTransport(transport)
@@ -668,25 +656,23 @@ func (m *Manager) httpClient(mapping trust.OIDCMapping) *http.Client {
 	}
 }
 
-func (m *Manager) getClientID(mapping trust.OIDCMapping) string {
-	if mapping.ClientID != "" {
-		return mapping.ClientID
+func (m *Manager) getClientID(oidc *oidcv1.OIDC) string {
+	if clientID := oidc.GetClientId(); clientID != "" {
+		return clientID
 	}
 
 	return m.clientID
 }
 
-func (m *Manager) exchangeCode(ctx context.Context, openidConf *oidc.Configuration, code, codeVerifier string, mapping trust.OIDCMapping) (tokenResponse, error) {
+func (m *Manager) exchangeCode(ctx context.Context, openidConf *oidc.Configuration, code, codeVerifier string, oidc *oidcv1.OIDC) (tokenResponse, error) {
 	data := url.Values{}
 	data.Set("grant_type", "authorization_code")
 	data.Set("code", code)
 	data.Set("code_verifier", codeVerifier)
 	data.Set("redirect_uri", m.callbackURL.String())
-	for _, parameter := range m.queryParametersToken {
-		value, ok := mapping.Properties[parameter]
-		if ok {
-			data.Set(parameter, value)
-		}
+	//nolint:forcetypeassert
+	for _, param := range proto.GetExtension(oidc, flowv1.E_TokenAttributes).([]*flowv1.Attribute) {
+		data.Set(param.GetKey(), param.GetValue())
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, openidConf.TokenEndpoint, strings.NewReader(data.Encode()))
@@ -695,7 +681,7 @@ func (m *Manager) exchangeCode(ctx context.Context, openidConf *oidc.Configurati
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client := m.httpClient(mapping)
+	client := m.httpClient(oidc)
 	resp, err := client.Do(req)
 	if err != nil {
 		return tokenResponse{}, fmt.Errorf("executing request: %w", err)

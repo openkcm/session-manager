@@ -8,11 +8,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	oidcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/v1"
+	trustv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/v1"
+
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/session"
 	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
-	"github.com/openkcm/session-manager/internal/trust"
-	"github.com/openkcm/session-manager/internal/trust/trustmock"
+	mocktrust "github.com/openkcm/session-manager/modules/oidctrust/mocks"
 )
 
 func TestManager_MakeSessionCookie(t *testing.T) {
@@ -425,33 +427,35 @@ func TestManager_Logout(t *testing.T) {
 	tests := []struct {
 		name           string
 		cfg            *config.SessionManager
-		setupOIDCRepo  func(t *testing.T) *trustmock.Repository
+		setupOIDCRepo  func(t *testing.T) *mocktrust.Repository
 		setupSession   func(*sessionmock.Repository)
 		wantErr        bool
 		wantErrMessage string
 		wantURL        string
 	}{
 		{
-			name: "Success - redirect to postLogoutURL when no end session endpoint",
+			name: "Success - redirect to postLogoutURL",
 			cfg: &config.SessionManager{
 				CSRFSecretParsed: []byte(testCSRFSecret),
 				ClientAuth: config.ClientAuth{
 					ClientID: testClientID,
 				},
 			},
-			setupOIDCRepo: func(t *testing.T) *trustmock.Repository {
+			setupOIDCRepo: func(t *testing.T) *mocktrust.Repository {
 				t.Helper()
 				// StartOIDCServer doesn't include end_session_endpoint, so it will fall back to postLogoutURL
 				oidcServer := StartOIDCServer(t, false)
 				t.Cleanup(oidcServer.Close)
 
-				mapping := trust.OIDCMapping{
-					IssuerURL:  oidcServer.URL,
-					JWKSURI:    oidcServer.URL + "/jwks",
-					Audiences:  []string{"test"},
-					Properties: map[string]string{},
-				}
-				return trustmock.NewInMemRepository(trustmock.WithTrust(tenantID, mapping))
+				trust := trustv1.Trust_builder{
+					TenantId: new(tenantID),
+					Oidc: oidcv1.OIDC_builder{
+						Issuer:    new(oidcServer.URL),
+						JwksUri:   new(oidcServer.URL + "/jwks"),
+						Audiences: []string{"test"},
+					}.Build(),
+				}.Build()
+				return mocktrust.NewInMemRepository(mocktrust.WithTrust(trust))
 			},
 			setupSession: func(repo *sessionmock.Repository) {
 				//nolint:errcheck
@@ -466,15 +470,14 @@ func TestManager_Logout(t *testing.T) {
 		{
 			name: "Error - session not found",
 			cfg: &config.SessionManager{
-				CSRFSecretParsed:      []byte(testCSRFSecret),
-				PostLogoutRedirectURL: postLogoutURL,
+				CSRFSecretParsed: []byte(testCSRFSecret),
 				ClientAuth: config.ClientAuth{
 					ClientID: testClientID,
 				},
 			},
-			setupOIDCRepo: func(t *testing.T) *trustmock.Repository {
+			setupOIDCRepo: func(t *testing.T) *mocktrust.Repository {
 				t.Helper()
-				return trustmock.NewInMemRepository()
+				return mocktrust.NewInMemRepository()
 			},
 			setupSession: func(repo *sessionmock.Repository) {
 				// Don't store session - will cause error
@@ -490,14 +493,9 @@ func TestManager_Logout(t *testing.T) {
 			tt.setupSession(sessionRepo)
 
 			oidcRepo := tt.setupOIDCRepo(t)
+			trust := newTrust(oidcRepo)
 
-			m, err := session.NewManager(ctx,
-				tt.cfg,
-				oidcRepo,
-				sessionRepo,
-				nil,
-				session.WithAllowHttpScheme(true),
-			)
+			m, err := session.NewManager(ctx, tt.cfg, trust, sessionRepo, nil, session.WithAllowHttpScheme(true))
 			require.NoError(t, err)
 
 			logoutURL, err := m.Logout(t.Context(), sessionID, postLogoutURL)

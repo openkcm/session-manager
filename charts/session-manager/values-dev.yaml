@@ -272,6 +272,7 @@ config:
         enabled: false
 
   database:
+    module: database.module.pgxpool
     name: session_manager
     port: 5432
     host:
@@ -284,7 +285,14 @@ config:
       source: embedded
       value: secret
 
+  trust:
+    module: trust.module.oidc
+
+  credentials:
+    module: credentials.module.oauth2
+
   valkey:
+    module: sessionstore.module.valkey
     host:
       source: embedded
       value: valkey-headless.session-manager.svc.cluster.local:6379
@@ -296,7 +304,7 @@ config:
       value: secret
     prefix: session-manager
     secretRef:
-      type: insecure # Supports "mtls" or "insecure"
+      type: insecure # Supported values: "mtls", "insecure", "client_secret_post"
       # mtls:
       #   cert:
       #     source: embedded
@@ -335,9 +343,18 @@ config:
       value: my-csrf-secret-at-least-thirty-two-bits-size
 
   migrate:
+    module: trust.migration.module.oidc
     source: file:///sql
 
   housekeeper:
     triggerInterval: 10m
     concurrencyLimit: 10
     tokenRefreshTriggerInterval: 15m
+
+  apps:
+    grpc:
+      module: app.module.grpcserver
+      services:
+        - module: service.module.grpc.session
+        - module: service.module.grpc.trustmapping
+        - module: service.module.grpc.oidcmapping

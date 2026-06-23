@@ -1,0 +1,40 @@
+-- name: GetTrust :one
+SELECT
+    issuer,
+    blocked,
+    jwks_uri,
+    audiences,
+    client_id
+FROM trust
+WHERE tenant_id = sqlc.arg(tenant_id);
+
+-- name: CreateTrust :exec
+INSERT INTO trust (
+    tenant_id,
+    blocked,
+    issuer,
+    jwks_uri,
+    audiences,
+    client_id)
+VALUES (
+    sqlc.arg(tenant_id),
+    sqlc.arg(blocked),
+    sqlc.arg(issuer),
+    sqlc.arg(jwks_uri),
+    COALESCE(sqlc.arg(audiences)::text[], '{}'::text[]),
+    sqlc.arg(client_id));
+
+-- name: DeleteTrust :execrows
+DELETE FROM trust
+WHERE tenant_id = sqlc.arg(tenant_id);
+
+-- name: UpdateTrust :execrows
+UPDATE trust
+SET
+    blocked = sqlc.arg(blocked),
+    issuer = sqlc.arg(issuer),
+    jwks_uri = sqlc.arg(jwks_uri),
+    audiences = COALESCE(sqlc.arg(audiences)::text[], '{}'::text[]),
+    client_id = sqlc.arg(client_id)
+WHERE
+    tenant_id = sqlc.arg(tenant_id);

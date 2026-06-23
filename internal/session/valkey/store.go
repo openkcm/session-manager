@@ -11,7 +11,7 @@ import (
 
 	"github.com/valkey-io/valkey-go"
 
-	"github.com/openkcm/session-manager/internal/serviceerr"
+	"github.com/openkcm/session-manager/pkg/serviceerr"
 )
 
 type store struct {
