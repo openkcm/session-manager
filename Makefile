@@ -146,7 +146,7 @@ helm-test:
 .PHONY: helm-unit-test
 helm-unit-test:
 	@echo "Running Helm unit tests"
-	cd helm-tests/unit && go test -v -count=1 -race ./...
+	go test -v -count=1 -race -tags=helmtests ./helm-tests/unit/...
 
 .PHONY: helm-integration-test
 helm-integration-test:
@@ -166,7 +166,7 @@ k3d-setup:
 .PHONY: helm-integration-test-run
 helm-integration-test-run:
 	kubectl config current-context
-	cd ./helm-tests/integration && go test -v -count=1 -race .
+	go test -v -count=1 -race -tags=helmtests ./helm-tests/integration/...
 
 .PHONY: k3d-teardown
 k3d-teardown:

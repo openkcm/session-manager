@@ -45,20 +45,26 @@ This directory contains unit tests for the session-manager Helm chart.
 
 ## Running Tests
 
+### Prerequisites
+
+- Go installed (see go.mod for version)
+- Helm 3.x installed and available in PATH
+- Tests use the `helmtests` build tag
+
 Run all tests:
 ```bash
 cd helm-tests/unit
-go test -v
+go test -v -tags=helmtests
 ```
 
 Run specific test:
 ```bash
-go test -v -run TestDeploymentRendering
+go test -v -tags=helmtests -run TestDeploymentRendering
 ```
 
 Run with coverage:
 ```bash
-go test -v -cover
+go test -v -tags=helmtests -cover
 ```
 
 ## Adding New Tests

@@ -6,9 +6,6 @@ This directory contains comprehensive automated tests for the session-manager He
 
 ```
 helm-tests/
-├── go.mod              # Go module definition
-├── go.sum              # Go module checksums
-├── main.go             # Main package file
 ├── integration/        # Integration tests
 │   ├── helm-install_test.go
 │   └── main_test.go
@@ -84,26 +81,23 @@ make k3d-teardown
 
 ### Using Go Commands Directly
 
+All commands should be run from the repository root. The `-tags=helmtests` flag is required because the test files use `//go:build helmtests` to isolate them from regular test runs.
+
 ```bash
-# Run all tests
-cd helm-tests
-go test ./...
+# Run all helm tests
+go test -v -count=1 -race -tags=helmtests ./helm-tests/...
 
 # Run unit tests only
-cd helm-tests/unit
-go test -v -count=1 -race ./...
+go test -v -count=1 -race -tags=helmtests ./helm-tests/unit/...
 
 # Run integration tests only (requires k3d cluster running)
-cd helm-tests/integration
-go test -v -count=1 -race .
+go test -v -count=1 -race -tags=helmtests ./helm-tests/integration/...
 
 # Run specific test
-cd helm-tests/unit
-go test -v -run TestDeploymentRendering
+go test -v -run TestDeploymentRendering -tags=helmtests ./helm-tests/unit/...
 
 # Run with coverage
-cd helm-tests
-go test -cover ./...
+go test -cover -tags=helmtests ./helm-tests/...
 ```
 
 
@@ -124,6 +118,8 @@ go test -cover ./...
 
 Example:
 ```go
+//go:build helmtests
+
 package main_test
 
 import (
@@ -168,7 +164,7 @@ The workflows are defined in:
 The helm-tests workflow:
 - **Job: `helm-test`** - Runs unit tests only (integration tests require a k3d cluster)
 - **Triggers:** On push (any branch)
-- **Requirements:** Go version from helm-tests/go.mod, Helm CLI
+- **Requirements:** Go version from go.mod, Helm CLI
 
 ### Running Locally
 
@@ -226,7 +222,7 @@ This ensures a clean test environment every time.
 
 ### Module Issues
 ```bash
-cd helm-tests
+# From repository root
 go mod tidy
 ```
 
