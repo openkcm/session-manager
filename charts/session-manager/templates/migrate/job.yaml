@@ -54,18 +54,18 @@ spec:
           args: [ "migrate" ]
           env: []
           volumeMounts:
-            - name: {{ include "session-manager.name" . }}-config-volume
+            - name: {{ include "session-manager.fullname" . }}-config-volume
               mountPath: /etc/{{ include "session-manager.name" . }}
               readOnly: true
           {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
           {{- end }}
       volumes:
-        - name: {{ include "session-manager.name" . }}-config-volume
+        - name: {{ include "session-manager.fullname" . }}-config-volume
           projected:
             sources:
               - configMap:
-                  name: {{ include "session-manager.name" . }}-config
+                  name: {{ include "session-manager.fullname" . }}-config
       {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
