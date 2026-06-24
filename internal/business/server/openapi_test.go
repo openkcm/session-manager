@@ -763,48 +763,78 @@ func TestOpenAPIServer_Logout_Success(t *testing.T) {
 	})
 }
 
+func Test_urlWithErrorCodeAndDescription(t *testing.T) {
+	t.Run("absolute with hash based routing", func(t *testing.T) {
+		result := urlWithErrorCodeAndDescription("https://my.domain/#/foo/bar", "code", "desc")
+		assert.Equal(t, "https://my.domain/#/foo/bar?errorCode=code&errorDescription=desc", result)
+	})
+	t.Run("absolute without hash based routing", func(t *testing.T) {
+		result := urlWithErrorCodeAndDescription("https://my.domain/foo/bar", "code", "desc")
+		assert.Equal(t, "https://my.domain/foo/bar?errorCode=code&errorDescription=desc", result)
+	})
+	t.Run("relative with hash based routing", func(t *testing.T) {
+		result := urlWithErrorCodeAndDescription("/#/foo/bar", "code", "desc")
+		assert.Equal(t, "/#/foo/bar?errorCode=code&errorDescription=desc", result)
+	})
+	t.Run("relative without hash based routing", func(t *testing.T) {
+		result := urlWithErrorCodeAndDescription("/foo/bar", "code", "desc")
+		assert.Equal(t, "/foo/bar?errorCode=code&errorDescription=desc", result)
+	})
+	t.Run("invalid URL", func(t *testing.T) {
+		result := urlWithErrorCodeAndDescription("ht!ps://my.domain/foo/bar", "code", "desc")
+		assert.Empty(t, result)
+	})
+	t.Run("empty fragment", func(t *testing.T) {
+		result := urlWithErrorCodeAndDescription("/foo/bar#", "code", "desc")
+		assert.Equal(t, "/foo/bar?errorCode=code&errorDescription=desc", result)
+	})
+}
+
 func TestOpenAPIServer_BuildErrorRedirectURL(t *testing.T) {
+	ctx := t.Context()
 	server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
 
 	t.Run("returns empty when errorURI is empty", func(t *testing.T) {
-		result := server.buildErrorRedirectURL("", serviceerr.ErrNotFound)
+		result := server.buildErrorRedirectURL(ctx, "", serviceerr.ErrNotFound)
 		assert.Empty(t, result)
 	})
 
 	t.Run("returns empty when errorURI is not in allowed list", func(t *testing.T) {
-		result := server.buildErrorRedirectURL("https://evil.com/error", serviceerr.ErrNotFound)
+		result := server.buildErrorRedirectURL(ctx, "https://evil.com/error", serviceerr.ErrNotFound)
 		assert.Empty(t, result)
 	})
 
 	t.Run("returns redirect URL with error code for allowed errorURI", func(t *testing.T) {
-		result := server.buildErrorRedirectURL("https://app.example.com/error", serviceerr.ErrNotFound)
+		result := server.buildErrorRedirectURL(ctx, "https://app.example.com/error", serviceerr.ErrNotFound)
 		assert.Contains(t, result, "errorCode=not_found")
 		assert.Contains(t, result, "errorDescription=not+found")
 	})
 
 	t.Run("preserves existing query params and adds errorCode", func(t *testing.T) {
-		result := server.buildErrorRedirectURL("https://app.example.com/error?tenant=x", serviceerr.ErrStateExpired)
+		result := server.buildErrorRedirectURL(ctx, "https://app.example.com/error?tenant=x", serviceerr.ErrStateExpired)
 		assert.Contains(t, result, "errorCode=state_expired")
 		assert.Contains(t, result, "tenant=x")
 		assert.Contains(t, result, "https://app.example.com/error?")
 	})
 
 	t.Run("maps unknown error to unknown", func(t *testing.T) {
-		result := server.buildErrorRedirectURL("https://app.example.com/error", errors.New("random"))
+		result := server.buildErrorRedirectURL(ctx, "https://app.example.com/error", errors.New("random"))
 		assert.Contains(t, result, "errorCode=unknown")
 		assert.Contains(t, result, "errorDescription=unknown+error")
 	})
 
 	t.Run("handles access denied error", func(t *testing.T) {
-		result := server.buildErrorRedirectURL("https://app.example.com/error", serviceerr.ErrAccessDenied)
+		result := server.buildErrorRedirectURL(ctx, "https://app.example.com/error", serviceerr.ErrAccessDenied)
 		assert.Contains(t, result, "errorCode=access_denied")
 	})
 }
 
 func TestOpenAPIServer_GetErrorURIFromState(t *testing.T) {
+	ctx := t.Context()
+
 	t.Run("returns empty when sManager is nil", func(t *testing.T) {
 		server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
-		result := server.getErrorURIFromState(context.Background(), "some-state")
+		result := server.getErrorURIFromState(ctx, "some-state")
 		assert.Empty(t, result)
 	})
 
@@ -815,7 +845,7 @@ func TestOpenAPIServer_GetErrorURIFromState(t *testing.T) {
 			},
 		}
 		server := newOpenAPIServer(mock, nil, "", "", []string{allowedBaseURL})
-		result := server.getErrorURIFromState(context.Background(), "some-state")
+		result := server.getErrorURIFromState(ctx, "some-state")
 		assert.Empty(t, result)
 	})
 
@@ -826,21 +856,23 @@ func TestOpenAPIServer_GetErrorURIFromState(t *testing.T) {
 			},
 		}
 		server := newOpenAPIServer(mock, nil, "", "", []string{allowedBaseURL})
-		result := server.getErrorURIFromState(context.Background(), "some-state")
+		result := server.getErrorURIFromState(ctx, "some-state")
 		assert.Equal(t, "https://app.example.com/error", result)
 	})
 }
 
 func TestOpenAPIServer_AuthErrorResponse(t *testing.T) {
+	ctx := t.Context()
+
 	t.Run("returns JSON when no errorURI", func(t *testing.T) {
 		server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
-		resp := server.authErrorResponse("", serviceerr.ErrUnknown)
+		resp := server.authErrorResponse(ctx, "", serviceerr.ErrUnknown)
 		assert.IsType(t, openapi.AuthdefaultJSONResponse{}, resp)
 	})
 
 	t.Run("returns redirect when errorURI is valid", func(t *testing.T) {
 		server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
-		resp := server.authErrorResponse("https://app.example.com/error", serviceerr.ErrNotFound)
+		resp := server.authErrorResponse(ctx, "https://app.example.com/error", serviceerr.ErrNotFound)
 		assert.IsType(t, openapi.Auth302Response{}, resp)
 		r, ok := resp.(openapi.Auth302Response)
 		require.True(t, ok)
@@ -849,15 +881,17 @@ func TestOpenAPIServer_AuthErrorResponse(t *testing.T) {
 }
 
 func TestOpenAPIServer_CallbackErrorResponse(t *testing.T) {
+	ctx := t.Context()
+
 	t.Run("returns JSON when no errorURI", func(t *testing.T) {
 		server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
-		resp := server.callbackErrorResponse("", serviceerr.ErrUnknown)
+		resp := server.callbackErrorResponse(ctx, "", serviceerr.ErrUnknown)
 		assert.IsType(t, openapi.CallbackdefaultJSONResponse{}, resp)
 	})
 
 	t.Run("returns redirect when errorURI is valid", func(t *testing.T) {
 		server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
-		resp := server.callbackErrorResponse("https://app.example.com/error", serviceerr.ErrStateExpired)
+		resp := server.callbackErrorResponse(ctx, "https://app.example.com/error", serviceerr.ErrStateExpired)
 		assert.IsType(t, openapi.Callback302Response{}, resp)
 		r, ok := resp.(openapi.Callback302Response)
 		require.True(t, ok)
@@ -866,9 +900,11 @@ func TestOpenAPIServer_CallbackErrorResponse(t *testing.T) {
 }
 
 func TestOpenAPIServer_CallbackFinaliseErrorResponse(t *testing.T) {
+	ctx := t.Context()
+
 	t.Run("returns redirect when errorURI is valid", func(t *testing.T) {
 		server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
-		resp := server.callbackFinaliseErrorResponse("https://app.example.com/error", serviceerr.ErrAccessDenied)
+		resp := server.callbackFinaliseErrorResponse(ctx, "https://app.example.com/error", serviceerr.ErrAccessDenied)
 		assert.IsType(t, openapi.Callback302Response{}, resp)
 		_, ok := resp.(openapi.Callback302Response)
 		require.True(t, ok)
@@ -876,7 +912,7 @@ func TestOpenAPIServer_CallbackFinaliseErrorResponse(t *testing.T) {
 
 	t.Run("masks 403 to unauthorized when no errorURI", func(t *testing.T) {
 		server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
-		resp := server.callbackFinaliseErrorResponse("", serviceerr.ErrAccessDenied)
+		resp := server.callbackFinaliseErrorResponse(ctx, "", serviceerr.ErrAccessDenied)
 		assert.IsType(t, openapi.CallbackdefaultJSONResponse{}, resp)
 		r, ok := resp.(openapi.CallbackdefaultJSONResponse)
 		require.True(t, ok)
@@ -886,7 +922,7 @@ func TestOpenAPIServer_CallbackFinaliseErrorResponse(t *testing.T) {
 
 	t.Run("returns original error when not 403 and no errorURI", func(t *testing.T) {
 		server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
-		resp := server.callbackFinaliseErrorResponse("", serviceerr.ErrStateExpired)
+		resp := server.callbackFinaliseErrorResponse(ctx, "", serviceerr.ErrStateExpired)
 		assert.IsType(t, openapi.CallbackdefaultJSONResponse{}, resp)
 		r, ok := resp.(openapi.CallbackdefaultJSONResponse)
 		require.True(t, ok)
