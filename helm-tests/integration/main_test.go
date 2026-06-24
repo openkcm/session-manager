@@ -1,3 +1,5 @@
+//go:build helmtests
+
 package main_test
 
 const (
