@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pressly/goose/v3"
@@ -61,10 +63,11 @@ func (m *RepoWrapper) Delete(ctx context.Context, tenantID string) error {
 // Get implements oidc.OIDCMappingRepository.
 func (m *RepoWrapper) Get(ctx context.Context, tenantID string) (trust.OIDCMapping, error) {
 	if m.MockGet != nil {
-		_, err := m.MockGet(ctx, tenantID)
+		mapping, err := m.MockGet(ctx, tenantID)
 		if err != nil {
 			return trust.OIDCMapping{}, err
 		}
+		return mapping, nil
 	}
 	return m.Repo.Get(ctx, tenantID)
 }
@@ -114,6 +117,10 @@ func createRepo(ctx context.Context) (trust.OIDCMappingRepository, error) {
 }
 
 func migrateDB(ctx context.Context, connStr string) error {
+	// Create a test config file for the migration
+	configCleanup := createTestConfig()
+	defer configCleanup()
+
 	db, err := sql.Open("pgx", connStr)
 	if err != nil {
 		return err
@@ -132,4 +139,45 @@ func migrateDB(ctx context.Context, connStr string) error {
 		return err
 	}
 	return nil
+}
+
+// createTestConfig creates a temporary config file for the migration tests.
+// It returns a cleanup function that should be called to remove the config file.
+func createTestConfig() func() {
+	// Create a temporary directory for the config
+	tmpDir, err := os.MkdirTemp("", "session-manager-test-*")
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create temp dir: %v", err))
+	}
+
+	// Create config.yaml with test client_id
+	configContent := `sessionManager:
+  clientAuth:
+    clientID: "test-client-id"
+`
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	err = os.WriteFile(configPath, []byte(configContent), 0644)
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		panic(fmt.Sprintf("Failed to write config file: %v", err))
+	}
+
+	// Change to the temp directory so the config loader can find it
+	originalDir, err := os.Getwd()
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		panic(fmt.Sprintf("Failed to get current directory: %v", err))
+	}
+
+	err = os.Chdir(tmpDir)
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		panic(fmt.Sprintf("Failed to change directory: %v", err))
+	}
+
+	// Return cleanup function
+	return func() {
+		_ = os.Chdir(originalDir)
+		os.RemoveAll(tmpDir)
+	}
 }

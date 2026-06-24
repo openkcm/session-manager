@@ -41,7 +41,6 @@ type SessionServer struct {
 	queryParametersIntrospect []string
 	idleSessionTimeout        time.Duration
 	allowHttpScheme           bool
-	clientID                  string
 
 	// cache introspection results
 	introspectionCache *ttlcache.Cache[string, oidc.Introspection]
@@ -52,7 +51,6 @@ func NewSessionServer(
 	sessionRepo session.Repository,
 	trustRepo trust.OIDCMappingRepository,
 	idleSessionTimeout time.Duration,
-	clientID string,
 	opts ...SessionServerOption,
 ) *SessionServer {
 	s := &SessionServer{
@@ -60,7 +58,6 @@ func NewSessionServer(
 		trustRepo:          trustRepo,
 		idleSessionTimeout: idleSessionTimeout,
 		newCreds:           func(clientID string) credentials.TransportCredentials { return credentials.NewInsecure(clientID) },
-		clientID:           clientID,
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -208,16 +205,11 @@ func (s *SessionServer) GetOIDCProvider(ctx context.Context, req *sessionv1.GetO
 	}, nil
 }
 
-func (s *SessionServer) getClientID(mapping *trust.OIDCMapping) string {
-	if mapping.ClientID != "" {
-		return mapping.ClientID
+func (s *SessionServer) httpClient(clientID string) (*http.Client, error) {
+	if clientID == "" {
+		return nil, errors.New("ClientID is missing")
 	}
-
-	return s.clientID
-}
-
-func (s *SessionServer) httpClient(mapping *trust.OIDCMapping) *http.Client {
-	creds := s.newCreds(s.getClientID(mapping))
+	creds := s.newCreds(clientID)
 	transport := creds.Transport()
 	if debugSettingSMDumpTransport.Value() == "1" {
 		transport = debugtools.NewTransport(transport)
@@ -225,7 +217,7 @@ func (s *SessionServer) httpClient(mapping *trust.OIDCMapping) *http.Client {
 
 	return &http.Client{
 		Transport: transport,
-	}
+	}, nil
 }
 
 func (s *SessionServer) introspectToken(ctx context.Context, token string, oidcTrust *trust.OIDCMapping) (oidc.Introspection, error) {
@@ -236,7 +228,11 @@ func (s *SessionServer) introspectToken(ctx context.Context, token string, oidcT
 		return item.Value(), nil
 	}
 
-	httpClient := s.httpClient(oidcTrust)
+	httpClient, err := s.httpClient(oidcTrust.ClientID)
+	if err != nil {
+		slogctx.Error(ctx, "Could not create HTTP client for OpenID provider", "issuer", oidcTrust.IssuerURL, "error", err)
+		return oidc.Introspection{Active: false}, err
+	}
 
 	// create the provider for the given issuer
 	provider, err := oidc.NewProvider(oidcTrust.IssuerURL, oidcTrust.Audiences,

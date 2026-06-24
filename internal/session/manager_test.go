@@ -51,6 +51,7 @@ func TestManager_Auth(t *testing.T) {
 
 	oidcMapping := trust.OIDCMapping{
 		IssuerURL: oidcServer.URL,
+		ClientID:  "my-client-id",
 		Blocked:   false,
 		JWKSURI:   "http://jwks.example.com",
 		Audiences: []string{requestURI},
@@ -81,10 +82,8 @@ func TestManager_Auth(t *testing.T) {
 				CallbackURL:                        callbackURL,
 				AdditionalQueryParametersAuthorize: []string{"paramAuth1"},
 				AllowedRedirectBaseURLs:            []string{"http://localhost"},
-				ClientAuth: config.ClientAuth{
-					ClientID: testClientID,
-				},
-				CSRFSecretParsed: []byte(testCSRFSecret),
+				ClientAuth:                         config.ClientAuth{},
+				CSRFSecretParsed:                   []byte(testCSRFSecret),
 			},
 			tenantID:  tenantID,
 			wantURL:   oidcServer.URL + "/oauth2/authorize?client_id=my-client-id&code_challenge=someChallenge&code_challenge_method=S256&redirect_uri=" + callbackURL + "&response_type=code&scope=openid+profile+email+groups&state=someState&paramAuth1=paramAuth1",
@@ -323,6 +322,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 
 			localOIDCMapping := trust.OIDCMapping{
 				IssuerURL: oidcServer.URL,
+				ClientID:  "client_id",
 				Blocked:   false,
 				JWKSURI:   jwksURI,
 				Audiences: []string{requestURI},
@@ -555,9 +555,7 @@ func TestManager_LogoutEdgeCases(t *testing.T) {
 
 			cfg := &config.SessionManager{
 				CSRFSecretParsed: []byte(testCSRFSecret),
-				ClientAuth: config.ClientAuth{
-					ClientID: testClientID,
-				},
+				ClientAuth:       config.ClientAuth{},
 			}
 
 			m, err := session.NewManager(ctx, cfg, oidcMock, sessionMock, auditLogger)
