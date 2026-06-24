@@ -3,6 +3,9 @@ version: "2"
 run:
   concurrency: 4
   timeout: 10m
+  build-tags:
+    - helmtests
+    - integration
 
 linters:
   default: all
