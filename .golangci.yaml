@@ -73,6 +73,14 @@ linters:
       - std-error-handling
     rules:
       - linters:
+          - staticcheck
+        text: "SA1019:"
+        paths:
+          - integration/grpc_test.go
+          - internal/grpc/oidcmapping.go
+          - internal/grpc/oidcmapping_test.go
+          - internal/grpc/session.go
+      - linters:
           - dupl
           - funlen
           - maintidx

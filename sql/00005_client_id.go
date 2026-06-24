@@ -49,7 +49,6 @@ func readClientIDfromConfig() (string, error) {
 	}
 
 	// Read the client_id from the config
-	//nolint:staticcheck
 	clientID := cfg.SessionManager.ClientAuth.ClientID
 	if clientID == "" {
 		return "", errors.New("client_id is not set in the config")
