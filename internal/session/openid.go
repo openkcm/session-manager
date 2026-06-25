@@ -7,6 +7,8 @@ import (
 
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/openkcm/common-sdk/pkg/oidc"
+
+	slogctx "github.com/veqryn/slog-context"
 )
 
 func (m *Manager) getOpenIDConfig(ctx context.Context, issuerURL string) (*oidc.Configuration, error) {
@@ -22,10 +24,14 @@ func (m *Manager) getOpenIDConfig(ctx context.Context, issuerURL string) (*oidc.
 		oidc.WithAllowHttpScheme(m.allowHttpScheme),
 	)
 	if err != nil {
+		slogctx.Error(ctx, "Could not create provider",
+			"issuerURL", issuerURL, "error", err)
 		return nil, err
 	}
 	cfg, err := provider.GetConfiguration(ctx)
 	if err != nil {
+		slogctx.Error(ctx, "Could not get OIDC provider configuration",
+			"issuerURL", issuerURL, "error", err)
 		return nil, err
 	}
 
