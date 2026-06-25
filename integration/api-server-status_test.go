@@ -55,8 +55,8 @@ func TestStatusServer(t *testing.T) {
 	}
 	// defer the graceful stop of the service so that coverprofiles are written
 	defer func() {
-		cmd.Process.Signal(os.Interrupt)
-		cmd.Wait()
+		_ = cmd.Process.Signal(os.Interrupt)
+		_ = cmd.Wait()
 	}()
 
 	// create the test cases
@@ -85,7 +85,8 @@ func TestStatusServer(t *testing.T) {
 		if i < 1 {
 			t.Fatalf("could not connect to server: %s", err)
 		}
-		if _, err := http.Get("http://localhost:8888"); err == nil {
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://localhost:8888", nil)
+		if _, err := http.DefaultClient.Do(req); err == nil {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -100,7 +101,12 @@ func TestStatusServer(t *testing.T) {
 				t.Fatalf("could not construct a request url: %s", err)
 			}
 
-			resp, err := http.Get(u)
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+			if err != nil {
+				t.Fatalf("could not create request: %s", err)
+			}
+
+			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
 				t.Fatalf("could not send request: %s", err)
 			}
@@ -124,7 +130,7 @@ func TestStatusServer(t *testing.T) {
 				} else {
 					t.Logf("response: %s", got)
 					var js json.RawMessage
-					if json.Unmarshal([]byte(got), &js) != nil {
+					if json.Unmarshal(got, &js) != nil {
 						t.Errorf("response is not valid json: %s", got)
 					}
 				}

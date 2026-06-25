@@ -92,7 +92,7 @@ func TestMigrate(t *testing.T) {
 
 	wd, _ := os.Getwd()
 	t.Chdir(testdir)
-	defer os.Chdir(wd)
+	_ = wd // t.Chdir automatically restores the working directory when the test finishes
 
 	// Run the migrations
 	cmd := exec.CommandContext(ctx, filepath.Join(currdir, "./session-manager"), cmdName)
@@ -191,7 +191,7 @@ func TestMigrateIdempotent(t *testing.T) {
 
 	wd, _ := os.Getwd()
 	t.Chdir(testdir)
-	defer os.Chdir(wd)
+	_ = wd // t.Chdir automatically restores the working directory when the test finishes
 
 	// Run migrations the first time
 	cmd := exec.CommandContext(ctx, filepath.Join(currdir, "./session-manager"), cmdName)

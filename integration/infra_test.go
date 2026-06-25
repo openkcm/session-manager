@@ -38,12 +38,11 @@ func initInfra(t *testing.T) (istat infraStat) {
 	// Since the config is read from the file $PWD/config.yaml,
 	// we're running a process in a temporary subdirectory
 	// so that we aren't interfering with the other tests.
-	procDir, err := os.MkdirTemp("", "*")
-	require.NoError(t, err, "failed to create a temp dir")
+	procDir := t.TempDir()
 	istat.Procdir = procDir
 	istat.ConfigFilePath = filepath.Join(procDir, "config.yaml")
 
-	err = os.WriteFile(istat.ConfigFilePath, []byte(validConfig), fs.ModePerm)
+	err := os.WriteFile(istat.ConfigFilePath, []byte(validConfig), fs.ModePerm)
 	require.NoError(t, err, "failed to write config file")
 
 	err = commoncfg.LoadConfig(&istat.Cfg, nil, istat.Procdir)
@@ -113,9 +112,7 @@ func (istat *infraStat) PrepareConfig(t *testing.T) {
 }
 
 func (istat *infraStat) Close(ctx context.Context) {
-	os.Remove(istat.ConfigFilePath)
-	os.RemoveAll(istat.Procdir)
-
+	// Note: Procdir cleanup is handled by t.TempDir()
 	for _, close := range istat.closeFuncs {
 		close(ctx)
 	}
