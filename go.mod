@@ -22,7 +22,7 @@ require (
 	github.com/moby/moby/api v1.54.2
 	github.com/oapi-codegen/runtime v1.4.1
 	github.com/openkcm/api-sdk v0.18.1
-	github.com/openkcm/common-sdk v1.16.1
+	github.com/openkcm/common-sdk v1.17.1-0.20260625093719-a9d985dfad28
 	github.com/pressly/goose/v3 v3.27.1
 	github.com/samber/oops v1.22.0
 	github.com/spf13/cobra v1.10.2
@@ -165,8 +165,8 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
-	go.opentelemetry.io/collector/featuregate v1.59.0 // indirect
-	go.opentelemetry.io/collector/pdata v1.59.0 // indirect
+	go.opentelemetry.io/collector/featuregate v1.60.0 // indirect
+	go.opentelemetry.io/collector/pdata v1.60.0 // indirect
 	go.opentelemetry.io/contrib/bridges/otelslog v0.19.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.69.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.68.0 // indirect

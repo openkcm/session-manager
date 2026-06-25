@@ -35,9 +35,9 @@ func createHTTPServer(_ context.Context, cfg *config.Config, sManager *session.M
 
 	handler := openapi.Handler(strictHandler)
 	handler = middleware.ResponseWriterMiddleware(handler)
-	handler = commonmiddleware.SecurityHeadersMiddleware(handler, map[string]string{
+	handler = commonmiddleware.SecurityHeadersMiddleware(map[string]string{
 		"Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none';",
-	})
+	})(handler)
 
 	return &http.Server{
 		Addr:    cfg.HTTP.Address,
