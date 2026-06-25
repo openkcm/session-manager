@@ -106,6 +106,7 @@ func TestRefreshAccessToken(t *testing.T) {
 
 		mapping := trust.OIDCMapping{
 			IssuerURL: discoveryServerURL,
+			ClientID:  "test-client-id",
 			Properties: map[string]string{
 				"test-param": "param-value",
 			},
@@ -127,9 +128,7 @@ func TestRefreshAccessToken(t *testing.T) {
 		require.NoError(t, err)
 
 		cfg := &config.SessionManager{
-			ClientAuth: config.ClientAuth{
-				ClientID: "test-client-id",
-			},
+			ClientAuth:                     config.ClientAuth{},
 			AdditionalQueryParametersToken: []string{"test-param"},
 			CSRFSecretParsed:               []byte(testCSRFSecret),
 		}
@@ -170,9 +169,7 @@ func TestRefreshAccessToken(t *testing.T) {
 		require.NoError(t, err)
 
 		cfg := &config.SessionManager{
-			ClientAuth: config.ClientAuth{
-				ClientID: "test-client-id",
-			},
+			ClientAuth:       config.ClientAuth{},
 			CSRFSecretParsed: []byte(testCSRFSecret),
 		}
 
@@ -226,9 +223,7 @@ func TestRefreshAccessToken(t *testing.T) {
 		require.NoError(t, err)
 
 		cfg := &config.SessionManager{
-			ClientAuth: config.ClientAuth{
-				ClientID: "test-client-id",
-			},
+			ClientAuth:       config.ClientAuth{},
 			CSRFSecretParsed: []byte(testCSRFSecret),
 		}
 
@@ -283,9 +278,7 @@ func TestRefreshAccessToken(t *testing.T) {
 		require.NoError(t, err)
 
 		cfg := &config.SessionManager{
-			ClientAuth: config.ClientAuth{
-				ClientID: "test-client-id",
-			},
+			ClientAuth:                     config.ClientAuth{},
 			AdditionalQueryParametersToken: []string{"missing-param"},
 			CSRFSecretParsed:               []byte(testCSRFSecret),
 		}

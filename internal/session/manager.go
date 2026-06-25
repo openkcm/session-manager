@@ -7,6 +7,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash"
 	"log/slog"
@@ -51,7 +52,6 @@ type Manager struct {
 	sessionDuration       time.Duration
 	idleSessionTimeout    time.Duration
 	callbackURL           *url.URL
-	clientID              string
 	queryParametersAuth   []string
 	queryParametersToken  []string
 	authContextKeys       []string
@@ -97,7 +97,6 @@ func NewManager(
 		csrfCookieTemplate:      cfg.CSRFCookieTemplate,
 		loginCSRFCookieTemplate: cfg.LoginCSRFCookieTemplate,
 		callbackURL:             callbackURL,
-		clientID:                cfg.ClientAuth.ClientID,
 		newCreds:                func(clientID string) credentials.TransportCredentials { return credentials.NewInsecure(clientID) },
 		csrfSecret:              cfg.CSRFSecretParsed,
 		allowedRedirectBaseURLs: parseURLs(cfg.AllowedRedirectBaseURLs),
@@ -175,7 +174,7 @@ func (m *Manager) authURI(openidConf *oidc.Configuration, state State, pkce pkce
 	q := u.Query()
 	q.Set("scope", "openid profile email groups")
 	q.Set("response_type", "code")
-	q.Set("client_id", m.getClientID(mapping))
+	q.Set("client_id", mapping.ClientID)
 	q.Set("state", state.ID)
 	q.Set("code_challenge", pkce.Challenge)
 	q.Set("code_challenge_method", pkce.Method)
@@ -369,7 +368,7 @@ func (m *Manager) buildSessionFromTokens(ctx context.Context, openidConf *oidc.C
 func (m *Manager) buildAuthContext(mapping trust.OIDCMapping) map[string]string {
 	authContext := map[string]string{
 		"issuer":    mapping.IssuerURL,
-		"client_id": m.getClientID(mapping),
+		"client_id": mapping.ClientID,
 	}
 	for _, parameter := range m.authContextKeys {
 		value, ok := mapping.Properties[parameter]
@@ -420,7 +419,7 @@ func (m *Manager) Logout(ctx context.Context, sessionID, postLogoutRedirectURL s
 	}
 
 	vals := make(url.Values, 2)
-	vals.Set("client_id", m.getClientID(mapping))
+	vals.Set("client_id", mapping.ClientID)
 	vals.Set("post_logout_redirect_uri", postLogoutRedirectURL)
 
 	for _, parameter := range m.queryParametersLogout {
@@ -656,8 +655,11 @@ func parseURLs(raw []string) []*url.URL {
 	return parsed
 }
 
-func (m *Manager) httpClient(mapping trust.OIDCMapping) *http.Client {
-	creds := m.newCreds(m.getClientID(mapping))
+func (m *Manager) httpClient(clientID string) (*http.Client, error) {
+	if clientID == "" {
+		return nil, errors.New("ClientID is missing")
+	}
+	creds := m.newCreds(clientID)
 	transport := creds.Transport()
 	if debugSettingSMDumpTransport.Value() == "1" {
 		transport = debugtools.NewTransport(transport)
@@ -665,15 +667,7 @@ func (m *Manager) httpClient(mapping trust.OIDCMapping) *http.Client {
 
 	return &http.Client{
 		Transport: transport,
-	}
-}
-
-func (m *Manager) getClientID(mapping trust.OIDCMapping) string {
-	if mapping.ClientID != "" {
-		return mapping.ClientID
-	}
-
-	return m.clientID
+	}, nil
 }
 
 func (m *Manager) exchangeCode(ctx context.Context, openidConf *oidc.Configuration, code, codeVerifier string, mapping trust.OIDCMapping) (tokenResponse, error) {
@@ -695,7 +689,10 @@ func (m *Manager) exchangeCode(ctx context.Context, openidConf *oidc.Configurati
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client := m.httpClient(mapping)
+	client, err := m.httpClient(mapping.ClientID)
+	if err != nil {
+		return tokenResponse{}, fmt.Errorf("creating http client: %w", err)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return tokenResponse{}, fmt.Errorf("executing request: %w", err)

@@ -96,7 +96,6 @@ func internalMain(ctx context.Context, cfg *config.Config) error {
 		sessionRepo,
 		trustRepo,
 		cfg.SessionManager.IdleSessionTimeout,
-		cfg.SessionManager.ClientAuth.ClientID,
 		grpc.WithQueryParametersIntrospect(cfg.SessionManager.AdditionalQueryParametersIntrospect),
 		grpc.WithTransportCredentials(credsBuilder),
 	)
@@ -212,7 +211,9 @@ func newCredsBuilder(cfg *config.Config) (credentials.Builder, error) {
 			return nil, fmt.Errorf("failed to load mTLS config: %w", err)
 		}
 
-		return func(clientID string) credentials.TransportCredentials { return credentials.NewTLS(clientID, tlsConfig) }, nil
+		return func(clientID string) credentials.TransportCredentials {
+			return credentials.NewTLS(clientID, tlsConfig)
+		}, nil
 	case "client_secret", "client_secret_post":
 		secret, err := commoncfg.LoadValueFromSourceRef(cfg.SessionManager.ClientAuth.ClientSecret)
 		if err != nil {
@@ -224,7 +225,9 @@ func newCredsBuilder(cfg *config.Config) (credentials.Builder, error) {
 		}, nil
 	case clientAuthTypeInsecure:
 		slog.Warn("insecure credentials are used. Do not use this in production")
-		return func(clientID string) credentials.TransportCredentials { return credentials.NewInsecure(clientID) }, nil
+		return func(clientID string) credentials.TransportCredentials {
+			return credentials.NewInsecure(clientID)
+		}, nil
 	default:
 		return nil, errors.New("unknown Client Auth type")
 	}

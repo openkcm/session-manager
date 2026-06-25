@@ -118,14 +118,17 @@ func (m *Manager) refreshAccessToken(ctx context.Context, s Session) error {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, openidConf.TokenEndpoint, bytes.NewBufferString(data.Encode()))
 	if err != nil {
-		return err
+		return fmt.Errorf("creating request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client := m.httpClient(mapping)
+	client, err := m.httpClient(mapping.ClientID)
+	if err != nil {
+		return fmt.Errorf("creating http client: %w", err)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("executing request: %w", err)
 	}
 	defer resp.Body.Close()
 

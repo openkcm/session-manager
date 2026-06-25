@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
 	"testing"
@@ -340,6 +341,24 @@ func TestHelmInstall(t *testing.T) {
 	// Check each pod's status
 	for _, pod := range pods.Items {
 		t.Logf("Pod %s: phase=%s", pod.Name, pod.Status.Phase)
+
+		// Log container logs for each pod
+		for _, container := range pod.Spec.Containers {
+			logOpts := &corev1.PodLogOptions{
+				Container: container.Name,
+			}
+			req := client.CoreV1().Pods(namespace).GetLogs(pod.Name, logOpts)
+			logStream, err := req.Stream(ctx)
+			if err != nil {
+				t.Logf("Failed to get logs for pod %s container %s: %v", pod.Name, container.Name, err)
+				continue
+			}
+			var logBuf bytes.Buffer
+			_, _ = io.Copy(&logBuf, logStream)
+			logStream.Close()
+			t.Logf("Logs for pod %s container %s:\n%s", pod.Name, container.Name, logBuf.String())
+		}
+
 		// Job pods should be Succeeded
 		if strings.Contains(pod.Name, "migrate") {
 			if pod.Status.Phase != corev1.PodSucceeded {

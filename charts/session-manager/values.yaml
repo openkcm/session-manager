@@ -321,11 +321,14 @@ config:
     idleSessionTimeout: 90m
     callbackURL: http://localhost:8080/sm/callback
     clientAuth:
-      clientID: "client-id"
       type: client_secret
       clientSecret:
         source: embedded
         value: secret
+      # Deprecated: ClientID is no longer used in the application code, but is still required in the config
+      # to backfill existing database entries during migration.
+      # It will be removed in a future release once the migration has been applied in all environments.
+      clientID: "client-id"
     sessionCookieTemplate:
       name: "__Host-Http-SESSION"
       path: "/"
