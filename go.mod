@@ -21,8 +21,8 @@ require (
 	github.com/jellydator/ttlcache/v3 v3.4.0
 	github.com/moby/moby/api v1.54.2
 	github.com/oapi-codegen/runtime v1.4.1
-	github.com/openkcm/api-sdk v0.18.1
-	github.com/openkcm/common-sdk v1.17.1-0.20260625093719-a9d985dfad28
+	github.com/openkcm/api-sdk v0.19.1
+	github.com/openkcm/common-sdk v1.18.0
 	github.com/pressly/goose/v3 v3.27.1
 	github.com/samber/oops v1.22.0
 	github.com/spf13/cobra v1.10.2
@@ -42,6 +42,7 @@ require (
 )
 
 require (
+	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260415201107-50325440f8f2.1 // indirect
 	cel.dev/expr v0.25.1 // indirect
 	dario.cat/mergo v1.0.2 // indirect
 	filippo.io/edwards25519 v1.2.0 // indirect

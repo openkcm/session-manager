@@ -201,6 +201,7 @@ func (s *SessionServer) GetOIDCProvider(ctx context.Context, req *sessionv1.GetO
 			IssuerUrl: provider.IssuerURL,
 			JwksUri:   provider.JWKSURI,
 			Audiences: provider.Audiences,
+			ClientId:  provider.ClientID,
 		},
 	}, nil
 }
