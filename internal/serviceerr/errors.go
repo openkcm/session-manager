@@ -3,10 +3,12 @@ package serviceerr
 import (
 	"context"
 	"fmt"
-	slogctx "github.com/veqryn/slog-context"
+	"net/http"
+
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"net/http"
+
+	slogctx "github.com/veqryn/slog-context"
 )
 
 type Code string
