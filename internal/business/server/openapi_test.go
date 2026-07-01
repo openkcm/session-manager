@@ -106,6 +106,27 @@ func TestNewOpenAPIServer(t *testing.T) {
 	})
 }
 
+func TestOpenAPIServer_Auth_DisallowedRequestURI(t *testing.T) {
+	t.Run("returns invalid_request when request URI is not an allowed redirect base URL", func(t *testing.T) {
+		server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
+		ctx := t.Context()
+		req := openapi.AuthRequestObject{
+			Params: openapi.AuthParams{RequestURI: "https://evil.example.com/page"},
+		}
+
+		resp, err := server.Auth(ctx, req)
+
+		require.NoError(t, err)
+		assert.IsType(t, openapi.AuthdefaultJSONResponse{}, resp)
+
+		r, ok := resp.(openapi.AuthdefaultJSONResponse)
+		require.True(t, ok)
+		assert.Equal(t, string(serviceerr.CodeInvalidRequest), r.Body.Error)
+		assert.Equal(t, http.StatusBadRequest, r.StatusCode)
+		assert.Equal(t, "request URI does not match an allowed redirect base URL", *r.Body.ErrorDescription)
+	})
+}
+
 func TestOpenAPIServer_Auth_MakeAuthURI_NilManager(t *testing.T) {
 	mock := &mockSessionManager{
 		makeAuthURIFunc: func(ctx context.Context, tenantID, requestURI, errorURI string) (string, string, error) {
@@ -476,6 +497,31 @@ func TestOpenAPIServer_Callback_Success(t *testing.T) {
 	})
 }
 
+func TestOpenAPIServer_Logout_DisallowedRedirectURI(t *testing.T) {
+	t.Run("returns invalid_request when post logout redirect URI is not an allowed redirect base URL", func(t *testing.T) {
+		server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
+		ctx := t.Context()
+
+		logoutReq := openapi.LogoutRequestObject{
+			Params: openapi.LogoutParams{
+				PostLogoutRedirectURI: "https://evil.example.com/logged-out",
+				Cookie:                "session-id=123",
+			},
+		}
+
+		resp, err := server.Logout(ctx, logoutReq)
+
+		require.NoError(t, err)
+		assert.IsType(t, openapi.LogoutdefaultJSONResponse{}, resp)
+
+		r, ok := resp.(openapi.LogoutdefaultJSONResponse)
+		require.True(t, ok)
+		assert.Equal(t, string(serviceerr.CodeInvalidRequest), r.Body.Error)
+		assert.Equal(t, http.StatusBadRequest, r.StatusCode)
+		assert.Equal(t, "post logout redirect URI does not match an allowed redirect base URL", *r.Body.ErrorDescription)
+	})
+}
+
 func TestOpenAPIServer_Logout_NoResponseWriter(t *testing.T) {
 	t.Run("returns an error when response writer is not in context", func(t *testing.T) {
 		server := newOpenAPIServer(nil, nil, "", "", []string{allowedBaseURL})
@@ -483,7 +529,8 @@ func TestOpenAPIServer_Logout_NoResponseWriter(t *testing.T) {
 
 		logoutReq := openapi.LogoutRequestObject{
 			Params: openapi.LogoutParams{
-				Cookie: "session-id=123",
+				PostLogoutRedirectURI: postLogoutURL,
+				Cookie:                "session-id=123",
 			},
 		}
 

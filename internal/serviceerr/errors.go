@@ -1,8 +1,14 @@
 package serviceerr
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+
+	slogctx "github.com/veqryn/slog-context"
 )
 
 type Code string
@@ -142,4 +148,10 @@ func (e Error) HTTPStatus() int {
 	default:
 		return http.StatusInternalServerError
 	}
+}
+
+func RecordAndLogError(ctx context.Context, span trace.Span, err error, args ...any) {
+	span.RecordError(err)
+	span.SetStatus(codes.Error, err.Error())
+	slogctx.Error(ctx, err.Error(), args...)
 }
