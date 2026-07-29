@@ -55,3 +55,8 @@ type ModuleInfo struct {
 type Provisioner interface {
 	Provision(ctx *Context) error
 }
+
+type App interface {
+	Start() error
+	Stop() error
+}

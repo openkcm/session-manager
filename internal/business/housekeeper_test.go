@@ -19,7 +19,7 @@ func TestHousekeeperMain_CancelledContext(t *testing.T) {
 		},
 		SessionManager: config.SessionManager{
 			ClientAuth: config.ClientAuth{
-				Type: insecure,
+				Type: "insecure",
 			},
 		},
 	}

@@ -9,6 +9,7 @@ import (
 
 	sessionmanager "github.com/openkcm/session-manager"
 	"github.com/openkcm/session-manager/internal/config"
+	"github.com/openkcm/session-manager/internal/sessionwiring"
 )
 
 // HousekeeperMain starts the house keeping jobs
@@ -29,7 +30,7 @@ func HousekeeperMain(ctx context.Context, cfg *config.Config) error {
 	//nolint:forcetypeassert
 	trust := trustMod.(sessionmanager.Trust)
 
-	sessionManager, closeFn, err := initSessionManager(ctx, cfg, trust)
+	sessionManager, closeFn, err := sessionwiring.InitSessionManager(ctx, cfg, trust)
 	if err != nil {
 		return fmt.Errorf("failed to initialise the session manager: %w", err)
 	}
