@@ -78,9 +78,9 @@ linters:
         text: "SA1019:"
         paths:
           - integration/grpc_test.go
-          - internal/grpc/oidcmapping.go
-          - internal/grpc/oidcmapping_test.go
-          - internal/grpc/session.go
+          - modules/grpc/oidcmapping/server.go
+          - modules/grpc/oidcmapping/server_test.go
+          - modules/grpc/session/server.go
       - linters:
           - dupl
           - funlen

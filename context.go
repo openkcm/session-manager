@@ -173,7 +173,7 @@ func (c *Context) instantiate(cfg ExtensionConfig) (Module, ModuleInfo, error) {
 		}
 	}
 
-	slogctx.Debug(c, "instantinated module", "module", modInfo.ID)
+	slogctx.Debug(c, "instantiated a module", "module", modInfo.ID)
 
 	if provisioner, ok := mod.(Provisioner); ok {
 		if err := provisioner.Provision(c); err != nil {
