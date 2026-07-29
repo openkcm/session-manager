@@ -1,4 +1,4 @@
-package grpc_test
+package session_test
 
 import (
 	"encoding/json"
@@ -19,9 +19,9 @@ import (
 	oidcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/v1"
 	trustv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/v1"
 
-	"github.com/openkcm/session-manager/internal/grpc"
-	"github.com/openkcm/session-manager/internal/session"
+	internalsession "github.com/openkcm/session-manager/internal/session"
 	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
+	"github.com/openkcm/session-manager/modules/grpc/session"
 	mocktrust "github.com/openkcm/session-manager/modules/oidctrust/mocks"
 )
 
@@ -33,7 +33,7 @@ func TestNewSessionServer(t *testing.T) {
 		trust := newTrust(trustRepo)
 		idleSessionTimeout := 90 * time.Minute
 
-		server := grpc.NewSessionServer(ctx, sessionRepo, trust, idleSessionTimeout, "")
+		server := session.NewServer(ctx, sessionRepo, trust, idleSessionTimeout)
 
 		assert.NotNil(t, server)
 	})
@@ -44,12 +44,11 @@ func TestNewSessionServer(t *testing.T) {
 		trust := newTrust(trustRepo)
 		idleSessionTimeout := 90 * time.Minute
 
-		server := grpc.NewSessionServer(ctx,
+		server := session.NewServer(ctx,
 			sessionRepo,
 			trust,
 			idleSessionTimeout,
-			"",
-			grpc.WithQueryParametersIntrospect([]string{"param1", "param2"}),
+			session.WithQueryParametersIntrospect([]string{"param1", "param2"}),
 		)
 
 		assert.NotNil(t, server)
@@ -61,11 +60,10 @@ func TestNewSessionServer(t *testing.T) {
 		trust := newTrust(trustRepo)
 		idleSessionTimeout := 90 * time.Minute
 
-		server := grpc.NewSessionServer(ctx,
+		server := session.NewServer(ctx,
 			sessionRepo,
 			trust,
 			idleSessionTimeout,
-			"",
 			nil,
 		)
 
@@ -96,12 +94,12 @@ func TestGetSession(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		sess := session.Session{
+		sess := internalsession.Session{
 			ID:          "session-123",
 			TenantID:    "tenant-123",
 			Issuer:      testServer.URL,
 			AccessToken: "access-token-123",
-			Claims: session.Claims{
+			Claims: internalsession.Claims{
 				Subject:    "user-123",
 				GivenName:  "John",
 				FamilyName: "Doe",
@@ -115,7 +113,8 @@ func TestGetSession(t *testing.T) {
 			TenantId: new(sess.TenantID),
 			Blocked:  new(false),
 			Oidc: oidcv1.OIDC_builder{
-				Issuer: new(testServer.URL),
+				Issuer:   new(testServer.URL),
+				ClientId: new("test-client-id"),
 			}.Build(),
 		}.Build()
 
@@ -127,8 +126,8 @@ func TestGetSession(t *testing.T) {
 
 		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 		trust := newTrust(trustRepo)
-		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "",
-			grpc.WithAllowHttpScheme(true),
+		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute,
+			session.WithAllowHttpScheme(true),
 		)
 		req := &sessionv1.GetSessionRequest{
 			SessionId: "session-123",
@@ -170,12 +169,12 @@ func TestGetSession(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		sess := session.Session{
+		sess := internalsession.Session{
 			ID:          "session-groups",
 			TenantID:    "tenant-groups",
 			Issuer:      testServer.URL,
 			AccessToken: "access-token-groups",
-			Claims: session.Claims{
+			Claims: internalsession.Claims{
 				Subject: "user-groups",
 				Groups:  []string{"session-group1", "session-group2"},
 			},
@@ -185,7 +184,8 @@ func TestGetSession(t *testing.T) {
 			TenantId: new(sess.TenantID),
 			Blocked:  new(false),
 			Oidc: oidcv1.OIDC_builder{
-				Issuer: new(testServer.URL),
+				Issuer:   new(testServer.URL),
+				ClientId: new("test-client-id"),
 			}.Build(),
 		}.Build()
 
@@ -196,8 +196,8 @@ func TestGetSession(t *testing.T) {
 
 		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 		trust := newTrust(trustRepo)
-		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "",
-			grpc.WithAllowHttpScheme(true),
+		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute,
+			session.WithAllowHttpScheme(true),
 		)
 
 		req := &sessionv1.GetSessionRequest{
@@ -227,11 +227,11 @@ func TestGetSession(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		sess := session.Session{
+		sess := internalsession.Session{
 			ID:       "session-456",
 			TenantID: "tenant-456",
 			Issuer:   testServer.URL,
-			Claims: session.Claims{
+			Claims: internalsession.Claims{
 				Subject: "user-456",
 			},
 		}
@@ -240,7 +240,8 @@ func TestGetSession(t *testing.T) {
 			TenantId: new(sess.TenantID),
 			Blocked:  new(false),
 			Oidc: oidcv1.OIDC_builder{
-				Issuer: new(testServer.URL),
+				Issuer:   new(testServer.URL),
+				ClientId: new("test-client-id"),
 			}.Build(),
 		}.Build()
 
@@ -251,8 +252,8 @@ func TestGetSession(t *testing.T) {
 
 		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 		trust := newTrust(trustRepo)
-		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "",
-			grpc.WithAllowHttpScheme(true),
+		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute,
+			session.WithAllowHttpScheme(true),
 		)
 
 		req := &sessionv1.GetSessionRequest{
@@ -274,7 +275,7 @@ func TestGetSession(t *testing.T) {
 		)
 		trustRepo := mocktrust.NewInMemRepository()
 		trust := newTrust(trustRepo)
-		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "")
+		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute)
 
 		req := &sessionv1.GetSessionRequest{
 			SessionId: "session-123",
@@ -289,7 +290,7 @@ func TestGetSession(t *testing.T) {
 	})
 
 	t.Run("invalid - session not active", func(t *testing.T) {
-		sess := session.Session{
+		sess := internalsession.Session{
 			ID:       "session-789",
 			TenantID: "tenant-789",
 		}
@@ -301,7 +302,7 @@ func TestGetSession(t *testing.T) {
 
 		trustRepo := mocktrust.NewInMemRepository()
 		trust := newTrust(trustRepo)
-		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "")
+		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute)
 
 		req := &sessionv1.GetSessionRequest{
 			SessionId: "session-789",
@@ -320,14 +321,14 @@ func TestGetSession(t *testing.T) {
 			sessionmock.WithLoadSessionError(errors.New("load error")),
 		)
 		// Create a session and mark as active but LoadSession will error
-		sess := session.Session{ID: "session-fail"}
+		sess := internalsession.Session{ID: "session-fail"}
 		err := sessionRepo.StoreSession(ctx, sess)
 		assert.NoError(t, err)
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
 		trustRepo := mocktrust.NewInMemRepository()
 		trust := newTrust(trustRepo)
-		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "")
+		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute)
 
 		req := &sessionv1.GetSessionRequest{
 			SessionId: "session-fail",
@@ -342,7 +343,7 @@ func TestGetSession(t *testing.T) {
 	})
 
 	t.Run("invalid - trust not found", func(t *testing.T) {
-		sess := session.Session{
+		sess := internalsession.Session{
 			ID:       "session-no-provider",
 			TenantID: "tenant-no-provider",
 			Issuer:   "https://issuer.example.com",
@@ -356,7 +357,7 @@ func TestGetSession(t *testing.T) {
 		// No trust added to repo
 		trustRepo := mocktrust.NewInMemRepository()
 		trust := newTrust(trustRepo)
-		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "")
+		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute)
 
 		req := &sessionv1.GetSessionRequest{
 			SessionId: "session-no-provider",
@@ -371,7 +372,7 @@ func TestGetSession(t *testing.T) {
 	})
 
 	t.Run("invalid - trust is blocked", func(t *testing.T) {
-		sess := session.Session{
+		sess := internalsession.Session{
 			ID:       "session-blocked",
 			TenantID: "tenant-blocked",
 			Issuer:   "https://issuer.example.com",
@@ -392,7 +393,7 @@ func TestGetSession(t *testing.T) {
 		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 		trust := newTrust(trustRepo)
 
-		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "")
+		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute)
 
 		req := &sessionv1.GetSessionRequest{
 			SessionId: "session-blocked",
@@ -419,7 +420,7 @@ func TestGetSession(t *testing.T) {
 	})
 
 	t.Run("invalid - tenant ID mismatch", func(t *testing.T) {
-		sess := session.Session{
+		sess := internalsession.Session{
 			ID:       "session-tenant",
 			TenantID: "correct-tenant",
 			Issuer:   "https://issuer.example.com",
@@ -440,7 +441,7 @@ func TestGetSession(t *testing.T) {
 		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 		trust := newTrust(trustRepo)
 
-		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "")
+		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute)
 
 		req := &sessionv1.GetSessionRequest{
 			SessionId: "session-tenant",
@@ -455,7 +456,7 @@ func TestGetSession(t *testing.T) {
 	})
 
 	t.Run("error - GetOpenIDConfig fails", func(t *testing.T) {
-		sess := session.Session{
+		sess := internalsession.Session{
 			ID:       "session-config-fail",
 			TenantID: "tenant-config-fail",
 			Issuer:   "https://invalid-issuer-no-server.example.com",
@@ -476,7 +477,7 @@ func TestGetSession(t *testing.T) {
 		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 		trust := newTrust(trustRepo)
 
-		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "")
+		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute)
 
 		req := &sessionv1.GetSessionRequest{
 			SessionId: "session-config-fail",
@@ -506,7 +507,7 @@ func TestGetSession(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		sess := session.Session{
+		sess := internalsession.Session{
 			ID:          "session-introspect-fail",
 			TenantID:    "tenant-introspect-fail",
 			Issuer:      testServer.URL,
@@ -522,14 +523,15 @@ func TestGetSession(t *testing.T) {
 			TenantId: new(sess.TenantID),
 			Blocked:  new(false),
 			Oidc: oidcv1.OIDC_builder{
-				Issuer: new(testServer.URL),
+				Issuer:   new(testServer.URL),
+				ClientId: new("test-client-id"),
 			}.Build(),
 		}.Build()
 		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 		trust := newTrust(trustRepo)
 
-		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "",
-			grpc.WithAllowHttpScheme(true),
+		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute,
+			session.WithAllowHttpScheme(true),
 		)
 
 		req := &sessionv1.GetSessionRequest{
@@ -562,7 +564,7 @@ func TestGetSession(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		sess := session.Session{
+		sess := internalsession.Session{
 			ID:          "session-inactive-token",
 			TenantID:    "tenant-inactive-token",
 			Issuer:      testServer.URL,
@@ -578,14 +580,15 @@ func TestGetSession(t *testing.T) {
 			TenantId: new(sess.TenantID),
 			Blocked:  new(false),
 			Oidc: oidcv1.OIDC_builder{
-				Issuer: new(testServer.URL),
+				Issuer:   new(testServer.URL),
+				ClientId: new("test-client-id"),
 			}.Build(),
 		}.Build()
 		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 		trust := newTrust(trustRepo)
 
-		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "",
-			grpc.WithAllowHttpScheme(true),
+		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute,
+			session.WithAllowHttpScheme(true),
 		)
 
 		req := &sessionv1.GetSessionRequest{
@@ -611,7 +614,7 @@ func TestGetSession(t *testing.T) {
 		}))
 		defer testServer.Close()
 
-		sess := session.Session{
+		sess := internalsession.Session{
 			ID:       "session-bump-fail",
 			TenantID: "tenant-bump-fail",
 			Issuer:   testServer.URL,
@@ -627,14 +630,15 @@ func TestGetSession(t *testing.T) {
 			TenantId: new(sess.TenantID),
 			Blocked:  new(false),
 			Oidc: oidcv1.OIDC_builder{
-				Issuer: new(testServer.URL),
+				Issuer:   new(testServer.URL),
+				ClientId: new("test-client-id"),
 			}.Build(),
 		}.Build()
 		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 		trust := newTrust(trustRepo)
 
-		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "",
-			grpc.WithAllowHttpScheme(true),
+		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute,
+			session.WithAllowHttpScheme(true),
 		)
 
 		req := &sessionv1.GetSessionRequest{
@@ -654,7 +658,7 @@ func TestWithQueryParametersIntrospect(t *testing.T) {
 	ctx := t.Context()
 	t.Run("sets query parameters correctly", func(t *testing.T) {
 		params := []string{"param1", "param2", "param3"}
-		opt := grpc.WithQueryParametersIntrospect(params)
+		opt := session.WithQueryParametersIntrospect(params)
 
 		assert.NotNil(t, opt)
 
@@ -663,7 +667,7 @@ func TestWithQueryParametersIntrospect(t *testing.T) {
 		trustRepo := mocktrust.NewInMemRepository()
 		trust := newTrust(trustRepo)
 
-		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "", opt)
+		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute, opt)
 
 		assert.NotNil(t, server)
 	})
@@ -686,7 +690,7 @@ func TestGetOIDCProvider(t *testing.T) {
 		trust := newTrust(trustRepo)
 		sessionRepo := sessionmock.NewInMemRepository()
 
-		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "")
+		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute)
 
 		req := &sessionv1.GetOIDCProviderRequest{
 			TenantId: "tenant-123",
@@ -706,7 +710,7 @@ func TestGetOIDCProvider(t *testing.T) {
 		sessionRepo := sessionmock.NewInMemRepository()
 		trustRepo := mocktrust.NewInMemRepository()
 		trust := newTrust(trustRepo)
-		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "")
+		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute)
 		req := &sessionv1.GetOIDCProviderRequest{
 			TenantId: "non-existent-tenant",
 		}
@@ -724,7 +728,7 @@ func TestGetOIDCProvider(t *testing.T) {
 			mocktrust.WithGetError(errors.New("database connection error")),
 		)
 		trust := newTrust(trustRepo)
-		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "")
+		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute)
 		req := &sessionv1.GetOIDCProviderRequest{
 			TenantId: "tenant-123",
 		}
