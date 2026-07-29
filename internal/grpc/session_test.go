@@ -111,7 +111,7 @@ func TestGetSession(t *testing.T) {
 			AuthContext: map[string]string{"key": "value"},
 		}
 
-		mapping := trustv1.Trust_builder{
+		trustData := trustv1.Trust_builder{
 			TenantId: new(sess.TenantID),
 			Blocked:  new(false),
 			Oidc: oidcv1.OIDC_builder{
@@ -125,7 +125,7 @@ func TestGetSession(t *testing.T) {
 		// Mark session as active
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
-		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(mapping))
+		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 		trust := newTrust(trustRepo)
 		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "",
 			grpc.WithAllowHttpScheme(true),
@@ -181,7 +181,7 @@ func TestGetSession(t *testing.T) {
 			},
 		}
 
-		mapping := trustv1.Trust_builder{
+		trustData := trustv1.Trust_builder{
 			TenantId: new(sess.TenantID),
 			Blocked:  new(false),
 			Oidc: oidcv1.OIDC_builder{
@@ -194,7 +194,7 @@ func TestGetSession(t *testing.T) {
 		)
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
-		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(mapping))
+		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 		trust := newTrust(trustRepo)
 		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "",
 			grpc.WithAllowHttpScheme(true),
@@ -236,7 +236,7 @@ func TestGetSession(t *testing.T) {
 			},
 		}
 
-		mapping := trustv1.Trust_builder{
+		trustData := trustv1.Trust_builder{
 			TenantId: new(sess.TenantID),
 			Blocked:  new(false),
 			Oidc: oidcv1.OIDC_builder{
@@ -249,7 +249,7 @@ func TestGetSession(t *testing.T) {
 		)
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
-		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(mapping))
+		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 		trust := newTrust(trustRepo)
 		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "",
 			grpc.WithAllowHttpScheme(true),
@@ -341,7 +341,7 @@ func TestGetSession(t *testing.T) {
 		assert.False(t, resp.GetValid())
 	})
 
-	t.Run("invalid - trust mapping not found", func(t *testing.T) {
+	t.Run("invalid - trust not found", func(t *testing.T) {
 		sess := session.Session{
 			ID:       "session-no-provider",
 			TenantID: "tenant-no-provider",
@@ -353,7 +353,7 @@ func TestGetSession(t *testing.T) {
 		)
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
-		// No mapping added to repo
+		// No trust added to repo
 		trustRepo := mocktrust.NewInMemRepository()
 		trust := newTrust(trustRepo)
 		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "")
@@ -370,7 +370,7 @@ func TestGetSession(t *testing.T) {
 		assert.False(t, resp.GetValid())
 	})
 
-	t.Run("invalid - trust mapping is blocked", func(t *testing.T) {
+	t.Run("invalid - trust is blocked", func(t *testing.T) {
 		sess := session.Session{
 			ID:       "session-blocked",
 			TenantID: "tenant-blocked",
@@ -382,14 +382,14 @@ func TestGetSession(t *testing.T) {
 		)
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
-		mapping := trustv1.Trust_builder{
+		trustData := trustv1.Trust_builder{
 			TenantId: new(sess.TenantID),
 			Blocked:  new(true),
 			Oidc: oidcv1.OIDC_builder{
 				Issuer: new("https://issuer.example.com"),
 			}.Build(),
 		}.Build()
-		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(mapping))
+		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 		trust := newTrust(trustRepo)
 
 		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "")
@@ -430,14 +430,14 @@ func TestGetSession(t *testing.T) {
 		)
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
-		mapping := trustv1.Trust_builder{
+		trustData := trustv1.Trust_builder{
 			TenantId: new("wrong-tenant"),
 			Blocked:  new(false),
 			Oidc: oidcv1.OIDC_builder{
 				Issuer: new("https://issuer.example.com"),
 			}.Build(),
 		}.Build()
-		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(mapping))
+		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 		trust := newTrust(trustRepo)
 
 		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "")
@@ -466,14 +466,14 @@ func TestGetSession(t *testing.T) {
 		)
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
-		mapping := trustv1.Trust_builder{
+		trustData := trustv1.Trust_builder{
 			TenantId: new(sess.TenantID),
 			Blocked:  new(false),
 			Oidc: oidcv1.OIDC_builder{
 				Issuer: new("https://invalid-issuer-no-server.example.com"),
 			}.Build(),
 		}.Build()
-		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(mapping))
+		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 		trust := newTrust(trustRepo)
 
 		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "")
@@ -518,14 +518,14 @@ func TestGetSession(t *testing.T) {
 		)
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
-		mapping := trustv1.Trust_builder{
+		trustData := trustv1.Trust_builder{
 			TenantId: new(sess.TenantID),
 			Blocked:  new(false),
 			Oidc: oidcv1.OIDC_builder{
 				Issuer: new(testServer.URL),
 			}.Build(),
 		}.Build()
-		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(mapping))
+		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 		trust := newTrust(trustRepo)
 
 		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "",
@@ -574,14 +574,14 @@ func TestGetSession(t *testing.T) {
 		)
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
-		mapping := trustv1.Trust_builder{
+		trustData := trustv1.Trust_builder{
 			TenantId: new(sess.TenantID),
 			Blocked:  new(false),
 			Oidc: oidcv1.OIDC_builder{
 				Issuer: new(testServer.URL),
 			}.Build(),
 		}.Build()
-		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(mapping))
+		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 		trust := newTrust(trustRepo)
 
 		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "",
@@ -623,14 +623,14 @@ func TestGetSession(t *testing.T) {
 		)
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
-		mapping := trustv1.Trust_builder{
+		trustData := trustv1.Trust_builder{
 			TenantId: new(sess.TenantID),
 			Blocked:  new(false),
 			Oidc: oidcv1.OIDC_builder{
 				Issuer: new(testServer.URL),
 			}.Build(),
 		}.Build()
-		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(mapping))
+		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 		trust := newTrust(trustRepo)
 
 		server := grpc.NewSessionServer(ctx, sessionRepo, trust, 90*time.Minute, "",
@@ -673,7 +673,7 @@ func TestGetOIDCProvider(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("success - returns OIDC provider", func(t *testing.T) {
-		mapping := trustv1.Trust_builder{
+		trustData := trustv1.Trust_builder{
 			TenantId: new("tenant-123"),
 			Blocked:  new(false),
 			Oidc: oidcv1.OIDC_builder{
@@ -682,7 +682,7 @@ func TestGetOIDCProvider(t *testing.T) {
 				Audiences: []string{"audience1", "audience2"},
 			}.Build(),
 		}.Build()
-		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(mapping))
+		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 		trust := newTrust(trustRepo)
 		sessionRepo := sessionmock.NewInMemRepository()
 

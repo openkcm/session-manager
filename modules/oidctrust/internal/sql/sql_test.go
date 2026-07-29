@@ -50,16 +50,16 @@ func TestMain(m *testing.M) {
 
 func TestRepository_Get(t *testing.T) {
 	tests := []struct {
-		name        string
-		tenantID    string
-		wantMapping *trustv1.Trust
-		assertErr   assert.ErrorAssertionFunc
+		name      string
+		tenantID  string
+		wantTrust *trustv1.Trust
+		assertErr assert.ErrorAssertionFunc
 	}{
 		{
-			name:        "Success",
-			tenantID:    "tenant1-id",
-			wantMapping: trustv1.Trust_builder{TenantId: new("tenant1-id"), Blocked: new(false), Oidc: oidcv1.OIDC_builder{Issuer: new("url-one"), Audiences: make([]string, 0)}.Build()}.Build(),
-			assertErr:   assert.NoError,
+			name:      "Success",
+			tenantID:  "tenant1-id",
+			wantTrust: trustv1.Trust_builder{TenantId: new("tenant1-id"), Blocked: new(false), Oidc: oidcv1.OIDC_builder{Issuer: new("url-one"), Audiences: make([]string, 0)}.Build()}.Build(),
+			assertErr: assert.NoError,
 		},
 		{
 			name:      "Error does not exist",
@@ -71,14 +71,14 @@ func TestRepository_Get(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := sqltrust.NewRepository(dbPool)
 
-			gotMapping, err := r.Get(t.Context(), tt.tenantID)
+			gotTrust, err := r.Get(t.Context(), tt.tenantID)
 			if !tt.assertErr(t, err, fmt.Sprintf("Repository.Get() error %v", err)) || err != nil {
-				assert.Zerof(t, gotMapping, "Repository.Get() extected zero value if an error is returned, got %v", gotMapping)
+				assert.Zerof(t, gotTrust, "Repository.Get() extected zero value if an error is returned, got %v", gotTrust)
 				return
 			}
 
-			if diff := cmp.Diff(tt.wantMapping, gotMapping, protocmp.Transform()); diff != "" {
-				t.Fatalf("mapping not equal:\n%s", diff)
+			if diff := cmp.Diff(tt.wantTrust, gotTrust, protocmp.Transform()); diff != "" {
+				t.Fatalf("trust not equal:\n%s", diff)
 			}
 		})
 	}
@@ -87,32 +87,32 @@ func TestRepository_Get(t *testing.T) {
 func TestRepository_Create(t *testing.T) {
 	tests := []struct {
 		name      string
-		mapping   *trustv1.Trust
+		trust     *trustv1.Trust
 		assertErr assert.ErrorAssertionFunc
 	}{
 		{
 			name:      "Create succeeds",
-			mapping:   trustv1.Trust_builder{TenantId: new("tenant-id-create-success"), Blocked: new(false), Oidc: oidcv1.OIDC_builder{Issuer: new("http://oidc-success.example.com"), JwksUri: new("jwks.example.com"), Audiences: []string{"cmk.example.com"}}.Build()}.Build(),
+			trust:     trustv1.Trust_builder{TenantId: new("tenant-id-create-success"), Blocked: new(false), Oidc: oidcv1.OIDC_builder{Issuer: new("http://oidc-success.example.com"), JwksUri: new("jwks.example.com"), Audiences: []string{"cmk.example.com"}}.Build()}.Build(),
 			assertErr: assert.NoError,
 		},
 		{
 			name:      "Duplicate",
-			mapping:   trustv1.Trust_builder{TenantId: new("tenant1-id"), Blocked: new(false), Oidc: oidcv1.OIDC_builder{Issuer: new("url-one"), JwksUri: new("jwks.example.com"), Audiences: []string{"cmk.example.com"}}.Build()}.Build(),
+			trust:     trustv1.Trust_builder{TenantId: new("tenant1-id"), Blocked: new(false), Oidc: oidcv1.OIDC_builder{Issuer: new("url-one"), JwksUri: new("jwks.example.com"), Audiences: []string{"cmk.example.com"}}.Build()}.Build(),
 			assertErr: assert.Error,
 		},
 		{
 			name:      "Create without JWKSURI and Audiences succeeds",
-			mapping:   trustv1.Trust_builder{TenantId: new("tenant-id-create-without-jwks-aud-success"), Blocked: new(false), Oidc: oidcv1.OIDC_builder{Issuer: new("http://oidc-success-2.example.com"), Audiences: []string{}}.Build()}.Build(),
+			trust:     trustv1.Trust_builder{TenantId: new("tenant-id-create-without-jwks-aud-success"), Blocked: new(false), Oidc: oidcv1.OIDC_builder{Issuer: new("http://oidc-success-2.example.com"), Audiences: []string{}}.Build()}.Build(),
 			assertErr: assert.NoError,
 		},
 		{
 			name:      "Create without JWKSURI succeeds",
-			mapping:   trustv1.Trust_builder{TenantId: new("tenant-id-create-without-jwks-success"), Blocked: new(false), Oidc: oidcv1.OIDC_builder{Issuer: new("http://oidc-success-3.example.com"), Audiences: []string{"cmk.example.com"}}.Build()}.Build(),
+			trust:     trustv1.Trust_builder{TenantId: new("tenant-id-create-without-jwks-success"), Blocked: new(false), Oidc: oidcv1.OIDC_builder{Issuer: new("http://oidc-success-3.example.com"), Audiences: []string{"cmk.example.com"}}.Build()}.Build(),
 			assertErr: assert.NoError,
 		},
 		{
 			name:      "Create without Audiences succeeds",
-			mapping:   trustv1.Trust_builder{TenantId: new("tenant-id-create-without-aud-success"), Blocked: new(false), Oidc: oidcv1.OIDC_builder{Issuer: new("http://oidc-success-4.example.com"), JwksUri: new("jwks.example.com"), Audiences: []string{}}.Build()}.Build(),
+			trust:     trustv1.Trust_builder{TenantId: new("tenant-id-create-without-aud-success"), Blocked: new(false), Oidc: oidcv1.OIDC_builder{Issuer: new("http://oidc-success-4.example.com"), JwksUri: new("jwks.example.com"), Audiences: []string{}}.Build()}.Build(),
 			assertErr: assert.NoError,
 		},
 	}
@@ -122,17 +122,17 @@ func TestRepository_Create(t *testing.T) {
 			r := sqltrust.NewRepository(dbPool)
 
 			// When
-			err := r.Create(t.Context(), tt.mapping)
+			err := r.Create(t.Context(), tt.trust)
 			if !tt.assertErr(t, err, fmt.Sprintf("Repository.Create() error %v", err)) || err != nil {
 				return
 			}
 
 			// Then
-			mapping, err := r.Get(t.Context(), tt.mapping.GetTenantId())
+			gotCreated, err := r.Get(t.Context(), tt.trust.GetTenantId())
 			require.NoError(t, err)
 
-			if diff := cmp.Diff(tt.mapping, mapping, protocmp.Transform()); diff != "" {
-				t.Fatalf("Unexpected mapping in the database (-want, +got):\n%s", diff)
+			if diff := cmp.Diff(tt.trust, gotCreated, protocmp.Transform()); diff != "" {
+				t.Fatalf("Unexpected trust in the database (-want, +got):\n%s", diff)
 			}
 		})
 	}
@@ -140,9 +140,9 @@ func TestRepository_Create(t *testing.T) {
 
 func TestRepository_Delete(t *testing.T) {
 	const tenantID = "tenant-id-delete-success"
-	mapping := trustv1.Trust_builder{TenantId: new(tenantID), Blocked: new(false), Oidc: oidcv1.OIDC_builder{Issuer: new("http://oidc-to-delete.example.com"), JwksUri: new("jwks.example.com"), Audiences: []string{"cmk.example.com"}}.Build()}.Build()
+	trust := trustv1.Trust_builder{TenantId: new(tenantID), Blocked: new(false), Oidc: oidcv1.OIDC_builder{Issuer: new("http://oidc-to-delete.example.com"), JwksUri: new("jwks.example.com"), Audiences: []string{"cmk.example.com"}}.Build()}.Build()
 	r := sqltrust.NewRepository(dbPool)
-	err := r.Create(t.Context(), mapping)
+	err := r.Create(t.Context(), trust)
 	require.NoError(t, err, "Inserting test data")
 
 	tests := []struct {
@@ -168,65 +168,65 @@ func TestRepository_Delete(t *testing.T) {
 				return
 			}
 
-			gotMapping, err := r.Get(t.Context(), tt.tenantID)
+			gotTrust, err := r.Get(t.Context(), tt.tenantID)
 			if !errors.Is(err, serviceerr.ErrNotFound) {
-				t.Error("The mapping is expected to be deleted")
+				t.Error("The trust is expected to be deleted")
 			}
-			assert.Zero(t, gotMapping, "The mapping is expected to be deleted, instead a value is returned")
+			assert.Zero(t, gotTrust, "The trust is expected to be deleted, instead a value is returned")
 		})
 	}
 }
 
 func TestRepository_Update(t *testing.T) {
 	const tenantID = "tenant-id-update-success"
-	mapping := trustv1.Trust_builder{TenantId: new(tenantID), Blocked: new(false), Oidc: oidcv1.OIDC_builder{Issuer: new("http://oidc-to-update.example.com"), JwksUri: new("jwks.example.com"), Audiences: []string{"cmk.example.com"}}.Build()}.Build()
+	trust := trustv1.Trust_builder{TenantId: new(tenantID), Blocked: new(false), Oidc: oidcv1.OIDC_builder{Issuer: new("http://oidc-to-update.example.com"), JwksUri: new("jwks.example.com"), Audiences: []string{"cmk.example.com"}}.Build()}.Build()
 	r := sqltrust.NewRepository(dbPool)
-	err := r.Create(t.Context(), mapping)
+	err := r.Create(t.Context(), trust)
 	require.NoError(t, err, "Inserting test data")
 
 	tests := []struct {
 		name      string
-		mapping   *trustv1.Trust
+		trust     *trustv1.Trust
 		assertErr assert.ErrorAssertionFunc
 	}{
 		{
 			name:      "Update succeeds",
-			mapping:   trustv1.Trust_builder{TenantId: new(tenantID), Blocked: new(true), Oidc: oidcv1.OIDC_builder{Issuer: new(mapping.GetOidc().GetIssuer()), JwksUri: new("jwks-updated.example.com"), Audiences: mapping.GetOidc().GetAudiences()}.Build()}.Build(),
+			trust:     trustv1.Trust_builder{TenantId: new(tenantID), Blocked: new(true), Oidc: oidcv1.OIDC_builder{Issuer: new(trust.GetOidc().GetIssuer()), JwksUri: new("jwks-updated.example.com"), Audiences: trust.GetOidc().GetAudiences()}.Build()}.Build(),
 			assertErr: assert.NoError,
 		},
 		{
 			name:      "Does not exist",
-			mapping:   trustv1.Trust_builder{TenantId: new("does-not-exist"), Blocked: new(true), Oidc: oidcv1.OIDC_builder{Issuer: new("does-not-exist"), JwksUri: new("jwks-updated.example.com"), Audiences: mapping.GetOidc().GetAudiences()}.Build()}.Build(),
+			trust:     trustv1.Trust_builder{TenantId: new("does-not-exist"), Blocked: new(true), Oidc: oidcv1.OIDC_builder{Issuer: new("does-not-exist"), JwksUri: new("jwks-updated.example.com"), Audiences: trust.GetOidc().GetAudiences()}.Build()}.Build(),
 			assertErr: assert.Error,
 		},
 		{
 			name:      "Update without JWKSURI and Audiences succeeds",
-			mapping:   trustv1.Trust_builder{TenantId: new(tenantID), Blocked: new(true), Oidc: oidcv1.OIDC_builder{Issuer: new(mapping.GetOidc().GetIssuer()), Audiences: []string{}}.Build()}.Build(),
+			trust:     trustv1.Trust_builder{TenantId: new(tenantID), Blocked: new(true), Oidc: oidcv1.OIDC_builder{Issuer: new(trust.GetOidc().GetIssuer()), Audiences: []string{}}.Build()}.Build(),
 			assertErr: assert.NoError,
 		},
 		{
 			name:      "Update without JWKSURI succeeds",
-			mapping:   trustv1.Trust_builder{TenantId: new(tenantID), Blocked: new(true), Oidc: oidcv1.OIDC_builder{Issuer: new(mapping.GetOidc().GetIssuer()), Audiences: mapping.GetOidc().GetAudiences()}.Build()}.Build(),
+			trust:     trustv1.Trust_builder{TenantId: new(tenantID), Blocked: new(true), Oidc: oidcv1.OIDC_builder{Issuer: new(trust.GetOidc().GetIssuer()), Audiences: trust.GetOidc().GetAudiences()}.Build()}.Build(),
 			assertErr: assert.NoError,
 		},
 		{
 			name:      "Update without Audiences succeeds",
-			mapping:   trustv1.Trust_builder{TenantId: new(tenantID), Blocked: new(true), Oidc: oidcv1.OIDC_builder{Issuer: new(mapping.GetOidc().GetIssuer()), JwksUri: new("jwks-updated.example.com"), Audiences: []string{}}.Build()}.Build(),
+			trust:     trustv1.Trust_builder{TenantId: new(tenantID), Blocked: new(true), Oidc: oidcv1.OIDC_builder{Issuer: new(trust.GetOidc().GetIssuer()), JwksUri: new("jwks-updated.example.com"), Audiences: []string{}}.Build()}.Build(),
 			assertErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := r.Update(t.Context(), tt.mapping)
+			err := r.Update(t.Context(), tt.trust)
 			if !tt.assertErr(t, err, fmt.Sprintf("Repository.Update() error %v", err)) || err != nil {
 				return
 			}
 
-			gotMapping, err := r.Get(t.Context(), tt.mapping.GetTenantId())
+			gotTrust, err := r.Get(t.Context(), tt.trust.GetTenantId())
 			require.NoError(t, err)
 
-			if diff := cmp.Diff(tt.mapping, gotMapping, protocmp.Transform()); diff != "" {
-				t.Fatalf("Unexpected mapping in the database (-want, +got):\n%s", diff)
+			if diff := cmp.Diff(tt.trust, gotTrust, protocmp.Transform()); diff != "" {
+				t.Fatalf("Unexpected trust in the database (-want, +got):\n%s", diff)
 			}
 		})
 	}

@@ -193,7 +193,7 @@ func TestGRPCServer(t *testing.T) {
 		assert.True(t, applyResp.GetSuccess())
 	})
 
-	t.Run("ApplyTrustMapping idempotent - applying same mapping twice", func(t *testing.T) {
+	t.Run("ApplyTrustMapping idempotent - applying same trust twice", func(t *testing.T) {
 		expJwks := "jks-idempotent"
 		expTenantID := uuid.Must(uuid.NewV4()).String()
 		expIssuer := uuid.Must(uuid.NewV4()).String()
@@ -305,7 +305,7 @@ func TestGRPCServer(t *testing.T) {
 		expTenantID := uuid.Must(uuid.NewV4()).String()
 		expIssuer := uuid.Must(uuid.NewV4()).String()
 
-		// Apply mapping
+		// Apply trust
 		applyRes, err := trust.ApplyTrustMapping(ctx, trustmappingv1.ApplyTrustMappingRequest_builder{
 			TenantId: &expTenantID,
 			Oidc: oidcv1.OIDC_builder{

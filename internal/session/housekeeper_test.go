@@ -106,7 +106,7 @@ func TestRefreshAccessToken(t *testing.T) {
 		defer tokenServer.Close()
 		tokenServerURL = tokenServer.URL + "/token"
 
-		mapping := trustv1.Trust_builder{
+		trustData := trustv1.Trust_builder{
 			TenantId: new(tenantID),
 			Oidc: oidcv1.OIDC_builder{
 				Issuer:   new(discoveryServerURL),
@@ -114,7 +114,7 @@ func TestRefreshAccessToken(t *testing.T) {
 			}.Build(),
 		}.Build()
 
-		oidcRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(mapping))
+		oidcRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 		trust := newTrust(oidcRepo)
 
 		sess := session.Session{
@@ -157,7 +157,7 @@ func TestRefreshAccessToken(t *testing.T) {
 		assert.Equal(t, "new-refresh-token", updatedSess.RefreshToken)
 	})
 
-	t.Run("Error - trust mapping not found", func(t *testing.T) {
+	t.Run("Error - trust not found", func(t *testing.T) {
 		oidcRepo := mocktrust.NewInMemRepository()
 		trust := newTrust(oidcRepo)
 
@@ -207,7 +207,7 @@ func TestRefreshAccessToken(t *testing.T) {
 		defer tokenServer.Close()
 		tokenServerURL = tokenServer.URL + "/token"
 
-		mapping := trustv1.Trust_builder{
+		trustData := trustv1.Trust_builder{
 			TenantId: new(tenantID),
 			Oidc: oidcv1.OIDC_builder{
 				Issuer:   new(discoveryServerURL),
@@ -215,7 +215,7 @@ func TestRefreshAccessToken(t *testing.T) {
 			}.Build(),
 		}.Build()
 
-		oidcRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(mapping))
+		oidcRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 
 		sess := session.Session{
 			ID:                sessionID,
@@ -266,7 +266,7 @@ func TestRefreshAccessToken(t *testing.T) {
 		defer discoveryServer.Close()
 		discoveryServerURL = discoveryServer.URL
 
-		mapping := trustv1.Trust_builder{
+		trustData := trustv1.Trust_builder{
 			TenantId: new(tenantID),
 			Oidc: oidcv1.OIDC_builder{
 				Issuer:   new(discoveryServer.URL),
@@ -274,7 +274,7 @@ func TestRefreshAccessToken(t *testing.T) {
 			}.Build(),
 		}.Build()
 
-		oidcRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(mapping))
+		oidcRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 
 		sess := session.Session{
 			ID:                sessionID,
@@ -458,7 +458,7 @@ func TestHousekeepSession_ErrorCases(t *testing.T) {
 		}))
 		defer tokenServer.Close()
 
-		mapping := trustv1.Trust_builder{
+		trustData := trustv1.Trust_builder{
 			TenantId: new(tenantID),
 			Oidc: oidcv1.OIDC_builder{
 				Issuer:   new(discoveryServerURL),
@@ -466,7 +466,7 @@ func TestHousekeepSession_ErrorCases(t *testing.T) {
 			}.Build(),
 		}.Build()
 
-		oidcRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(mapping))
+		oidcRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
 		trust := newTrust(oidcRepo)
 
 		sess := session.Session{

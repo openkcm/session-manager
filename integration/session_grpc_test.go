@@ -148,7 +148,7 @@ func TestSessionGRPC(t *testing.T) {
 		err = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 		require.NoError(t, err)
 
-		// Note: This test will fail validation because there's no trust mapping configured
+		// Note: This test will fail validation because there's no trust configured
 		// but it tests the session retrieval path
 		resp, err := sessionClient.GetSession(ctx, &sessionv1.GetSessionRequest{
 			SessionId: sess.ID,
@@ -156,7 +156,7 @@ func TestSessionGRPC(t *testing.T) {
 		})
 		assert.NoError(t, err)
 		assert.NotNil(t, resp)
-		// Will be false because trust mapping is not configured, but tests the flow
+		// Will be false because trust is not configured, but tests the flow
 		assert.False(t, resp.GetValid())
 	})
 

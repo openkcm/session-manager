@@ -11,31 +11,31 @@ import (
 	"github.com/openkcm/session-manager/pkg/serviceerr"
 )
 
-// ApplyMapping implements [sessionmanager.Trust].
-func (m *TrustModule) ApplyMapping(ctx context.Context, trust *trustv1.Trust) error {
+// Apply implements [sessionmanager.Trust].
+func (m *TrustModule) Apply(ctx context.Context, trust *trustv1.Trust) error {
 	if _, err := m.repository.Get(ctx, trust.GetTenantId()); err != nil {
 		err = m.repository.Create(ctx, trust)
 		if err != nil {
-			return fmt.Errorf("creating mapping for tenant: %w", err)
+			return fmt.Errorf("creating trust for tenant: %w", err)
 		}
 	} else {
 		err = m.repository.Update(ctx, trust)
 		if err != nil {
-			return fmt.Errorf("updating mapping for tenant: %w", err)
+			return fmt.Errorf("updating trust for tenant: %w", err)
 		}
 	}
 
 	return nil
 }
 
-// BlockMapping implements [sessionmanager.Trust].
-func (m *TrustModule) BlockMapping(ctx context.Context, tenantID string) error {
+// Block implements [sessionmanager.Trust].
+func (m *TrustModule) Block(ctx context.Context, tenantID string) error {
 	trust, err := m.repository.Get(ctx, tenantID)
 	if err != nil {
 		if errors.Is(err, serviceerr.ErrNotFound) {
 			return nil
 		}
-		return fmt.Errorf("getting mapping for tenant: %w", err)
+		return fmt.Errorf("getting trust for tenant: %w", err)
 	}
 	if trust.GetBlocked() {
 		return nil
@@ -46,29 +46,29 @@ func (m *TrustModule) BlockMapping(ctx context.Context, tenantID string) error {
 		if errors.Is(err, serviceerr.ErrNotFound) {
 			return nil
 		}
-		return fmt.Errorf("updating mapping for blocking tenant: %w", err)
+		return fmt.Errorf("updating trust for blocking tenant: %w", err)
 	}
 	return nil
 }
 
-// RemoveMapping implements [sessionmanager.Trust].
-func (m *TrustModule) RemoveMapping(ctx context.Context, tenantID string) error {
+// Remove implements [sessionmanager.Trust].
+func (m *TrustModule) Remove(ctx context.Context, tenantID string) error {
 	err := m.repository.Delete(ctx, tenantID)
 	if err != nil {
-		return fmt.Errorf("deleting mapping for tenant: %w", err)
+		return fmt.Errorf("deleting trust for tenant: %w", err)
 	}
 
 	return nil
 }
 
-// UnblockMapping implements [sessionmanager.Trust].
-func (m *TrustModule) UnblockMapping(ctx context.Context, tenantID string) error {
+// Unblock implements [sessionmanager.Trust].
+func (m *TrustModule) Unblock(ctx context.Context, tenantID string) error {
 	trust, err := m.repository.Get(ctx, tenantID)
 	if err != nil {
 		if errors.Is(err, serviceerr.ErrNotFound) {
 			return nil
 		}
-		return fmt.Errorf("getting mapping for tenant: %w", err)
+		return fmt.Errorf("getting trust for tenant: %w", err)
 	}
 	if !trust.GetBlocked() {
 		return nil
@@ -78,7 +78,7 @@ func (m *TrustModule) UnblockMapping(ctx context.Context, tenantID string) error
 		if errors.Is(err, serviceerr.ErrNotFound) {
 			return nil
 		}
-		return fmt.Errorf("updating mapping for unblocking tenant: %w", err)
+		return fmt.Errorf("updating trust for unblocking tenant: %w", err)
 	}
 	return nil
 }

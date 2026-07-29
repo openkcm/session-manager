@@ -17,13 +17,13 @@ import (
 )
 
 func StartGRPCServer(ctx context.Context, cfg *config.Config,
-	oidcmappingsrv *grpc.TrustMappingServer,
+	trustsrv *grpc.TrustMappingServer,
 	sessionsrv *grpc.SessionServer,
 ) error {
 	grpcServer := commongrpc.NewServer(ctx, &cfg.GRPC.GRPCServer)
 
-	// Register OIDC mapping server for the regional tenant manager
-	trustmappingv1.RegisterServiceServer(grpcServer, oidcmappingsrv)
+	// Register Trust server for the regional tenant manager
+	trustmappingv1.RegisterServiceServer(grpcServer, trustsrv)
 	// Register Session server for ExtAuthZ
 	sessionv1.RegisterServiceServer(grpcServer, sessionsrv)
 

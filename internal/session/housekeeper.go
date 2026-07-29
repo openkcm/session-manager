@@ -98,7 +98,7 @@ func (m *Manager) housekeepSession(ctx context.Context, s Session, refreshTrigge
 func (m *Manager) refreshAccessToken(ctx context.Context, s Session) error {
 	trust, err := m.trust.Get(ctx, s.TenantID)
 	if err != nil {
-		return fmt.Errorf("could not get trust mapping: %w", err)
+		return fmt.Errorf("could not get trust: %w", err)
 	}
 
 	oidc := trust.GetOidc()
