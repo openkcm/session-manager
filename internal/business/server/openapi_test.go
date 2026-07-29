@@ -14,8 +14,8 @@ import (
 
 	"github.com/openkcm/session-manager/internal/middleware"
 	"github.com/openkcm/session-manager/internal/openapi"
-	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/internal/session"
+	"github.com/openkcm/session-manager/pkg/serviceerr"
 )
 
 const (

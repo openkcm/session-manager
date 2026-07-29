@@ -1,12 +1,12 @@
 version: "2"
 sql:
     - engine: postgresql
-      queries: ./internal/trust/trustsql/queries.sql
-      schema: ./sql
+      queries: ./modules/oidctrust/internal/sql/queries.sql
+      schema: ./modules/oidctrust/migrations
       gen:
           go:
               package: queries
-              out: ./internal/trust/trustsql/internal/queries
+              out: ./modules/oidctrust/internal/sql/queries
               sql_package: pgx/v5
               sql_driver: github.com/jackc/pgx/v5
               emit_db_tags: true
