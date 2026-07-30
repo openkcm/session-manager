@@ -16,8 +16,45 @@ DB_ADMIN_PASS_KEY := secretKey
 VALKEY_PASS := $(DB_PASS)
 K3D_CLUSTER_NAME := session-manager-test
 SERVICE_NAME := session-manager
+DEV_COMPOSE := dev/docker-compose.yaml
 
 all: clean lint build test image
+
+.PHONY: help
+help: ## Show this help
+	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-18s\033[0m %s\n", $$1, $$2}'
+
+# ----------------------------------------------------------------------------
+# Local development (binary on host, dependencies in Docker Compose).
+# This is NOT the k3d/Helm path (`make start`). See docs/local-dev.md.
+# ----------------------------------------------------------------------------
+
+.PHONY: dev-deps
+dev-deps: ## Start local dependencies (Postgres, Valkey, Dex) and wait until healthy
+	@echo "Starting local dependencies via Docker Compose"
+	docker compose -f $(DEV_COMPOSE) up -d --wait
+
+.PHONY: dev-deps-down
+dev-deps-down: ## Stop and remove local dependencies
+	docker compose -f $(DEV_COMPOSE) down
+
+.PHONY: dev-deps-reset
+dev-deps-reset: ## Stop and WIPE local dependency data (clean-slate DB)
+	docker compose -f $(DEV_COMPOSE) down -v
+
+.PHONY: dev-deps-logs
+dev-deps-logs: ## Tail logs from the local dependencies
+	docker compose -f $(DEV_COMPOSE) logs -f
+
+.PHONY: migrate
+migrate: build ## Apply database migrations against the local Postgres
+	./$(SERVICE_NAME) migrate
+
+.PHONY: run
+run: build ## Run the api-server on the host against the local dependencies
+	./$(SERVICE_NAME) api-server
+
 
 .PHONY: start
 start: start-k3d psql-helm-install valkey-helm-install ensure-deps service-helm-install

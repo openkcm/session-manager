@@ -35,6 +35,12 @@ func createHTTPServer(_ context.Context, cfg *config.Config, sManager *session.M
 
 	handler := openapi.Handler(strictHandler)
 	handler = middleware.ResponseWriterMiddleware(handler)
+	// Alias a configured login-CSRF cookie name onto the canonical
+	// "__Host-LoginCSRF" name the generated handler reads. No-op unless the
+	// login-CSRF cookie template sets a custom name (used for local http dev).
+	handler = middleware.LoginCSRFCookieAliasMiddleware(
+		cfg.SessionManager.LoginCSRFCookieTemplate.Name,
+	)(handler)
 	handler = commonmiddleware.SecurityHeadersMiddleware(map[string]string{
 		"Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none';",
 	})(handler)

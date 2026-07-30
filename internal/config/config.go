@@ -224,6 +224,11 @@ type SessionManager struct {
 	// during the authorization flow and post logout. This is used to validate the redirect
 	// URLs provided in the authorization request and post logout requests.
 	AllowedRedirectBaseURLs []string `yaml:"allowedRedirectBaseURLs"`
+
+	// AllowHttpScheme permits OIDC issuers served over plain http:// (e.g. a local
+	// mock IdP such as Dex during development). Defaults to false so production
+	// only trusts https:// issuers.
+	AllowHttpScheme bool `yaml:"allowHttpScheme" default:"false"`
 }
 
 type CookieSameSiteValue string

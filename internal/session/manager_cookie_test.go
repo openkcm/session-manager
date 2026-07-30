@@ -321,27 +321,53 @@ func TestManager_MakeCSRFCookie(t *testing.T) {
 
 func TestManager_MakeLoginCSRFCookie(t *testing.T) {
 	ctx := t.Context()
-	cfg := &config.SessionManager{
-		CSRFSecretParsed: []byte(testCSRFSecret),
-		LoginCSRFCookieTemplate: config.CookieTemplate{
-			Name:     "LoginCSRFToken",
-			MaxAge:   3600,
-			Path:     "/",
-			Secure:   true,
-			HTTPOnly: false,
-			SameSite: config.CookieSameSiteStrict,
-		},
-	}
 
-	m, err := session.NewManager(ctx, cfg, nil, sessionmock.NewInMemRepository(), nil)
-	require.NoError(t, err)
+	t.Run("honors configured cookie name", func(t *testing.T) {
+		cfg := &config.SessionManager{
+			CSRFSecretParsed: []byte(testCSRFSecret),
+			LoginCSRFCookieTemplate: config.CookieTemplate{
+				Name:     "LoginCSRFToken",
+				MaxAge:   3600,
+				Path:     "/",
+				Secure:   true,
+				HTTPOnly: false,
+				SameSite: config.CookieSameSiteStrict,
+			},
+		}
 
-	cookie, err := m.MakeLoginCSRFCookie(t.Context(), "csrf-456")
+		m, err := session.NewManager(ctx, cfg, nil, sessionmock.NewInMemRepository(), nil)
+		require.NoError(t, err)
 
-	require.NoError(t, err)
-	require.NotNil(t, cookie)
-	assert.Equal(t, "__Host-LoginCSRF", cookie.Name)
-	assert.Equal(t, "csrf-456", cookie.Value)
+		cookie, err := m.MakeLoginCSRFCookie(t.Context(), "csrf-456")
+
+		require.NoError(t, err)
+		require.NotNil(t, cookie)
+		assert.Equal(t, "LoginCSRFToken", cookie.Name)
+		assert.Equal(t, "csrf-456", cookie.Value)
+	})
+
+	t.Run("falls back to __Host-LoginCSRF when name unset", func(t *testing.T) {
+		cfg := &config.SessionManager{
+			CSRFSecretParsed: []byte(testCSRFSecret),
+			LoginCSRFCookieTemplate: config.CookieTemplate{
+				MaxAge:   3600,
+				Path:     "/",
+				Secure:   true,
+				HTTPOnly: false,
+				SameSite: config.CookieSameSiteStrict,
+			},
+		}
+
+		m, err := session.NewManager(ctx, cfg, nil, sessionmock.NewInMemRepository(), nil)
+		require.NoError(t, err)
+
+		cookie, err := m.MakeLoginCSRFCookie(t.Context(), "csrf-456")
+
+		require.NoError(t, err)
+		require.NotNil(t, cookie)
+		assert.Equal(t, session.LoginCSRFCookieName, cookie.Name)
+		assert.Equal(t, "csrf-456", cookie.Value)
+	})
 }
 
 func TestManager_ValidateCSRFToken(t *testing.T) {

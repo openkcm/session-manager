@@ -24,6 +24,19 @@ $ make start
 
 This will start a local k3d cluster, deploy PostgreSQL, perform the database migrations, and deploy the service.
 
+### Running and debugging on the host
+
+For the fast inner-loop workflow — running the binary directly on your machine
+with backing services (Postgres, Valkey, and a mock OIDC provider) in Docker
+Compose, and attaching a debugger — see [docs/local-dev.md](docs/local-dev.md):
+
+```sh
+$ make dev-deps   # start dependencies (waits until healthy)
+$ make migrate    # apply DB migrations
+$ make run        # run the api-server on the host
+```
+
+
 ## Support, Feedback, Contributing
 
 This project is open to feature requests/suggestions, bug reports etc. via [GitHub issues](https://github.com/openkcm/<your-project>/issues). Contribution and feedback are encouraged and always welcome. For more information about how to contribute, the project structure, as well as additional contribution information, see our [Contribution Guidelines](CONTRIBUTING.md).

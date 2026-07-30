@@ -543,7 +543,12 @@ func (m *Manager) MakeCSRFCookie(ctx context.Context, tenantID, value string) (*
 
 func (m *Manager) MakeLoginCSRFCookie(ctx context.Context, value string) (*http.Cookie, error) {
 	loginCSRFCookie := m.loginCSRFCookieTemplate.ToCookie(value)
-	loginCSRFCookie.Name = LoginCSRFCookieName
+	// Honor a configured cookie name (e.g. a non-"__Host-" name for local http
+	// development, where the "__Host-" prefix's mandatory Secure attribute makes
+	// the cookie unusable). Fall back to the hardened default when unset.
+	if loginCSRFCookie.Name == "" {
+		loginCSRFCookie.Name = LoginCSRFCookieName
+	}
 	err := loginCSRFCookie.Valid()
 	if err != nil {
 		return nil, fmt.Errorf("invalid CSRF cookie: %w", err)
