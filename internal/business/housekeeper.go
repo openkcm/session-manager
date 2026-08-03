@@ -40,7 +40,8 @@ func HousekeeperMain(ctx context.Context, cfg *config.Config) error {
 	defer closeFn()
 
 	// Start the housekeeper loop
-	tick := time.Tick(cfg.Housekeeper.TriggerInterval)
+	ticker := time.NewTicker(cfg.Housekeeper.TriggerInterval)
+	defer ticker.Stop()
 	refreshTriggerInterval := cfg.Housekeeper.TokenRefreshTriggerInterval
 	concurrencyLimit := cfg.Housekeeper.ConcurrencyLimit
 	for {
@@ -50,7 +51,7 @@ func HousekeeperMain(ctx context.Context, cfg *config.Config) error {
 		}
 
 		select {
-		case <-tick:
+		case <-ticker.C:
 			continue
 		case <-c.Done():
 			return nil
