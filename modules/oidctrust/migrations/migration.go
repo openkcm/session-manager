@@ -24,7 +24,7 @@ func init() {
 }
 
 type MigrationModule struct {
-	DBModule string `yaml:"dbModule" default:"database.module.pgxpool"`
+	DBModule string `yaml:"dbModule" default:"database.module.pgxpool" dep:"sessionmanager.Database"`
 
 	db sessionmanager.Database
 }

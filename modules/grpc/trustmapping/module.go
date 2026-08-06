@@ -29,7 +29,7 @@ func newModule() sessionmanager.Module {
 // (a sessionmanager.Trust implementation) by ID via ctx.GetModule.
 type Module struct {
 	Mod   string `yaml:"module"`
-	Trust string `yaml:"trust" default:"trust.module.oidc"`
+	Trust string `yaml:"trust" default:"trust.module.oidc" dep:"sessionmanager.Trust"`
 
 	server *Server
 }

@@ -6,6 +6,7 @@ package session
 import (
 	"errors"
 	"fmt"
+	"reflect"
 
 	"google.golang.org/grpc"
 
@@ -21,6 +22,8 @@ const moduleID = "service.module.grpc.session"
 
 func init() {
 	sessionmanager.RegisterModule(new(Module))
+	sessionmanager.RegisterDepInterface("session.Repository", reflect.TypeFor[internalsession.Repository]())
+	sessionmanager.RegisterDepInterface("credentials.Builder", reflect.TypeFor[credentialsBuilder]())
 }
 
 func newModule() sessionmanager.Module {
@@ -38,9 +41,9 @@ type credentialsBuilder interface {
 // and owns a *Server that implements the proto.
 type Module struct {
 	Mod          string `yaml:"module"`
-	Trust        string `yaml:"trust"        default:"trust.module.oidc"`
-	SessionStore string `yaml:"sessionStore" default:"sessionstore.module.valkey"`
-	Credentials  string `yaml:"credentials"  default:"credentials.module.oauth2"`
+	Trust        string `yaml:"trust"        default:"trust.module.oidc"        dep:"sessionmanager.Trust"`
+	SessionStore string `yaml:"sessionStore" default:"sessionstore.module.valkey" dep:"session.Repository"`
+	Credentials  string `yaml:"credentials"  default:"credentials.module.oauth2"  dep:"credentials.Builder"`
 
 	AllowHttpScheme           bool     `yaml:"allowHttpScheme"`
 	QueryParametersIntrospect []string `yaml:"queryParametersIntrospect"`

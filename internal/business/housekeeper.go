@@ -19,21 +19,13 @@ func HousekeeperMain(ctx context.Context, cfg *config.Config) error {
 
 	c = config.WithContext(c, cfg)
 
-	_, err := c.LoadModule(&cfg.Database)
-	if err != nil {
-		return fmt.Errorf("loading database module: %w", err)
-	}
-
-	if _, err := c.LoadModule(&cfg.Trust); err != nil {
-		return fmt.Errorf("loading trust module: %w", err)
-	}
-
-	if _, err := c.LoadModule(&cfg.ValKey); err != nil {
-		return fmt.Errorf("loading session-store module: %w", err)
-	}
-
-	if _, err := c.LoadModule(&cfg.Credentials); err != nil {
-		return fmt.Errorf("loading credentials module: %w", err)
+	if err := c.LoadAll([]sessionmanager.LoadSpec{
+		{Cfg: &cfg.Database},
+		{Cfg: &cfg.Trust},
+		{Cfg: &cfg.ValKey},
+		{Cfg: &cfg.Credentials},
+	}); err != nil {
+		return fmt.Errorf("loading shared modules: %w", err)
 	}
 
 	trust, err := sessionmanager.GetModuleAs[sessionmanager.Trust](c, cfg.Trust.Module())
