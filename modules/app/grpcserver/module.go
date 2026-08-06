@@ -39,14 +39,18 @@ func newModule() sessionmanager.Module {
 }
 
 // Module is the gRPC server app. Its lifecycle:
-//   - Provision: load every service module listed under services: from the
-//     config; type-assert each against Service; collect them in declaration
-//     order.
-//   - Start: build the underlying *grpc.Server via commongrpc.NewServer using
-//     the top-level cfg.GRPC block, register every collected service onto it,
-//     listen on cfg.GRPC.Address, and begin Serve in a goroutine.
-//   - Stop: GracefulStop bounded by cfg.GRPC.ShutdownTimeout; if the timeout
-//     fires, fall back to a forceful Stop.
+//
+// - Provision: resolve every service module listed under services: the
+// services are provisioned before this app by the loader's topological
+// order (the app depends on its services), so they are looked up by ID
+// rather than loaded here; collect them in declaration order.
+//
+// - Start: build the underlying *grpc.Server via commongrpc.NewServer using
+// the top-level cfg.GRPC block, register every collected service onto it,
+// listen on cfg.GRPC.Address, and begin Serve in a goroutine.
+//
+// - Stop: GracefulStop bounded by cfg.GRPC.ShutdownTimeout; if the timeout
+// fires, fall back to a forceful Stop.
 type Module struct {
 	Mod      string               `yaml:"module"`
 	Services []*config.ServiceCfg `yaml:"services"`
@@ -83,15 +87,14 @@ func (m *Module) Provision(ctx *sessionmanager.Context) error {
 		return errors.New("app.module.grpcserver requires at least one service under services")
 	}
 
+	// Services are provisioned ahead of this app by the loader (the app declares
+	// each service as a structural dependency), so resolve them by ID in
+	// declaration order rather than loading them here.
 	m.services = make([]Service, 0, len(m.Services))
 	for i, svcCfg := range m.Services {
-		mod, err := ctx.LoadModule(svcCfg)
+		svc, err := sessionmanager.GetModuleAs[Service](ctx, svcCfg.Module())
 		if err != nil {
-			return fmt.Errorf("loading service[%d] %q: %w", i, svcCfg.Module(), err)
-		}
-		svc, ok := mod.(Service)
-		if !ok {
-			return fmt.Errorf("service[%d] module %q does not implement grpcserver.Service", i, svcCfg.Module())
+			return fmt.Errorf("resolving service[%d] %q: %w", i, svcCfg.Module(), err)
 		}
 		m.services = append(m.services, svc)
 	}

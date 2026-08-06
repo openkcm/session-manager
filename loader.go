@@ -65,9 +65,11 @@ func (c *Context) LoadAll(specs []LoadSpec) error {
 		return err
 	}
 
+	ordered := topoSort(pending)
+
 	// Phase 4
 	before := len(c.modOrder)
-	for _, p := range pending {
+	for _, p := range ordered {
 		if err := c.provisionAndRegister(p); err != nil {
 			c.unloadModulesAfter(before)
 			return fmt.Errorf("loading module %q: %w", p.id, err)
@@ -372,4 +374,91 @@ func detectCycle(pending []*pendingModule) string {
 	}
 
 	return ""
+}
+
+// topoSort orders pending modules so that every module comes after all of its
+// dependencies. The graph is assumed acyclic (validateGraph has already rejected cycles).
+func topoSort(pending []*pendingModule) []*pendingModule {
+	index := make(map[string]int, len(pending))
+	for i, p := range pending {
+		index[p.id] = i
+	}
+
+	// successors[x] = nodes that depend on x (so they follow x); indeg[y] = how
+	// many in-batch dependencies y still waits on.
+	successors := make(map[string][]string, len(pending))
+	indeg := make(map[string]int, len(pending))
+	for _, p := range pending {
+		indeg[p.id] = 0
+	}
+
+	edgesOf := func(p *pendingModule) []string {
+		ids := make([]string, 0, len(p.deps)+len(p.structDeps))
+		for _, e := range p.deps {
+			ids = append(ids, e.targetID)
+		}
+		ids = append(ids, p.structDeps...)
+		return ids
+	}
+
+	for _, p := range pending {
+		for _, dep := range edgesOf(p) {
+			if _, inBatch := index[dep]; !inBatch {
+				continue // dependency already loaded; no intra-batch constraint
+			}
+			successors[dep] = append(successors[dep], p.id)
+			indeg[p.id]++
+		}
+	}
+
+	// ready holds in-degree-zero node ids, kept sorted by input index so the
+	// earliest-declared ready node is always emitted next (stable, deterministic).
+	var ready []string
+	for _, p := range pending {
+		if indeg[p.id] == 0 {
+			ready = append(ready, p.id)
+		}
+	}
+
+	byID := make(map[string]*pendingModule, len(pending))
+	for _, p := range pending {
+		byID[p.id] = p
+	}
+
+	ordered := make([]*pendingModule, 0, len(pending))
+	for len(ready) > 0 {
+		// Pop the ready node with the smallest input index.
+		pick := 0
+		for i := 1; i < len(ready); i++ {
+			if index[ready[i]] < index[ready[pick]] {
+				pick = i
+			}
+		}
+		id := ready[pick]
+		ready = append(ready[:pick], ready[pick+1:]...)
+
+		ordered = append(ordered, byID[id])
+
+		for _, succ := range successors[id] {
+			indeg[succ]--
+			if indeg[succ] == 0 {
+				ready = append(ready, succ)
+			}
+		}
+	}
+
+	// If a cycle slipped through, append any unemitted nodes in input order so we never silently drop them.
+	if len(ordered) != len(pending) {
+		emitted := make(map[string]bool, len(ordered))
+		for _, p := range ordered {
+			emitted[p.id] = true
+		}
+		for _, p := range pending {
+			if !emitted[p.id] {
+				ordered = append(ordered, p)
+			}
+		}
+	}
+
+	return ordered
 }

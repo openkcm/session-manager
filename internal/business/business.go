@@ -23,17 +23,27 @@ func Main(ctx context.Context, cfg *config.Config) error {
 
 	c = config.WithContext(c, cfg)
 
-	// Load the shared top-level modules through the phased loader: this
-	// validates the dependency graph (e.g. trust -> database) before any
-	// module is provisioned. Order in the spec slice is the provisioning
-	// order.
-	if err := c.LoadAll([]sessionmanager.LoadSpec{
+	// Build one graph: the shared top-level modules plus every app and its
+	// service children. LoadAll validates the whole graph, then provisions in
+	// topological order (dependencies before dependents, services before the
+	// app that hosts them). startApps then only starts the loaded apps.
+	appSpecs, err := appLoadSpecs(cfg)
+	if err != nil {
+		return fmt.Errorf("building app load specs: %w", err)
+	}
+
+	topLevel := []sessionmanager.LoadSpec{
 		{Cfg: &cfg.Database},
 		{Cfg: &cfg.Trust},
 		{Cfg: &cfg.ValKey},
 		{Cfg: &cfg.Credentials},
-	}); err != nil {
-		return fmt.Errorf("loading shared modules: %w", err)
+	}
+	specs := make([]sessionmanager.LoadSpec, 0, len(topLevel)+len(appSpecs))
+	specs = append(specs, topLevel...)
+	specs = append(specs, appSpecs...)
+
+	if err := c.LoadAll(specs); err != nil {
+		return fmt.Errorf("loading modules: %w", err)
 	}
 
 	stopApps, err := startApps(c, cfg)

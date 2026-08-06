@@ -153,6 +153,83 @@ func TestDetectCycle_AcyclicReturnsEmpty(t *testing.T) {
 	}
 }
 
+// --- topoSort ------------------------------------------------------------
+
+// posOf returns the index of id in the ordered result, or -1.
+func posOf(ordered []*pendingModule, id string) int {
+	for i, p := range ordered {
+		if p.id == id {
+			return i
+		}
+	}
+	return -1
+}
+
+func TestTopoSort_Order(t *testing.T) {
+	// Graph mirroring the real one: db is a leaf; trust depends on db;
+	// session-svc depends on trust/store/creds; the app contains session-svc.
+	db := &pendingModule{id: "db"}
+	store := &pendingModule{id: "store"}
+	creds := &pendingModule{id: "creds"}
+	trust := &pendingModule{id: "trust", deps: []depEdge{{targetID: "db"}}}
+	svc := &pendingModule{id: "svc", deps: []depEdge{
+		{targetID: "trust"}, {targetID: "store"}, {targetID: "creds"},
+	}}
+	app := &pendingModule{id: "app", isApp: true, structDeps: []string{"svc"}}
+
+	// Deliberately supply in a NON-topological input order.
+	input := []*pendingModule{app, svc, trust, db, store, creds}
+	ordered := topoSort(input)
+
+	if len(ordered) != len(input) {
+		t.Fatalf("topoSort dropped nodes: got %d want %d", len(ordered), len(input))
+	}
+
+	// Every dependency must precede its dependent.
+	mustPrecede := [][2]string{
+		{"db", "trust"},
+		{"trust", "svc"},
+		{"store", "svc"},
+		{"creds", "svc"},
+		{"svc", "app"}, // structural: service before its app
+	}
+	for _, pair := range mustPrecede {
+		if posOf(ordered, pair[0]) >= posOf(ordered, pair[1]) {
+			t.Errorf("%q must be provisioned before %q; order was %s",
+				pair[0], pair[1], orderIDs(ordered))
+		}
+	}
+	// The app hosts everything, so it must be last.
+	if ordered[len(ordered)-1].id != "app" {
+		t.Errorf("app must be last, got order %s", orderIDs(ordered))
+	}
+}
+
+func TestTopoSort_Deterministic(t *testing.T) {
+	// Independent nodes (no edges): order must follow input order stably and
+	// be identical across repeated runs.
+	build := func() []*pendingModule {
+		return []*pendingModule{{id: "a"}, {id: "b"}, {id: "c"}, {id: "d"}}
+	}
+	first := orderIDs(topoSort(build()))
+	for range 50 {
+		if got := orderIDs(topoSort(build())); got != first {
+			t.Fatalf("topoSort not deterministic: %s vs %s", first, got)
+		}
+	}
+	if first != "a,b,c,d" {
+		t.Fatalf("independent nodes should keep input order, got %s", first)
+	}
+}
+
+func orderIDs(ps []*pendingModule) string {
+	ids := make([]string, len(ps))
+	for i, p := range ps {
+		ids[i] = p.id
+	}
+	return strings.Join(ids, ",")
+}
+
 // --- prepare (no provision) ----------------------------------------------
 
 // prepareProvisioner records whether Provision ran.
@@ -192,5 +269,89 @@ func TestPrepare_NoProvision(t *testing.T) {
 	// And it must not be registered into the context yet.
 	if _, err := c.GetModule(id); err == nil {
 		t.Fatal("prepare must not register the module into the context")
+	}
+}
+
+// --- LoadAll end-to-end (provisioning order) -----------------------------
+
+// orderRecorder is shared by recordingModule instances to capture the order in
+// which Provision runs across a LoadAll call.
+type orderRecorder struct{ ids []string }
+
+type recordingModule struct {
+	stubID   string
+	recorder *orderRecorder
+}
+
+func (m *recordingModule) Module() ModuleInfo {
+	return ModuleInfo{ID: m.stubID, New: func() Module { return m }}
+}
+func (m *recordingModule) Provision(_ *Context) error {
+	m.recorder.ids = append(m.recorder.ids, m.stubID)
+	return nil
+}
+
+// recordingCfg is an ExtensionConfig that leaves the pre-registered instance
+// untouched (no unmarshal), so the recorder wired in at registration survives.
+type recordingCfg struct{ id string }
+
+func (c *recordingCfg) Module() string                  { return c.id }
+func (c *recordingCfg) UnmarshalExtension(Module) error { return nil }
+
+func TestLoadAll_ProvisionsAndRegisters(t *testing.T) {
+	rec := &orderRecorder{}
+	dbID := "loadall/" + t.Name() + "/db"
+	trustID := "loadall/" + t.Name() + "/trust"
+
+	RegisterModule(&recordingModule{stubID: dbID, recorder: rec})
+	RegisterModule(&recordingModule{stubID: trustID, recorder: rec})
+
+	c, cancel := NewContext(t.Context())
+	defer cancel(nil)
+
+	// Two independent modules: LoadAll provisions each (recording into rec) and
+	// registers them into the context. Dependency-driven ordering is covered by
+	// TestTopoSort_Order at the unit level.
+	err := c.LoadAll([]LoadSpec{
+		{Cfg: &recordingCfg{id: trustID}},
+		{Cfg: &recordingCfg{id: dbID}},
+	})
+	if err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+
+	if len(rec.ids) != 2 {
+		t.Fatalf("expected 2 modules provisioned, got %v", rec.ids)
+	}
+	if _, err := c.GetModule(dbID); err != nil {
+		t.Errorf("db not registered: %v", err)
+	}
+	if _, err := c.GetModule(trustID); err != nil {
+		t.Errorf("trust not registered: %v", err)
+	}
+}
+
+func TestLoadAll_SubsetLoadsWithoutAbsentModules(t *testing.T) {
+	rec := &orderRecorder{}
+	dbID := "subset/" + t.Name() + "/db"
+	migrateID := "subset/" + t.Name() + "/migrate"
+
+	RegisterModule(&recordingModule{stubID: dbID, recorder: rec})
+	RegisterModule(&recordingModule{stubID: migrateID, recorder: rec})
+
+	c, cancel := NewContext(t.Context())
+	defer cancel(nil)
+
+	// Mirrors MigrateMain: only two modules in the graph. It must validate and
+	// load without complaining about trust/valkey/etc. being absent.
+	err := c.LoadAll([]LoadSpec{
+		{Cfg: &recordingCfg{id: dbID}},
+		{Cfg: &recordingCfg{id: migrateID}},
+	})
+	if err != nil {
+		t.Fatalf("LoadAll subset: %v", err)
+	}
+	if len(rec.ids) != 2 {
+		t.Fatalf("expected 2 modules provisioned, got %v", rec.ids)
 	}
 }

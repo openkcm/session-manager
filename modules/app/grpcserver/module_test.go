@@ -74,6 +74,11 @@ func TestModule_StartRegistersServicesAndStops(t *testing.T) {
 	svc := &fakeService{}
 	sessionmanager.RegisterModule(&customMod{id: fakeID, mod: svc})
 
+	// The grpc app resolves its services by ID; they are provisioned before it
+	// by the loader. Load the service into the context first to mirror that.
+	_, err := ctx.LoadModule(newSvcCfg(fakeID))
+	require.NoError(t, err)
+
 	m := &grpcserver.Module{
 		Services: []*config.ServiceCfg{newSvcCfg(fakeID)},
 	}
@@ -94,12 +99,30 @@ func TestModule_NonServiceUnderServicesIsRejected(t *testing.T) {
 	id := "test.notservice." + t.Name()
 	sessionmanager.RegisterModule(&customMod{id: id, mod: &notService{id: id}})
 
+	// Load the (non-Service) module so it is present in the context, then let
+	// the app try to resolve it: the typed lookup must reject it because it
+	// does not implement grpcserver.Service.
+	_, err := ctx.LoadModule(newSvcCfg(id))
+	require.NoError(t, err)
+
 	m := &grpcserver.Module{
 		Services: []*config.ServiceCfg{newSvcCfg(id)},
 	}
-	err := m.Provision(ctx)
+	err = m.Provision(ctx)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "does not implement")
+}
+
+func TestModule_MissingServiceIsRejected(t *testing.T) {
+	ctx, _ := newCtx(t)
+
+	// A service listed but never loaded must fail resolution with a clear error.
+	m := &grpcserver.Module{
+		Services: []*config.ServiceCfg{newSvcCfg("test.absent.service." + t.Name())},
+	}
+	err := m.Provision(ctx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not loaded")
 }
 
 func TestModule_EmptyServicesRejected(t *testing.T) {

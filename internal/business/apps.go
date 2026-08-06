@@ -18,14 +18,45 @@ type startedApp struct {
 	app  sessionmanager.App
 }
 
-// startApps loads, provisions and starts every app declared under the
-// top-level apps: section in cfg, in the order given by cfg.AppsOrder (with
-// any apps not listed there appended in cfg.Apps map iteration order).
+// appLoadSpecs builds the LoadSpec entries for every app under the top-level
+// apps: section, in start order (cfg.AppsOrder first, then remaining apps in
+// map order). Each app spec carries its service modules as structural children
+// so the loader provisions services before the app that hosts them.
+func appLoadSpecs(cfg *config.Config) ([]sessionmanager.LoadSpec, error) {
+	order, err := appsStartOrder(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	specs := make([]sessionmanager.LoadSpec, 0, len(order))
+	for _, name := range order {
+		appCfg := cfg.Apps[name]
+
+		children := make([]sessionmanager.LoadSpec, 0, len(appCfg.Services))
+		for _, svcCfg := range appCfg.Services {
+			children = append(children, sessionmanager.LoadSpec{Cfg: svcCfg})
+		}
+
+		specs = append(specs, sessionmanager.LoadSpec{
+			Cfg:      appCfg,
+			IsApp:    true,
+			Children: children,
+		})
+	}
+
+	return specs, nil
+}
+
+// startApps starts every already-loaded app under the top-level apps: section
+// in cfg, in the order given by cfg.AppsOrder (with any apps not listed there
+// appended in cfg.Apps map iteration order). The apps must already have been
+// loaded and provisioned via LoadAll; startApps only resolves each by its
+// module ID and calls Start.
 //
 // If any Start() returns a non-nil error, every previously-started app is
-// stopped in reverse order before the original error is returned. On
-// success, the returned stopAll closure stops every started app in reverse
-// order and joins any Stop() errors via errors.Join.
+// stopped in reverse order before the original error is returned. On success,
+// the returned stopAll closure stops every started app in reverse order and
+// joins any Stop() errors via errors.Join.
 func startApps(ctx *sessionmanager.Context, cfg *config.Config) (stopAll func() error, _ error) {
 	order, err := appsStartOrder(cfg)
 	if err != nil {
@@ -45,11 +76,10 @@ func startApps(ctx *sessionmanager.Context, cfg *config.Config) (stopAll func() 
 	for _, name := range order {
 		appCfg := cfg.Apps[name]
 
-		slogctx.Info(ctx, "loading app", "app", name, "module", appCfg.Module())
-		app, err := ctx.LoadApp(appCfg)
+		app, err := ctx.GetApp(appCfg.Module())
 		if err != nil {
 			rollback()
-			return nil, fmt.Errorf("loading app %q: %w", name, err)
+			return nil, fmt.Errorf("resolving app %q (%s): %w", name, appCfg.Module(), err)
 		}
 
 		slogctx.Info(ctx, "starting app", "app", name)

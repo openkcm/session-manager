@@ -88,6 +88,17 @@ func (s *moduleInfoStub) Module() sessionmanager.ModuleInfo {
 	return sessionmanager.ModuleInfo{ID: s.id, New: s.new}
 }
 
+// loadAppsInto loads every configured app into ctx (mirroring what
+// business.Main does via LoadAll) so startApps can resolve them by ID. fakeApps
+// declare no dependencies, so a plain per-app LoadApp is sufficient here.
+func loadAppsInto(t *testing.T, ctx *sessionmanager.Context, cfg *config.Config) {
+	t.Helper()
+	for _, name := range cfg.AppsOrder {
+		_, err := ctx.LoadApp(cfg.Apps[name])
+		require.NoError(t, err)
+	}
+}
+
 func TestStartApps_OrderAndReverseStop(t *testing.T) {
 	var counter atomic.Int64
 	a := &fakeApp{counter: &counter}
@@ -97,6 +108,7 @@ func TestStartApps_OrderAndReverseStop(t *testing.T) {
 
 	ctx, cancel := sessionmanager.NewContext(t.Context())
 	defer cancel(nil)
+	loadAppsInto(t, ctx, cfg)
 
 	stop, err := startApps(ctx, cfg)
 	require.NoError(t, err)
@@ -118,6 +130,7 @@ func TestStartApps_StartFailureRollsBack(t *testing.T) {
 
 	ctx, cancel := sessionmanager.NewContext(t.Context())
 	defer cancel(nil)
+	loadAppsInto(t, ctx, cfg)
 
 	stop, err := startApps(ctx, cfg)
 	require.Error(t, err)
@@ -140,6 +153,7 @@ func TestStartApps_FirstAppFailsNoStop(t *testing.T) {
 
 	ctx, cancel := sessionmanager.NewContext(t.Context())
 	defer cancel(nil)
+	loadAppsInto(t, ctx, cfg)
 
 	_, err := startApps(ctx, cfg)
 	require.ErrorIs(t, err, wantErr)
@@ -159,6 +173,7 @@ func TestStartApps_StopErrorsAggregated(t *testing.T) {
 
 	ctx, cancel := sessionmanager.NewContext(t.Context())
 	defer cancel(nil)
+	loadAppsInto(t, ctx, cfg)
 
 	stop, err := startApps(ctx, cfg)
 	require.NoError(t, err)
