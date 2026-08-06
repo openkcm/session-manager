@@ -2,8 +2,6 @@ module github.com/openkcm/session-manager
 
 go 1.26.5
 
-toolchain go1.26.5
-
 tool (
 	github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
 	github.com/sqlc-dev/sqlc/cmd/sqlc
