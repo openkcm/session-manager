@@ -33,13 +33,11 @@ func (m *TrustModule) Module() sessionmanager.ModuleInfo {
 }
 
 func (m *TrustModule) Provision(ctx *sessionmanager.Context) error {
-	dbMod, err := ctx.GetModule(m.DBModule)
+	db, err := sessionmanager.GetModuleAs[sessionmanager.Database](ctx, m.DBModule)
 	if err != nil {
 		return fmt.Errorf("getting db module: %w", err)
 	}
 
-	//nolint:forcetypeassert
-	db := dbMod.(sessionmanager.Database)
 	m.repository = sqltrust.NewRepository(db)
 
 	return nil

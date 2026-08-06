@@ -42,13 +42,9 @@ func (m *Module) Module() sessionmanager.ModuleInfo {
 }
 
 func (m *Module) Provision(ctx *sessionmanager.Context) error {
-	trustMod, err := ctx.GetModule(m.Trust)
+	trust, err := sessionmanager.GetModuleAs[sessionmanager.Trust](ctx, m.Trust)
 	if err != nil {
 		return fmt.Errorf("getting trust module %q: %w", m.Trust, err)
-	}
-	trust, ok := trustMod.(sessionmanager.Trust)
-	if !ok {
-		return fmt.Errorf("module %q does not implement sessionmanager.Trust", m.Trust)
 	}
 
 	m.server = NewServer(trust)

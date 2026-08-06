@@ -81,13 +81,10 @@ func publicMain(ctx *sessionmanager.Context, cfg *config.Config) error {
 
 	cfg.SessionManager.CSRFSecretParsed = csrfSecret
 
-	trustMod, err := ctx.GetModule(cfg.Trust.Module())
+	trust, err := sessionmanager.GetModuleAs[sessionmanager.Trust](ctx, cfg.Trust.Module())
 	if err != nil {
 		return fmt.Errorf("getting trust module: %w", err)
 	}
-
-	//nolint:forcetypeassert
-	trust := trustMod.(sessionmanager.Trust)
 
 	sessionManager, closeFn, err := sessionwiring.InitSessionManager(ctx, cfg, trust)
 	if err != nil {

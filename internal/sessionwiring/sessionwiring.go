@@ -64,13 +64,9 @@ func InitSessionManager(ctx *sessionmanager.Context, cfg *config.Config, trust s
 // SessionRepository resolves the session repository module loaded under the
 // ID configured in cfg.ValKey.Module() and returns its session.Repository.
 func SessionRepository(ctx *sessionmanager.Context, cfg *config.Config) (session.Repository, error) {
-	mod, err := ctx.GetModule(cfg.ValKey.Module())
+	repo, err := sessionmanager.GetModuleAs[session.Repository](ctx, cfg.ValKey.Module())
 	if err != nil {
 		return nil, fmt.Errorf("getting session-store module %q: %w", cfg.ValKey.Module(), err)
-	}
-	repo, ok := mod.(session.Repository)
-	if !ok {
-		return nil, fmt.Errorf("module %q does not implement session.Repository", cfg.ValKey.Module())
 	}
 	return repo, nil
 }
@@ -78,13 +74,9 @@ func SessionRepository(ctx *sessionmanager.Context, cfg *config.Config) (session
 // CredsBuilder resolves the credentials module loaded under the ID configured
 // in cfg.Credentials.Module() and returns its credentials.Builder.
 func CredsBuilder(ctx *sessionmanager.Context, cfg *config.Config) (credentials.Builder, error) {
-	mod, err := ctx.GetModule(cfg.Credentials.Module())
+	cb, err := sessionmanager.GetModuleAs[credentialsBuilder](ctx, cfg.Credentials.Module())
 	if err != nil {
 		return nil, fmt.Errorf("getting credentials module %q: %w", cfg.Credentials.Module(), err)
-	}
-	cb, ok := mod.(credentialsBuilder)
-	if !ok {
-		return nil, fmt.Errorf("module %q does not expose Builder()", cfg.Credentials.Module())
 	}
 	return cb.Builder(), nil
 }

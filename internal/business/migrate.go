@@ -29,13 +29,15 @@ func MigrateMain(ctx context.Context, cfg *config.Config) error {
 	}
 
 	slogctx.Debug(c, "loading migrate")
-	mod, err := c.LoadModule(&cfg.Migrate)
-	if err != nil {
+	if _, err = c.LoadModule(&cfg.Migrate); err != nil {
 		return fmt.Errorf("loading migration module: %w", err)
 	}
 
-	//nolint:forcetypeassert
-	migrate := mod.(sessionmanager.Migrate)
+	migrate, err := sessionmanager.GetModuleAs[sessionmanager.Migrate](c, cfg.Migrate.Module())
+	if err != nil {
+		return fmt.Errorf("getting migration module: %w", err)
+	}
+
 	slogctx.Debug(c, "executing migration")
 	if err := migrate.Migrate(ctx); err != nil {
 		return fmt.Errorf("executing migrations: %w", err)

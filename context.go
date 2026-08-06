@@ -86,6 +86,24 @@ func (c *Context) GetApp(id string) (App, error) {
 	return nil, errors.New("app is not loaded")
 }
 
+// GetModuleAs looks up a loaded module by ID and asserts it to the interface T.
+// It is the type-safe replacement for GetModule.
+func GetModuleAs[T any](c *Context, id string) (T, error) {
+	var zero T
+
+	mod, err := c.GetModule(id)
+	if err != nil {
+		return zero, err
+	}
+
+	typed, ok := mod.(T)
+	if !ok {
+		return zero, fmt.Errorf("module %q does not implement %s", id, reflect.TypeFor[T]())
+	}
+
+	return typed, nil
+}
+
 func (c *Context) LoadModule(cfg ExtensionConfig) (Module, error) {
 	before := len(c.modOrder)
 	mod, modInfo, err := c.instantiate(cfg)

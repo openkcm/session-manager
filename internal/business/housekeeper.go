@@ -24,8 +24,7 @@ func HousekeeperMain(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("loading database module: %w", err)
 	}
 
-	trustMod, err := c.LoadModule(&cfg.Trust)
-	if err != nil {
+	if _, err := c.LoadModule(&cfg.Trust); err != nil {
 		return fmt.Errorf("loading trust module: %w", err)
 	}
 
@@ -37,8 +36,10 @@ func HousekeeperMain(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("loading credentials module: %w", err)
 	}
 
-	//nolint:forcetypeassert
-	trust := trustMod.(sessionmanager.Trust)
+	trust, err := sessionmanager.GetModuleAs[sessionmanager.Trust](c, cfg.Trust.Module())
+	if err != nil {
+		return fmt.Errorf("getting trust module: %w", err)
+	}
 
 	sessionManager, closeFn, err := sessionwiring.InitSessionManager(c, cfg, trust)
 	if err != nil {

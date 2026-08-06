@@ -61,31 +61,19 @@ func (m *Module) Provision(ctx *sessionmanager.Context) error {
 		return errors.New("config not found in context")
 	}
 
-	trustMod, err := ctx.GetModule(m.Trust)
+	trust, err := sessionmanager.GetModuleAs[sessionmanager.Trust](ctx, m.Trust)
 	if err != nil {
 		return fmt.Errorf("getting trust module %q: %w", m.Trust, err)
 	}
-	trust, ok := trustMod.(sessionmanager.Trust)
-	if !ok {
-		return fmt.Errorf("module %q does not implement sessionmanager.Trust", m.Trust)
-	}
 
-	storeMod, err := ctx.GetModule(m.SessionStore)
+	repo, err := sessionmanager.GetModuleAs[internalsession.Repository](ctx, m.SessionStore)
 	if err != nil {
 		return fmt.Errorf("getting session-store module %q: %w", m.SessionStore, err)
 	}
-	repo, ok := storeMod.(internalsession.Repository)
-	if !ok {
-		return fmt.Errorf("module %q does not implement session.Repository", m.SessionStore)
-	}
 
-	credsMod, err := ctx.GetModule(m.Credentials)
+	creds, err := sessionmanager.GetModuleAs[credentialsBuilder](ctx, m.Credentials)
 	if err != nil {
 		return fmt.Errorf("getting credentials module %q: %w", m.Credentials, err)
-	}
-	creds, ok := credsMod.(credentialsBuilder)
-	if !ok {
-		return fmt.Errorf("module %q does not expose Builder()", m.Credentials)
 	}
 
 	opts := []Option{

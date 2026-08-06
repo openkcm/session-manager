@@ -51,12 +51,11 @@ func (m *MigrationModule) Module() sessionmanager.ModuleInfo {
 }
 
 func (m *MigrationModule) Provision(ctx *sessionmanager.Context) error {
-	mod, err := ctx.GetModule(m.DBModule)
+	db, err := sessionmanager.GetModuleAs[sessionmanager.Database](ctx, m.DBModule)
 	if err != nil {
 		return fmt.Errorf("getting postgres module: %w", err)
 	}
 
-	//nolint:forcetypeassert
-	m.db = mod.(sessionmanager.Database)
+	m.db = db
 	return nil
 }

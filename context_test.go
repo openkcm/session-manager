@@ -234,6 +234,57 @@ func TestGetModule_NotLoaded(t *testing.T) {
 	assert.Contains(t, err.Error(), "not loaded")
 }
 
+func TestGetModuleAs_Success(t *testing.T) {
+	id := uniqueID(t, "as-ok")
+	sessionmanager.RegisterModule(&customNewModule{
+		id:    id,
+		newFn: func() sessionmanager.Module { return &appModule{stubModule: stubModule{id: id}} },
+	})
+
+	ctx, cancel := sessionmanager.NewContext(t.Context())
+	defer cancel(nil)
+
+	_, err := ctx.LoadModule(&simpleExtensionConfig{moduleID: id})
+	require.NoError(t, err)
+
+	// appModule satisfies sessionmanager.App, so the typed lookup succeeds.
+	app, err := sessionmanager.GetModuleAs[sessionmanager.App](ctx, id)
+	require.NoError(t, err)
+	assert.NotNil(t, app)
+}
+
+func TestGetModuleAs_WrongType(t *testing.T) {
+	id := uniqueID(t, "as-wrong")
+	sessionmanager.RegisterModule(&customNewModule{
+		id:    id,
+		newFn: func() sessionmanager.Module { return &stubModule{id: id} },
+	})
+
+	ctx, cancel := sessionmanager.NewContext(t.Context())
+	defer cancel(nil)
+
+	_, err := ctx.LoadModule(&simpleExtensionConfig{moduleID: id})
+	require.NoError(t, err)
+
+	// stubModule does NOT implement App; the assertion must fail with a
+	// descriptive error naming the module ID and expected interface rather
+	// than panicking.
+	_, err = sessionmanager.GetModuleAs[sessionmanager.App](ctx, id)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), id)
+	assert.Contains(t, err.Error(), "does not implement")
+}
+
+func TestGetModuleAs_NotLoaded(t *testing.T) {
+	ctx, cancel := sessionmanager.NewContext(t.Context())
+	defer cancel(nil)
+
+	// Nothing loaded — the underlying GetModule error propagates.
+	_, err := sessionmanager.GetModuleAs[sessionmanager.Trust](ctx, "module-that-is-not-loaded")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not loaded")
+}
+
 // appModule is a Module that also satisfies the App interface.
 type appModule struct {
 	stubModule
