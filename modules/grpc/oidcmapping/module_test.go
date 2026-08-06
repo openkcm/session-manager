@@ -54,7 +54,7 @@ func TestModule_ProvisionResolvesCustomTrust(t *testing.T) {
 	ctx, cancel := sessionmanager.NewContext(t.Context())
 	defer cancel(nil)
 
-	_, err := ctx.LoadModule(&extConfig{moduleID: id})
+	err := ctx.LoadAll([]sessionmanager.LoadSpec{{Cfg: &extConfig{moduleID: id}}})
 	require.NoError(t, err)
 
 	m := &ommod.Module{Trust: id}

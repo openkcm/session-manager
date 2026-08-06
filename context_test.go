@@ -83,7 +83,7 @@ func TestNewContext_CancelCloseModules(t *testing.T) {
 
 	ctx, cancel := sessionmanager.NewContext(t.Context())
 
-	_, err := ctx.LoadModule(&simpleExtensionConfig{moduleID: id})
+	err := ctx.LoadAll([]sessionmanager.LoadSpec{{Cfg: &simpleExtensionConfig{moduleID: id}}})
 	require.NoError(t, err)
 
 	cancel(nil)
@@ -107,7 +107,7 @@ func TestNewContext_CloseErrorIsHandled(t *testing.T) {
 	})
 
 	ctx, cancel := sessionmanager.NewContext(t.Context())
-	_, err := ctx.LoadModule(&simpleExtensionConfig{moduleID: id})
+	err := ctx.LoadAll([]sessionmanager.LoadSpec{{Cfg: &simpleExtensionConfig{moduleID: id}}})
 	require.NoError(t, err)
 
 	// Should not panic even though Close() returns an error.
@@ -137,9 +137,8 @@ func TestLoadModule_Success(t *testing.T) {
 	ctx, cancel := sessionmanager.NewContext(t.Context())
 	defer cancel(nil)
 
-	mod, err := ctx.LoadModule(&simpleExtensionConfig{moduleID: id})
+	err := ctx.LoadAll([]sessionmanager.LoadSpec{{Cfg: &simpleExtensionConfig{moduleID: id}}})
 	require.NoError(t, err)
-	require.NotNil(t, mod)
 	assert.True(t, pm.provisioned)
 }
 
@@ -147,7 +146,7 @@ func TestLoadModule_UnknownModule(t *testing.T) {
 	ctx, cancel := sessionmanager.NewContext(t.Context())
 	defer cancel(nil)
 
-	_, err := ctx.LoadModule(&simpleExtensionConfig{moduleID: "no-such-module"})
+	err := ctx.LoadAll([]sessionmanager.LoadSpec{{Cfg: &simpleExtensionConfig{moduleID: "no-such-module"}}})
 	require.Error(t, err)
 }
 
@@ -161,12 +160,13 @@ func TestLoadModule_DuplicateReturnsError(t *testing.T) {
 	ctx, cancel := sessionmanager.NewContext(t.Context())
 	defer cancel(nil)
 
-	_, err := ctx.LoadModule(&simpleExtensionConfig{moduleID: id})
-	require.NoError(t, err)
-
-	_, err = ctx.LoadModule(&simpleExtensionConfig{moduleID: id})
+	// The same module ID listed twice in one load set is rejected.
+	err := ctx.LoadAll([]sessionmanager.LoadSpec{
+		{Cfg: &simpleExtensionConfig{moduleID: id}},
+		{Cfg: &simpleExtensionConfig{moduleID: id}},
+	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "already been loaded")
+	assert.Contains(t, err.Error(), "more than once")
 }
 
 func TestLoadModule_ProvisionError(t *testing.T) {
@@ -179,7 +179,7 @@ func TestLoadModule_ProvisionError(t *testing.T) {
 	ctx, cancel := sessionmanager.NewContext(t.Context())
 	defer cancel(nil)
 
-	_, err := ctx.LoadModule(&simpleExtensionConfig{moduleID: id})
+	err := ctx.LoadAll([]sessionmanager.LoadSpec{{Cfg: &simpleExtensionConfig{moduleID: id}}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "provision failed")
 }
@@ -195,7 +195,7 @@ func TestLoadModule_UnmarshalError(t *testing.T) {
 	ctx, cancel := sessionmanager.NewContext(t.Context())
 	defer cancel(nil)
 
-	_, err := ctx.LoadModule(&failingUnmarshalConfig{moduleID: id})
+	err := ctx.LoadAll([]sessionmanager.LoadSpec{{Cfg: &failingUnmarshalConfig{moduleID: id}}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unmarshal failed")
 }
@@ -210,7 +210,7 @@ func TestGetModule_AfterLoad(t *testing.T) {
 	ctx, cancel := sessionmanager.NewContext(t.Context())
 	defer cancel(nil)
 
-	_, err := ctx.LoadModule(&simpleExtensionConfig{moduleID: id})
+	err := ctx.LoadAll([]sessionmanager.LoadSpec{{Cfg: &simpleExtensionConfig{moduleID: id}}})
 	require.NoError(t, err)
 
 	mod, err := ctx.GetModule(id)
@@ -244,7 +244,7 @@ func TestGetModuleAs_Success(t *testing.T) {
 	ctx, cancel := sessionmanager.NewContext(t.Context())
 	defer cancel(nil)
 
-	_, err := ctx.LoadModule(&simpleExtensionConfig{moduleID: id})
+	err := ctx.LoadAll([]sessionmanager.LoadSpec{{Cfg: &simpleExtensionConfig{moduleID: id}}})
 	require.NoError(t, err)
 
 	// appModule satisfies sessionmanager.App, so the typed lookup succeeds.
@@ -263,7 +263,7 @@ func TestGetModuleAs_WrongType(t *testing.T) {
 	ctx, cancel := sessionmanager.NewContext(t.Context())
 	defer cancel(nil)
 
-	_, err := ctx.LoadModule(&simpleExtensionConfig{moduleID: id})
+	err := ctx.LoadAll([]sessionmanager.LoadSpec{{Cfg: &simpleExtensionConfig{moduleID: id}}})
 	require.NoError(t, err)
 
 	// stubModule does NOT implement App; the assertion must fail with a
@@ -327,13 +327,12 @@ func TestLoadApp_Success(t *testing.T) {
 	ctx, cancel := sessionmanager.NewContext(t.Context())
 	defer cancel(nil)
 
-	app, err := ctx.LoadApp(&simpleExtensionConfig{moduleID: id})
+	err := ctx.LoadAll([]sessionmanager.LoadSpec{{Cfg: &simpleExtensionConfig{moduleID: id}, IsApp: true}})
 	require.NoError(t, err)
-	require.NotNil(t, app)
 
 	got, err := ctx.GetApp(id)
 	require.NoError(t, err)
-	assert.Same(t, app, got)
+	assert.Same(t, am, got)
 }
 
 func TestLoadApp_MissingAppInterface(t *testing.T) {
@@ -346,7 +345,7 @@ func TestLoadApp_MissingAppInterface(t *testing.T) {
 	ctx, cancel := sessionmanager.NewContext(t.Context())
 	defer cancel(nil)
 
-	_, err := ctx.LoadApp(&simpleExtensionConfig{moduleID: id})
+	err := ctx.LoadAll([]sessionmanager.LoadSpec{{Cfg: &simpleExtensionConfig{moduleID: id}, IsApp: true}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "App interface")
 }
@@ -355,7 +354,7 @@ func TestLoadApp_UnknownModule(t *testing.T) {
 	ctx, cancel := sessionmanager.NewContext(t.Context())
 	defer cancel(nil)
 
-	_, err := ctx.LoadApp(&simpleExtensionConfig{moduleID: "no-such-app-module"})
+	err := ctx.LoadAll([]sessionmanager.LoadSpec{{Cfg: &simpleExtensionConfig{moduleID: "no-such-app-module"}, IsApp: true}})
 	require.Error(t, err)
 }
 
@@ -369,12 +368,13 @@ func TestLoadApp_DuplicateReturnsError(t *testing.T) {
 	ctx, cancel := sessionmanager.NewContext(t.Context())
 	defer cancel(nil)
 
-	_, err := ctx.LoadApp(&simpleExtensionConfig{moduleID: id})
-	require.NoError(t, err)
-
-	_, err = ctx.LoadApp(&simpleExtensionConfig{moduleID: id})
+	// The same app ID listed twice in one load set is rejected.
+	err := ctx.LoadAll([]sessionmanager.LoadSpec{
+		{Cfg: &simpleExtensionConfig{moduleID: id}, IsApp: true},
+		{Cfg: &simpleExtensionConfig{moduleID: id}, IsApp: true},
+	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "already been loaded")
+	assert.Contains(t, err.Error(), "more than once")
 }
 
 func TestGetApp_NotLoaded(t *testing.T) {
@@ -396,52 +396,11 @@ func TestNewContext_CancelClosesApps(t *testing.T) {
 	})
 
 	ctx, cancel := sessionmanager.NewContext(t.Context())
-	_, err := ctx.LoadApp(&simpleExtensionConfig{moduleID: id})
+	err := ctx.LoadAll([]sessionmanager.LoadSpec{{Cfg: &simpleExtensionConfig{moduleID: id}, IsApp: true}})
 	require.NoError(t, err)
 
 	cancel(nil)
 	assert.True(t, cam.closed, "Close() should be called on apps when context is cancelled")
-}
-
-// childLoadingProvisioner is a Module whose Provision loads the configured
-// child module IDs, in order, via ctx.LoadModule. If failAfter is non-negative
-// it returns an error immediately after loading that many children.
-type childLoadingProvisioner struct {
-	stubModule
-
-	childIDs   []string
-	failAfter  int    // -1 = never fail
-	failReason string // error text used when failAfter triggers
-}
-
-func (m *childLoadingProvisioner) Provision(ctx *sessionmanager.Context) error {
-	for i, id := range m.childIDs {
-		if m.failAfter >= 0 && i == m.failAfter {
-			return errors.New(m.failReason)
-		}
-		if _, err := ctx.LoadModule(&simpleExtensionConfig{moduleID: id}); err != nil {
-			return err
-		}
-	}
-	if m.failAfter >= 0 && m.failAfter >= len(m.childIDs) {
-		return errors.New(m.failReason)
-	}
-	return nil
-}
-
-// childLoadingApp is an App whose Provision loads the given child modules
-// before the framework registers it as an app.
-type childLoadingApp struct {
-	appModule
-	childLoadingProvisioner
-}
-
-func (a *childLoadingApp) Module() sessionmanager.ModuleInfo {
-	return a.appModule.Module()
-}
-
-func (a *childLoadingApp) Provision(ctx *sessionmanager.Context) error {
-	return a.childLoadingProvisioner.Provision(ctx)
 }
 
 // orderRecorder is shared across closableOrderModule instances so tests can
@@ -462,122 +421,65 @@ func (m *closableOrderModule) Close() error {
 	return nil
 }
 
-func TestLoadModule_ChildLoadFailureRollsBackEarlierSiblings(t *testing.T) {
-	parentID := uniqueID(t, "parent")
-	child1ID := uniqueID(t, "child1")
-	// child2ID is intentionally unregistered so its load fails.
-	child2ID := uniqueID(t, "child2-missing")
+func TestLoadAll_ProvisionFailureRollsBackEarlierSiblings(t *testing.T) {
+	okID := uniqueID(t, "ok")
+	failID := uniqueID(t, "fail")
 
-	c1 := &closableModule{stubModule: stubModule{id: child1ID}}
+	// The first module is a Closer that loads cleanly; the second fails during
+	// Provision. LoadAll must roll back (Close + deregister) the first before
+	// returning the error.
+	c1 := &closableModule{stubModule: stubModule{id: okID}}
 	sessionmanager.RegisterModule(&customNewModule{
-		id:    child1ID,
+		id:    okID,
 		newFn: func() sessionmanager.Module { return c1 },
 	})
-
-	parent := &childLoadingProvisioner{
-		stubModule: stubModule{id: parentID},
-		childIDs:   []string{child1ID, child2ID},
-		failAfter:  -1,
-	}
 	sessionmanager.RegisterModule(&customNewModule{
-		id:    parentID,
-		newFn: func() sessionmanager.Module { return parent },
+		id:    failID,
+		newFn: func() sessionmanager.Module { return &failingProvisionerModule{stubModule: stubModule{id: failID}} },
 	})
 
 	ctx, cancel := sessionmanager.NewContext(t.Context())
 	defer cancel(nil)
 
-	_, err := ctx.LoadModule(&simpleExtensionConfig{moduleID: parentID})
+	err := ctx.LoadAll([]sessionmanager.LoadSpec{
+		{Cfg: &simpleExtensionConfig{moduleID: okID}},
+		{Cfg: &simpleExtensionConfig{moduleID: failID}},
+	})
 	require.Error(t, err)
 	assert.True(t, c1.closed, "earlier sibling must be closed during rollback")
 
-	// child1 must be removed from the registry.
-	_, err = ctx.GetModule(child1ID)
+	// The earlier sibling must be removed from the registry.
+	_, err = ctx.GetModule(okID)
 	require.Error(t, err)
 
-	// parent itself was never registered (its Provision failed).
-	_, err = ctx.GetModule(parentID)
-	require.Error(t, err)
-}
-
-func TestLoadApp_ProvisionErrorRollsBackChildren(t *testing.T) {
-	appID := uniqueID(t, "app")
-	child1ID := uniqueID(t, "ch1")
-	child2ID := uniqueID(t, "ch2")
-
-	c1 := &closableModule{stubModule: stubModule{id: child1ID}}
-	c2 := &closableModule{stubModule: stubModule{id: child2ID}}
-
-	sessionmanager.RegisterModule(&customNewModule{
-		id:    child1ID,
-		newFn: func() sessionmanager.Module { return c1 },
-	})
-	sessionmanager.RegisterModule(&customNewModule{
-		id:    child2ID,
-		newFn: func() sessionmanager.Module { return c2 },
-	})
-
-	app := &childLoadingApp{
-		appModule: appModule{stubModule: stubModule{id: appID}},
-		childLoadingProvisioner: childLoadingProvisioner{
-			childIDs:   []string{child1ID, child2ID},
-			failAfter:  2, // fail after both children loaded
-			failReason: "app provision boom",
-		},
-	}
-	sessionmanager.RegisterModule(&customNewModule{
-		id:    appID,
-		newFn: func() sessionmanager.Module { return app },
-	})
-
-	ctx, cancel := sessionmanager.NewContext(t.Context())
-	defer cancel(nil)
-
-	_, err := ctx.LoadApp(&simpleExtensionConfig{moduleID: appID})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "app provision boom")
-
-	assert.True(t, c1.closed, "child1 must be closed during rollback")
-	assert.True(t, c2.closed, "child2 must be closed during rollback")
-
-	// Neither child is in the registry.
-	_, err = ctx.GetModule(child1ID)
-	require.Error(t, err)
-	_, err = ctx.GetModule(child2ID)
-	require.Error(t, err)
-
-	// The app itself was never registered.
-	_, err = ctx.GetApp(appID)
+	// The failing module was never registered.
+	_, err = ctx.GetModule(failID)
 	require.Error(t, err)
 }
 
-func TestLoadModule_NonCloserChildIsRemovedOnRollback(t *testing.T) {
-	parentID := uniqueID(t, "parent-noncloser")
-	plainID := uniqueID(t, "plain-child")
-	missingID := uniqueID(t, "missing-child")
+func TestLoadAll_NonCloserSiblingIsRemovedOnRollback(t *testing.T) {
+	plainID := uniqueID(t, "plain")
+	failID := uniqueID(t, "fail-after")
 
 	sessionmanager.RegisterModule(&customNewModule{
 		id:    plainID,
 		newFn: func() sessionmanager.Module { return &stubModule{id: plainID} },
 	})
-
-	parent := &childLoadingProvisioner{
-		stubModule: stubModule{id: parentID},
-		childIDs:   []string{plainID, missingID},
-		failAfter:  -1,
-	}
 	sessionmanager.RegisterModule(&customNewModule{
-		id:    parentID,
-		newFn: func() sessionmanager.Module { return parent },
+		id:    failID,
+		newFn: func() sessionmanager.Module { return &failingProvisionerModule{stubModule: stubModule{id: failID}} },
 	})
 
 	ctx, cancel := sessionmanager.NewContext(t.Context())
 	defer cancel(nil)
 
-	_, err := ctx.LoadModule(&simpleExtensionConfig{moduleID: parentID})
+	err := ctx.LoadAll([]sessionmanager.LoadSpec{
+		{Cfg: &simpleExtensionConfig{moduleID: plainID}},
+		{Cfg: &simpleExtensionConfig{moduleID: failID}},
+	})
 	require.Error(t, err)
 
-	// Non-closer child must still be removed from the registry.
+	// The non-closer sibling must still be removed from the registry.
 	_, err = ctx.GetModule(plainID)
 	require.Error(t, err)
 }
@@ -598,10 +500,12 @@ func TestNewContext_CloseInReverseLoadOrder(t *testing.T) {
 
 	ctx, cancel := sessionmanager.NewContext(t.Context())
 
-	for _, id := range []string{idA, idB, idC} {
-		_, err := ctx.LoadModule(&simpleExtensionConfig{moduleID: id})
-		require.NoError(t, err)
-	}
+	err := ctx.LoadAll([]sessionmanager.LoadSpec{
+		{Cfg: &simpleExtensionConfig{moduleID: idA}},
+		{Cfg: &simpleExtensionConfig{moduleID: idB}},
+		{Cfg: &simpleExtensionConfig{moduleID: idC}},
+	})
+	require.NoError(t, err)
 
 	cancel(nil)
 
@@ -630,10 +534,12 @@ func TestNewContext_CloseSkipsNonClosersInReverseOrder(t *testing.T) {
 	})
 
 	ctx, cancel := sessionmanager.NewContext(t.Context())
-	for _, id := range []string{idA, idB, idC} {
-		_, err := ctx.LoadModule(&simpleExtensionConfig{moduleID: id})
-		require.NoError(t, err)
-	}
+	err := ctx.LoadAll([]sessionmanager.LoadSpec{
+		{Cfg: &simpleExtensionConfig{moduleID: idA}},
+		{Cfg: &simpleExtensionConfig{moduleID: idB}},
+		{Cfg: &simpleExtensionConfig{moduleID: idC}},
+	})
+	require.NoError(t, err)
 
 	cancel(nil)
 	require.Equal(t, []string{idC, idA}, rec.closes,

@@ -104,54 +104,11 @@ func GetModuleAs[T any](c *Context, id string) (T, error) {
 	return typed, nil
 }
 
-func (c *Context) LoadModule(cfg ExtensionConfig) (Module, error) {
-	before := len(c.modOrder)
-	mod, modInfo, err := c.instantiate(cfg)
-	if err != nil {
-		c.unloadModulesAfter(before)
-		return nil, err
-	}
-
-	if _, ok := c.mods[modInfo.ID]; ok {
-		c.unloadModulesAfter(before)
-		return nil, errors.New("module has already been loaded")
-	}
-
-	c.mods[modInfo.ID] = mod
-	c.modOrder = append(c.modOrder, modInfo.ID)
-
-	return mod, nil
-}
-
-func (c *Context) LoadApp(cfg ExtensionConfig) (App, error) {
-	before := len(c.modOrder)
-	mod, modInfo, err := c.instantiate(cfg)
-	if err != nil {
-		c.unloadModulesAfter(before)
-		return nil, err
-	}
-
-	app, ok := mod.(App)
-	if !ok {
-		c.unloadModulesAfter(before)
-		return nil, fmt.Errorf("module %q does not implement the App interface", modInfo.ID)
-	}
-
-	if _, ok := c.apps[modInfo.ID]; ok {
-		c.unloadModulesAfter(before)
-		return nil, errors.New("app has already been loaded")
-	}
-
-	c.apps[modInfo.ID] = app
-
-	return app, nil
-}
-
 // unloadModulesAfter rolls back any modules appended to modOrder at or after
 // the snapshot index. Modules are closed in reverse load order. It is the
-// recovery path for a failed LoadModule or LoadApp call: every successfully
-// loaded child module is closed and removed from the registry before the
-// error surfaces to the caller.
+// recovery path for a failed LoadAll call: every successfully provisioned
+// module is closed and removed from the registry before the error surfaces to
+// the caller.
 func (c *Context) unloadModulesAfter(snapshot int) {
 	if snapshot >= len(c.modOrder) {
 		return
@@ -170,36 +127,4 @@ func (c *Context) unloadModulesAfter(snapshot int) {
 		delete(c.mods, id)
 	}
 	c.modOrder = c.modOrder[:snapshot]
-}
-
-// instantiate resolves cfg.Module(), calls New(), unmarshals the extension, and
-// runs Provision if the resulting instance is a Provisioner. It is shared by
-// LoadModule and LoadApp.
-func (c *Context) instantiate(cfg ExtensionConfig) (Module, ModuleInfo, error) {
-	modInfo, err := GetModule(cfg.Module())
-	if err != nil {
-		return nil, ModuleInfo{}, fmt.Errorf("getting module %q: %w", reflect.TypeOf(cfg), err)
-	}
-
-	slogctx.Debug(c, "loading module", "module", modInfo.ID)
-
-	mod := modInfo.New()
-	rv := reflect.ValueOf(mod)
-	if rv.Kind() == reflect.Pointer && rv.Elem().Kind() == reflect.Struct {
-		if err := cfg.UnmarshalExtension(mod); err != nil {
-			return nil, ModuleInfo{}, fmt.Errorf("unmarshaling extension %s: %w", modInfo.ID, err)
-		}
-	}
-
-	slogctx.Debug(c, "instantiated a module", "module", modInfo.ID)
-
-	if provisioner, ok := mod.(Provisioner); ok {
-		if err := provisioner.Provision(c); err != nil {
-			return nil, ModuleInfo{}, fmt.Errorf("provisioning module: %w", err)
-		}
-
-		slogctx.Debug(c, "provisioned module", "module", modInfo.ID)
-	}
-
-	return mod, modInfo, nil
 }

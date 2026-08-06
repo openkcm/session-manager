@@ -53,11 +53,9 @@ type pendingModule struct {
 // aggregating all errors.
 //
 // Phase 4:
-// provision each node in the caller-supplied (flattened) order and
-// register it into the Context, rolling back on failure.
-//
-// The provisioning order in this increment is the flattened spec order; a
-// later change derives it from the dependency graph via topological sort.
+// provision each node in dependency order (derived by topological sort over
+// the dep-tagged and app->service edges) and register it into the Context,
+// rolling back on failure.
 func (c *Context) LoadAll(specs []LoadSpec) error {
 	// Phases 1-3
 	pending, err := c.validateAll(specs)

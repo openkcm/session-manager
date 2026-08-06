@@ -90,13 +90,14 @@ func (s *moduleInfoStub) Module() sessionmanager.ModuleInfo {
 
 // loadAppsInto loads every configured app into ctx (mirroring what
 // business.Main does via LoadAll) so startApps can resolve them by ID. fakeApps
-// declare no dependencies, so a plain per-app LoadApp is sufficient here.
+// declare no dependencies, so loading them as a flat spec set is sufficient.
 func loadAppsInto(t *testing.T, ctx *sessionmanager.Context, cfg *config.Config) {
 	t.Helper()
+	specs := make([]sessionmanager.LoadSpec, 0, len(cfg.AppsOrder))
 	for _, name := range cfg.AppsOrder {
-		_, err := ctx.LoadApp(cfg.Apps[name])
-		require.NoError(t, err)
+		specs = append(specs, sessionmanager.LoadSpec{Cfg: cfg.Apps[name], IsApp: true})
 	}
+	require.NoError(t, ctx.LoadAll(specs))
 }
 
 func TestStartApps_OrderAndReverseStop(t *testing.T) {

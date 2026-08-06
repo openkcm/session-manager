@@ -76,7 +76,7 @@ func TestModule_StartRegistersServicesAndStops(t *testing.T) {
 
 	// The grpc app resolves its services by ID; they are provisioned before it
 	// by the loader. Load the service into the context first to mirror that.
-	_, err := ctx.LoadModule(newSvcCfg(fakeID))
+	err := ctx.LoadAll([]sessionmanager.LoadSpec{{Cfg: newSvcCfg(fakeID)}})
 	require.NoError(t, err)
 
 	m := &grpcserver.Module{
@@ -102,7 +102,7 @@ func TestModule_NonServiceUnderServicesIsRejected(t *testing.T) {
 	// Load the (non-Service) module so it is present in the context, then let
 	// the app try to resolve it: the typed lookup must reject it because it
 	// does not implement grpcserver.Service.
-	_, err := ctx.LoadModule(newSvcCfg(id))
+	err := ctx.LoadAll([]sessionmanager.LoadSpec{{Cfg: newSvcCfg(id)}})
 	require.NoError(t, err)
 
 	m := &grpcserver.Module{
