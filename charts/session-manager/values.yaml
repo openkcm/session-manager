@@ -109,7 +109,15 @@ service:
       targetPort: grpc
       name: grpc
 
-resources: {}
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+    ephemeral-storage: 1Gi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+    ephemeral-storage: 256Mi
 
 # This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 livenessProbe:
@@ -295,6 +303,7 @@ config:
 
   trust:
     module: trust.module.oidc
+    dbModule: database.module.pgxpool
 
   credentials:
     module: credentials.module.oauth2
@@ -360,7 +369,7 @@ config:
 
   migrate:
     module: trust.migration.module.oidc
-    source: file:///sql
+    dbModule: database.module.pgxpool
 
   housekeeper:
     triggerInterval: 10m
