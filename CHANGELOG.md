@@ -1,5 +1,60 @@
 # Changelog
 
+## [0.18.0](https://github.com/openkcm/session-manager/compare/v0.17.3...v0.18.0) (2026-08-13)
+
+
+### Features
+
+* add AGENTS.md ([e096ca0](https://github.com/openkcm/session-manager/commit/e096ca010ddb6c2e345db457bf9bacf39583a51d))
+* add agents.md ([#302](https://github.com/openkcm/session-manager/issues/302)) ([e096ca0](https://github.com/openkcm/session-manager/commit/e096ca010ddb6c2e345db457bf9bacf39583a51d))
+* add SEC-390 security headers ([6f0557d](https://github.com/openkcm/session-manager/commit/6f0557d1cb4337030a4658af89e412c3fff2c315))
+* modules support ([#296](https://github.com/openkcm/session-manager/issues/296)) ([846d993](https://github.com/openkcm/session-manager/commit/846d99354364cb954ae8a8a41ae09e858e4d911d))
+* restart pods on configmap change via checksum annotation ([#341](https://github.com/openkcm/session-manager/issues/341)) ([8e2ec4f](https://github.com/openkcm/session-manager/commit/8e2ec4f2aa30a3b184b47cf11426f2643e5f30c9))
+* Session Manager/UI: on error redirect to "oops" page ([#300](https://github.com/openkcm/session-manager/issues/300)) ([c7b76e7](https://github.com/openkcm/session-manager/commit/c7b76e7da4b7b600b81474ba263e2779384e6dcb))
+
+
+### Bug Fixes
+
+* add missing `__Host-` prefix to login CSRF token ([#285](https://github.com/openkcm/session-manager/issues/285)) ([ebdffeb](https://github.com/openkcm/session-manager/commit/ebdffeb6cc54c8bafe0bf379cddd5c3c202628d8))
+* add missing error logs ([#323](https://github.com/openkcm/session-manager/issues/323)) ([c3dbe6b](https://github.com/openkcm/session-manager/commit/c3dbe6be853d44cfd97f208248cf5d51977f6ffd))
+* allow hash based routing in error URLs ([#312](https://github.com/openkcm/session-manager/issues/312)) ([49a98ed](https://github.com/openkcm/session-manager/commit/49a98ed70c741c5e864e7cba7d7c88e1dc13dfb8))
+* bump Go toolchain to v1.26.4 ([#304](https://github.com/openkcm/session-manager/issues/304)) ([ce57236](https://github.com/openkcm/session-manager/commit/ce5723627ee1da95d03835886a795c7b74429a0e))
+* bump toolchain and crypto ([#331](https://github.com/openkcm/session-manager/issues/331)) ([74d6f9b](https://github.com/openkcm/session-manager/commit/74d6f9ba479041a5c342d091719ac05648627db4))
+* chart regarding default cookie values ([#287](https://github.com/openkcm/session-manager/issues/287)) ([877e149](https://github.com/openkcm/session-manager/commit/877e1498fd824fdb2c94936a8fe520937210c494))
+* config map name in chart ([#317](https://github.com/openkcm/session-manager/issues/317)) ([63df2aa](https://github.com/openkcm/session-manager/commit/63df2aa7e58bf2ab0932fd53867568715be64ac9))
+* Deprecate browser fingerprint. ([#306](https://github.com/openkcm/session-manager/issues/306)) ([331049b](https://github.com/openkcm/session-manager/commit/331049b23b6a691988285cec284e10aa23462c19))
+* **deps:** bump actions/checkout from 6 to 7 ([#314](https://github.com/openkcm/session-manager/issues/314)) ([aec0ccb](https://github.com/openkcm/session-manager/commit/aec0ccbf221c468fc3dce3adf3e557cc40ec6abd))
+* **deps:** bump actions/setup-go from 6 to 7 ([#328](https://github.com/openkcm/session-manager/issues/328)) ([3d03f3c](https://github.com/openkcm/session-manager/commit/3d03f3cbb905c18d39f6dfd06480c6bdec2f40cf))
+* **deps:** bump github.com/getkin/kin-openapi from 0.135.0 to 0.144.0 ([#334](https://github.com/openkcm/session-manager/issues/334)) ([bbb9f88](https://github.com/openkcm/session-manager/commit/bbb9f8862f7df713c9b8f68f5b413b719079ac42))
+* **deps:** bump github.com/jackc/pgx/v5 from 5.9.1 to 5.9.2 ([#281](https://github.com/openkcm/session-manager/issues/281)) ([d00b4ec](https://github.com/openkcm/session-manager/commit/d00b4ec485e2b3b6deb52dc2545e45946139b7da))
+* **deps:** bump github.com/moby/moby/api from 1.54.1 to 1.54.2 in the gomod-group group ([#284](https://github.com/openkcm/session-manager/issues/284)) ([e47f3d1](https://github.com/openkcm/session-manager/commit/e47f3d1c4be786e52ef305ed30ec4d24622d18f2))
+* **deps:** bump github.com/moby/moby/api in the gomod-group group ([e47f3d1](https://github.com/openkcm/session-manager/commit/e47f3d1c4be786e52ef305ed30ec4d24622d18f2))
+* **deps:** bump github.com/oapi-codegen/oapi-codegen/v2 ([2e29ac3](https://github.com/openkcm/session-manager/commit/2e29ac30e07c44f7fbf7b77df0eb3387a87f7b83))
+* **deps:** bump github.com/oapi-codegen/oapi-codegen/v2 from 2.5.0 to 2.7.1 ([#330](https://github.com/openkcm/session-manager/issues/330)) ([2e29ac3](https://github.com/openkcm/session-manager/commit/2e29ac30e07c44f7fbf7b77df0eb3387a87f7b83))
+* **deps:** bump the gomod-group group across 1 directory with 2 updates ([#291](https://github.com/openkcm/session-manager/issues/291)) ([e75f06b](https://github.com/openkcm/session-manager/commit/e75f06bc91cfffe69250b49927a61749bd7f1560))
+* **deps:** bump the gomod-group group across 1 directory with 5 updates ([#275](https://github.com/openkcm/session-manager/issues/275)) ([7abce1f](https://github.com/openkcm/session-manager/commit/7abce1f118d394a1214b0d1bea3853defd0d0c5a))
+* **deps:** bump the gomod-group group across 1 directory with 6 updates ([#325](https://github.com/openkcm/session-manager/issues/325)) ([08293bb](https://github.com/openkcm/session-manager/commit/08293bb62086a505d01ab5a47eb7651d28d279b4))
+* **deps:** bump the gomod-group group across 1 directory with 6 updates ([#329](https://github.com/openkcm/session-manager/issues/329)) ([b81cce4](https://github.com/openkcm/session-manager/commit/b81cce468af8c9af9cdae8e091c6c24b7e3d282b))
+* **deps:** bump the gomod-group group with 2 updates ([#295](https://github.com/openkcm/session-manager/issues/295)) ([bbc9ef4](https://github.com/openkcm/session-manager/commit/bbc9ef47a098ac9385adfd5f78d6e3f1cb9de2cb))
+* **deps:** bump the gomod-group group with 2 updates ([#305](https://github.com/openkcm/session-manager/issues/305)) ([5643ee8](https://github.com/openkcm/session-manager/commit/5643ee8ea42313b8c33533a65437bdc5ed8afc79))
+* **deps:** bump the gomod-group group with 2 updates ([#308](https://github.com/openkcm/session-manager/issues/308)) ([d46f4c1](https://github.com/openkcm/session-manager/commit/d46f4c11ca09aa12c425853f7232d78cf91c614c))
+* **deps:** bump the gomod-group group with 6 updates ([#301](https://github.com/openkcm/session-manager/issues/301)) ([01343d0](https://github.com/openkcm/session-manager/commit/01343d0d801a3cdf1f1ff04f873c95a5e98cd421))
+* do not require CSRF token header on `/sm/logout` ([#283](https://github.com/openkcm/session-manager/issues/283)) ([fd41c13](https://github.com/openkcm/session-manager/commit/fd41c136710f30b1ecf8b6aae568ef9293186227))
+* **helm:** make image.tag or image.digest mandatory ([#293](https://github.com/openkcm/session-manager/issues/293)) ([077a8b4](https://github.com/openkcm/session-manager/commit/077a8b46736015556aac0bf972aed38d47f51e0f))
+* Logout for the right tenant session ([#276](https://github.com/openkcm/session-manager/issues/276)) ([6103fbf](https://github.com/openkcm/session-manager/commit/6103fbff39d218bc7510542e2996f8e02a9fca4a))
+* mitigate CxONE cookie findings ([#297](https://github.com/openkcm/session-manager/issues/297)) ([9b2b768](https://github.com/openkcm/session-manager/commit/9b2b7684e7e3b9186e79a7fc43a111100da50665))
+* mitigate CxONE finding on cookies ([#298](https://github.com/openkcm/session-manager/issues/298)) ([2c6bd28](https://github.com/openkcm/session-manager/commit/2c6bd28ae4f3882cd21a49150c422d814dfb7699))
+* move client_id from config to individual trusts ([#282](https://github.com/openkcm/session-manager/issues/282)) ([4668f4d](https://github.com/openkcm/session-manager/commit/4668f4d2fe9ec30f2a0ded17a93e8ad97af6d143))
+* remove browser fingerprint ([331049b](https://github.com/openkcm/session-manager/commit/331049b23b6a691988285cec284e10aa23462c19))
+* return missing client_id in GetOIDCProvider ([#321](https://github.com/openkcm/session-manager/issues/321)) ([f10b896](https://github.com/openkcm/session-manager/commit/f10b8965266a582c17a3d140cbb8ae9d82b5d63e))
+* switch in-memory cache implementation ([#277](https://github.com/openkcm/session-manager/issues/277)) ([b16b3a9](https://github.com/openkcm/session-manager/commit/b16b3a90f97e3c16ba784d237fcab62b3c3f543c))
+* tackle CxONE findings ([#309](https://github.com/openkcm/session-manager/issues/309)) ([f9512c7](https://github.com/openkcm/session-manager/commit/f9512c7d1262ec5f1a525854febe74f3e24c570e))
+* the helm tests ([#318](https://github.com/openkcm/session-manager/issues/318)) ([165fddd](https://github.com/openkcm/session-manager/commit/165fddd1a2b179bfb4d5efaee96b1f0d0ffa6191))
+* update SecurityHeadersMiddleware call to constructor pattern ([#322](https://github.com/openkcm/session-manager/issues/322)) ([9aacb6f](https://github.com/openkcm/session-manager/commit/9aacb6f225bdae71d1eddeb59c7f2d4c718a5791))
+* URL matching ([#310](https://github.com/openkcm/session-manager/issues/310)) ([51745c9](https://github.com/openkcm/session-manager/commit/51745c949539e36c38bfc4340cab8fe347c2f0e8))
+* validate redirect URLs ([#286](https://github.com/openkcm/session-manager/issues/286)) ([8b78904](https://github.com/openkcm/session-manager/commit/8b789042a1d8b4650ec8a0a585972b6091fb22d4))
+* vulnerabilities in golang.org/x/* ([#303](https://github.com/openkcm/session-manager/issues/303)) ([6d30087](https://github.com/openkcm/session-manager/commit/6d30087478ac187fe12c613fbbf52c44273a5c03))
+
 ## [0.17.3](https://github.com/openkcm/session-manager/compare/v0.17.2...v0.17.3) (2026-04-08)
 
 
