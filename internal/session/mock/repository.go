@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/internal/session"
+	"github.com/openkcm/session-manager/pkg/serviceerr"
 )
 
 type RepositoryOption func(*Repository)

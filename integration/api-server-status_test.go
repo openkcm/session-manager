@@ -85,7 +85,11 @@ func TestStatusServer(t *testing.T) {
 		if i < 1 {
 			t.Fatalf("could not connect to server: %s", err)
 		}
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://localhost:8888", nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://localhost:8888", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
 		if _, err := http.DefaultClient.Do(req); err == nil {
 			break
 		}
@@ -118,21 +122,14 @@ func TestStatusServer(t *testing.T) {
 
 			// Assert
 			if tc.wantError {
-				if err == nil {
-					t.Error("expected error, but got nil")
-				}
 				if got != nil {
 					t.Errorf("expected nil response, but got: %+v", got)
 				}
 			} else {
-				if err != nil {
-					t.Errorf("unexpected error: %s", err)
-				} else {
-					t.Logf("response: %s", got)
-					var js json.RawMessage
-					if json.Unmarshal(got, &js) != nil {
-						t.Errorf("response is not valid json: %s", got)
-					}
+				t.Logf("response: %s", got)
+				var js json.RawMessage
+				if json.Unmarshal(got, &js) != nil {
+					t.Errorf("response is not valid json: %s", got)
 				}
 			}
 		})

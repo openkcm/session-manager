@@ -1,0 +1,62 @@
+# Local development dependencies for running session-manager directly on the
+# host (binary on host, dependencies in Docker — see docs/local-dev.md).
+#
+# This is NOT the production/k3d path (that is `make start`, driven by Helm).
+# It brings up only the backing services the binary talks to over localhost,
+# with credentials matching config.yaml.
+#
+#   make dev-deps        # start (waits until healthy)
+#   make dev-deps-down   # stop and remove
+#
+# Or directly: docker compose -f dev/docker-compose.yaml up -d
+
+# Explicit project name so this stack stays independent of downstream repos'
+# dev stacks. Without it, Compose derives the project name from the parent dir
+# ("dev"), which collides with any other repo using the same dev/ layout.
+name: sm-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sm-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: session_manager
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d session_manager"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: sm-valkey
+    command: ["valkey-server", "--requirepass", "secret"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "-a", "secret", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Mock OIDC identity provider. Lets you complete a real login round-trip
+  # (/sm/auth -> Dex login -> /sm/callback -> session) without an external IdP.
+  # Test user: admin@example.com / password. Client: my-client / secret.
+  dex:
+    image: ghcr.io/dexidp/dex:latest
+    container_name: sm-dex
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    volumes:
+      - ./dex/config.yaml:/etc/dex/config.yaml:ro
+    ports:
+      - "5556:5556"
+    healthcheck:
+      # The image has no shell/curl; use Dex's own healthz over the wget busybox applet.
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:5556/dex/.well-known/openid-configuration"]
+      interval: 5s
+      timeout: 3s
+      retries: 10

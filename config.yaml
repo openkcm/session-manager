@@ -56,131 +56,62 @@ logger:
                     jwt-token: "*****"
 
 telemetry:
+    # Disabled by default for local development. Flip enabled: true to ship
+    # signals to a local OpenTelemetry collector (e.g. `docker run otel/opentelemetry-collector`
+    # listening on localhost:4317). The insecure secretRef needs no certificates,
+    # so it works out of the box on a developer machine.
+    #
+    # On a real environment the collector is reached over mTLS using credentials
+    # mounted from a secret.
+    #     secretRef:
+    #       type: mtls
+    #       mtls:
+    #         cert:
+    #           source: file
+    #           file: { path: /path/to/certs.json, format: json, jsonPath: "$.cert" }
+    #         certKey:
+    #           source: file
+    #           file: { path: /path/to/certs.json, format: json, jsonPath: "$.key" }
+    #         serverCa:
+    #           source: file
+    #           file: { path: /path/to/certs.json, format: json, jsonPath: "$.server-ca" }
+    # An alternative is a Dynatrace-style api-token secretRef:
+    #     secretRef:
+    #       type: api-token
+    #       apiToken:
+    #         source: embedded
+    #         value: "dt0c01.XXXXXXXX.YYYYYYYY"
     logs:
         enabled: false
         protocol: grpc
         host:
-            source: file
-            file:
-                path: /etc/credentials/sap-cloud-logging.json
-                format: json
-                jsonPath: "$.ingest-otlp-endpoint"
-        #url: "/v1/logs"
+            source: embedded
+            value: localhost:4317
         secretRef:
-            type: mtls # insecure, mtls, api-token
-            mtls:
-                cert:
-                    source: file
-                    file:
-                        path: /etc/credentials/sap-cloud-logging.json
-                        format: json
-                        jsonPath: "$.ingest-otlp-cert"
-                certKey:
-                    source: file
-                    file:
-                        path: /etc/credentials/sap-cloud-logging.json
-                        format: json
-                        jsonPath: "$.ingest-otlp-key"
-                serverCa:
-                    source: file
-                    file:
-                        path: /etc/credentials/sap-cloud-logging.json
-                        format: json
-                        jsonPath: "$.server-ca"
-
+            type: insecure # insecure, mtls, api-token
     traces:
         enabled: false
-        #protocol: http
-        #host:
-        #  source: embedded
-        #  value: live.eu30.apm.services.cloud.sap
-        #url:
-        #  source: embedded
-        #  value: /e/98373022-4039-442d-8646-0b69d207eee8/api/v2/otlp/v1/traces
-        #secretRef:
-        #  type: api-token # insecure, mtls, api-token
-        #  apiToken:
-        #    source: embedded
-        #    value: "dt0c01.3X64SRHJVCJ43KRTPPJZYG5M.....5U6FZWJRMM6L2FJZFNZWM5EN2LRKWYUQLWLME"
-
         protocol: grpc
         host:
-            source: file
-            file:
-                path: /etc/credentials/sap-cloud-logging.json
-                format: json
-                jsonPath: "$.ingest-otlp-endpoint"
-        #url: "/v1/traces"
+            source: embedded
+            value: localhost:4317
         secretRef:
-            type: mtls # insecure, mtls, api-token
-            mtls:
-                cert:
-                    source: file
-                    file:
-                        path: /etc/credentials/sap-cloud-logging.json
-                        format: json
-                        jsonPath: "$.ingest-otlp-cert"
-                certKey:
-                    source: file
-                    file:
-                        path: /etc/credentials/sap-cloud-logging.json
-                        format: json
-                        jsonPath: "$.ingest-otlp-key"
-                serverCa:
-                    source: file
-                    file:
-                        path: /etc/credentials/sap-cloud-logging.json
-                        format: json
-                        jsonPath: "$.server-ca"
+            type: insecure # insecure, mtls, api-token
     metrics:
         enabled: false
+        # Set prometheus.enabled: true to expose metrics on the status port's
+        # /metrics endpoint instead of (or in addition to) OTLP push.
         prometheus:
             enabled: false
-
-        #protocol: http
-        #host:
-        #  source: embedded
-        #  value: live.eu30.apm.services.cloud.sap
-        #url:
-        #  source: embedded
-        #  value: /e/98373022-4039-442d-8646-0b69d207eee8/api/v2/otlp/v1/metrics
-        #secretRef:
-        #  type: api-token # insecure, mtls, api-token
-        #  apiToken:
-        #    source: embedded
-        #    value: "dt0c01.3X64SRHJVCJ43KRTPPJZYG5M.TOCDC...5U6FZWJRMM6L2FJZFNZWM5EN2LRKWYUQLWLME"
-
         protocol: grpc
         host:
-            source: file
-            file:
-                path: /etc/credentials/sap-cloud-logging.json
-                format: json
-                jsonPath: "$.ingest-otlp-endpoint"
-        #url: "/v1/metrics"
+            source: embedded
+            value: localhost:4317
         secretRef:
-            type: mtls # insecure, mtls, api-token
-            mtls:
-                cert:
-                    source: file
-                    file:
-                        path: /etc/credentials/sap-cloud-logging.json
-                        format: json
-                        jsonPath: "$.ingest-otlp-cert"
-                certKey:
-                    source: file
-                    file:
-                        path: /etc/credentials/sap-cloud-logging.json
-                        format: json
-                        jsonPath: "$.ingest-otlp-key"
-                serverCa:
-                    source: file
-                    file:
-                        path: /etc/credentials/sap-cloud-logging.json
-                        format: json
-                        jsonPath: "$.server-ca"
+            type: insecure # insecure, mtls, api-token
 
 database:
+    module: database.module.pgxpool
     name: session_manager
     port: 5432
     host:
@@ -193,7 +124,18 @@ database:
         source: embedded
         value: secret
 
+trust:
+    module: trust.module.oidc
+
+migrate:
+    module: trust.migration.module.oidc
+    source: file://./sql
+
+credentials:
+    module: credentials.module.oauth2
+
 valkey:
+    module: sessionstore.module.valkey
     host:
         source: embedded
         value: localhost:6379
@@ -205,56 +147,102 @@ valkey:
         value: secret
     prefix: session-manager
     secretRef:
-        type: insecure # Supports "mtls" or "insecure"
-        # mtls:
-        #     cert:
-        #         source: embedded
-        #         value: value
-        #     certKey:
-        #         source: embedded
-        #         value: value
-        #     serverCa:
-        #         source: embedded
-        #         value: value
+        type: insecure # Supported values: "mtls", "insecure", "client_secret_post"
+    #   secretRef:
+    #     type: mtls
+    #     mTLS:
+    #       cert:
+    #         source: file
+    #         file: { path: /etc/credentials/valkey/tls_crt, format: binary }
+    #       certKey:
+    #         source: file
+    #         file: { path: /etc/credentials/valkey/tls_key, format: binary }
+    #       serverCA:
+    #         source: file
+    #         file: { path: /etc/credentials/valkey/ca_crt, format: binary }
 
 sessionManager:
     sessionDuration: 12h
     idleSessionTimeout: 90m
     callbackURL: http://localhost:8080/sm/callback
+    # Allow plain-http OIDC issuers (e.g. a local Dex mock IdP). Keep false on real
+    # environments so only https:// issuers are trusted.
+    allowHttpScheme: true
+    # On a real environment the callback is the externally reachable HTTPS URL.
+    # allowedRedirectBaseURLs restricts the redirect targets accepted during the
+    # authorization flow and after logout. Requests whose redirect does not match
+    # one of these base URLs are rejected. Keep the trailing "/" on host entries
+    # to avoid open-redirect attacks (e.g. https://<known>.<evil>/).
+    allowedRedirectBaseURLs:
+        - http://localhost:8080/
     clientAuth:
         # Deprecated: ClientID is no longer used in the application code, but is still required in the config
         # to backfill existing database entries during migration.
         # It will be removed in a future release once the migration has been applied in all environments.
         clientID: "client-id"
+        # type: one of "client_secret" (simplest for local dev) or "mtls".
         type: client_secret
         clientSecret:
             source: embedded
             value: secret
+        # On a real environment mTLS client authentication is used instead, with
+        # the certificate/key/CA mounted from secrets:
+        #   type: mtls
+        #   mTLS:
+        #     cert:
+        #       source: file
+        #       file: { path: /etc/credentials/cluster-cert/tls_crt, format: binary }
+        #     certKey:
+        #       source: file
+        #       file: { path: /etc/credentials/cluster-cert/tls_key, format: binary }
+        #     serverCA:
+        #       source: file
+        #       file: { path: /etc/credentials/digicert/root-ca-bundle.crt, format: binary }
+    # Cookie attributes are relaxed for local development over plain http://.
+    # Browsers reject the "__Host-" name prefix, Secure, and SameSite=None over
+    # a non-HTTPS origin, which breaks browser-based session debugging. On a real
+    # (HTTPS) environment these are hardened — shown as comments per field below.
     sessionCookieTemplate:
-        name: "__Host-Http-SESSION"
+        name: "SESSION" # real env: "__Host-Http-SESSION"
         path: "/"
-        secure: true
-        sameSite: None
+        secure: false # real env: true
+        sameSite: Lax # real env: None
         httpOnly: true
     csrfCookieTemplate:
         name: "CSRF"
         path: "/"
-        secure: true
+        secure: false # real env: true
         sameSite: Strict
-        domain: localhost
+        domain: localhost # the deployment domain
     loginCSRFCookieTemplate:
+        # real env: leave unset to use the hardened "__Host-LoginCSRF" default.
+        # Browsers reject the "__Host-" prefix without Secure, so local http dev
+        # uses a plain name instead.
+        name: "LoginCSRF" # real env: unset ("__Host-LoginCSRF")
         path: "/"
-        secure: true
+        secure: false # real env: true
         sameSite: Lax
         httpOnly: true
     csrfSecret:
+        # Must be at least 32 bytes. Embedded for local dev; on a real environment
+        # it is mounted from a secret:
+        #   source: file
+        #   file: { path: /etc/credentials/csrf-secret/csrf_secret, format: binary }
         source: embedded
         value: my-csrf-secret-at-least-thirty-two-bits-size
-
-migrate:
-    source: file://./sql
 
 housekeeper:
     triggerInterval: 10m
     concurrencyLimit: 10
     tokenRefreshTriggerInterval: 15m
+
+apps:
+    grpc:
+        module: app.module.grpcserver
+        services:
+            - module: service.module.grpc.session
+              # Allow http:// issuers (local Dex) when validating sessions. Keep
+              # false / omit on real environments.
+              allowHttpScheme: true
+            - module: service.module.grpc.trustmapping
+            - module: service.module.grpc.oidcmapping

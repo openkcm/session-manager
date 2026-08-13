@@ -16,8 +16,45 @@ DB_ADMIN_PASS_KEY := secretKey
 VALKEY_PASS := $(DB_PASS)
 K3D_CLUSTER_NAME := session-manager-test
 SERVICE_NAME := session-manager
+DEV_COMPOSE := dev/docker-compose.yaml
 
 all: clean lint build test image
+
+.PHONY: help
+help: ## Show this help
+	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-18s\033[0m %s\n", $$1, $$2}'
+
+# ----------------------------------------------------------------------------
+# Local development (binary on host, dependencies in Docker Compose).
+# This is NOT the k3d/Helm path (`make start`). See docs/local-dev.md.
+# ----------------------------------------------------------------------------
+
+.PHONY: dev-deps
+dev-deps: ## Start local dependencies (Postgres, Valkey, Dex) and wait until healthy
+	@echo "Starting local dependencies via Docker Compose"
+	docker compose -f $(DEV_COMPOSE) up -d --wait
+
+.PHONY: dev-deps-down
+dev-deps-down: ## Stop and remove local dependencies
+	docker compose -f $(DEV_COMPOSE) down
+
+.PHONY: dev-deps-reset
+dev-deps-reset: ## Stop and WIPE local dependency data (clean-slate DB)
+	docker compose -f $(DEV_COMPOSE) down -v
+
+.PHONY: dev-deps-logs
+dev-deps-logs: ## Tail logs from the local dependencies
+	docker compose -f $(DEV_COMPOSE) logs -f
+
+.PHONY: migrate
+migrate: build ## Apply database migrations against the local Postgres
+	./$(SERVICE_NAME) migrate
+
+.PHONY: run
+run: build ## Run the api-server on the host against the local dependencies
+	./$(SERVICE_NAME) api-server
+
 
 .PHONY: start
 start: start-k3d psql-helm-install valkey-helm-install ensure-deps service-helm-install
@@ -106,37 +143,41 @@ docker-dev-build:
 .PHONY: codegen
 codegen:
 	go generate ./...
-	go run github.com/sqlc-dev/sqlc/cmd/sqlc@latest generate
+	go tool github.com/sqlc-dev/sqlc/cmd/sqlc generate
 
 .PHONY: clean
 clean:
-	rm -f cover.out cover.html session-manager
-	rm -rf cover/
+	@rm -f cover.out cover.html session-manager
+	@rm -rf cover/
+
+.PHONY: fix-lint
+fix-lint:
+	golangci-lint run --fix --build-tags=integration ./...
 
 .PHONY: lint
 lint:
-	golangci-lint run ./...
+	golangci-lint run --build-tags=integration ./...
 
 .PHONY: build
 build:
 	go build ./cmd/session-manager
 
 .PHONY: test
-test: clean install-gotestsum
+test: clean
 	@mkdir -p cover/integration cover/unit
 	@go clean -testcache
 
-	gotestsum --junitfile="${CURDIR}/junit-unit.xml" --format=testname -- -count=1 -race -cover ./... -args -test.gocoverdir="${CURDIR}/cover/unit"
-	GOCOVERDIR="${CURDIR}/cover/integration" gotestsum --junitfile="${CURDIR}/junit-integration.xml" --format=testname -- -v -count=1 -race -tags=integration ./integration
+	@go tool gotest.tools/gotestsum --junitfile="${CURDIR}/junit-unit.xml" --format=dots-v2 -- -count=1 -race -cover ./... -args -test.gocoverdir="${CURDIR}/cover/unit"
+	@GOCOVERDIR=${CURDIR}/cover/integration go tool gotest.tools/gotestsum --junitfile="${CURDIR}/junit-integration.xml" --format=dots-v2 -- -v -count=1 -race -tags=integration ./integration
 
 	@go tool covdata textfmt -i=./cover/unit,./cover/integration -o cover.out
 	@grep -v 'github.com/openkcm/session-manager/internal/openapi/'         cover.out > cover.tmp && mv cover.tmp cover.out
 	@grep -v 'github.com/openkcm/session-manager/internal/dbtest/'          cover.out > cover.tmp && mv cover.tmp cover.out
-	@grep -v 'github.com/openkcm/session-manager/internal/trust/trustmock/' cover.out > cover.tmp && mv cover.tmp cover.out
+	@grep -v 'github.com/openkcm/session-manager/modules/oidctrust/mocks/'  cover.out > cover.tmp && mv cover.tmp cover.out
 	@grep -v 'github.com/openkcm/session-manager/internal/session/mock/'    cover.out > cover.tmp && mv cover.tmp cover.out
 	@go tool cover -func=cover.out
 
-	@echo "On a Mac, you can use the following command to open the coverage report in the browser\ngo tool cover -html=cover.out -o cover.html && open cover.html"
+	@echo "On a Mac, you can use the following command to open the coverage report in the browser\ngo tool cover -html=cover.out"
 
 .PHONY: helm-test
 helm-test:
@@ -171,10 +212,6 @@ helm-integration-test-run:
 .PHONY: k3d-teardown
 k3d-teardown:
 	k3d cluster delete $(K3D_CLUSTER_NAME)
-
-.PHONY: install-gotestsum
-install-gotestsum:
-	(cd /tmp && go install gotest.tools/gotestsum@latest)
 
 .PHONY: image
 image:
