@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/openkcm/common-sdk/pkg/health"
 	"github.com/stretchr/testify/assert"
@@ -118,29 +117,6 @@ func TestStatusListener(t *testing.T) {
 		assert.NotPanics(t, func() {
 			statusListener(ctx, state)
 		})
-	})
-}
-
-func TestStartStatusServer(t *testing.T) {
-	t.Run("returns error when connection string creation fails", func(t *testing.T) {
-		cfg := &config.Config{
-			Database: config.Database{
-				Name: "",
-				Port: "",
-			},
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-		defer cancel()
-
-		err := startStatusServer(ctx, cfg)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "making connection string from config")
-	})
-}
-
-func TestHealthStatusTimeout(t *testing.T) {
-	t.Run("has correct value", func(t *testing.T) {
-		assert.Equal(t, 5*time.Second, healthStatusTimeout)
 	})
 }
 

@@ -332,11 +332,13 @@ func TestHousekeeperDeployment(t *testing.T) {
 			expected: []string{
 				"resources:",
 				"limits:",
+				"cpu: 500m",
+				"memory: 512Mi",
+				"ephemeral-storage: 1Gi",
+				"requests:",
 				"cpu: 100m",
 				"memory: 128Mi",
-				"requests:",
-				"cpu: 50m",
-				"memory: 64Mi",
+				"ephemeral-storage: 256Mi",
 			},
 		},
 		{

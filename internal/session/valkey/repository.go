@@ -10,8 +10,8 @@ import (
 
 	slogctx "github.com/veqryn/slog-context"
 
-	"github.com/openkcm/session-manager/internal/serviceerr"
 	"github.com/openkcm/session-manager/internal/session"
+	"github.com/openkcm/session-manager/pkg/serviceerr"
 )
 
 type ObjectType string

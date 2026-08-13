@@ -138,10 +138,10 @@ func TestConfigMapRendering(t *testing.T) {
 		},
 		{
 			name:   "custom migrate config",
-			values: "--set config.migrate.source=file:///custom-path",
+			values: "--set config.migrate.dbModule=database.module.custom",
 			expected: []string{
 				"migrate:",
-				"source: file:///custom-path",
+				"dbModule: database.module.custom",
 			},
 		},
 		{

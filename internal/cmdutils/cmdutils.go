@@ -3,11 +3,9 @@ package cmdutils
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"syscall"
 	"time"
 
-	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/openkcm/common-sdk/pkg/health"
 	"github.com/openkcm/common-sdk/pkg/logger"
 	"github.com/openkcm/common-sdk/pkg/otlp"
@@ -35,7 +33,11 @@ func CobraCommand(
 		Long:         long,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, err := loadConfig(buildInfo)
+			cfg, err := config.Load(buildInfo,
+				"/etc/session-manager/",
+				"$HOME/.session-manager/",
+				"./",
+			)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
@@ -65,7 +67,7 @@ func run(ctx context.Context, withTelemetry, withStatusServer bool, fn func(cont
 		return oops.In("main").
 			Wrapf(err, "Failed to initialise the logger")
 	}
-	slogctx.Debug(ctx, "Starting the application", slog.Any("config", cfg))
+	slogctx.Debug(ctx, "Starting the application")
 
 	// OpenTelemetry
 	if withTelemetry {
@@ -95,33 +97,6 @@ func run(ctx context.Context, withTelemetry, withStatusServer bool, fn func(cont
 	return nil
 }
 
-func loadConfig(buildInfo string) (*config.Config, error) {
-	defaultValues := map[string]any{}
-	cfg := &config.Config{}
-
-	err := commoncfg.LoadConfig(
-		cfg,
-		defaultValues,
-		"/etc/session-manager",
-		"$HOME/.session-manager",
-		".",
-	)
-	if err != nil {
-		return nil, fmt.Errorf("loading configuration: %w", err)
-	}
-
-	// Update Version
-	err = commoncfg.UpdateConfigVersion(
-		&cfg.BaseConfig,
-		buildInfo,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("updating the version configuration: %w", err)
-	}
-
-	return cfg, nil
-}
-
 func statusListener(ctx context.Context, state health.State) {
 	subctx := slogctx.With(ctx, "status", state.Status)
 	//nolint:fatcontext
@@ -136,11 +111,6 @@ func statusListener(ctx context.Context, state health.State) {
 }
 
 func startStatusServer(ctx context.Context, cfg *config.Config) error {
-	connStr, err := config.MakeConnStr(cfg.Database)
-	if err != nil {
-		return fmt.Errorf("making connection string from config: %w", err)
-	}
-
 	liveness := status.WithLiveness(
 		health.NewHandler(
 			health.NewChecker(health.WithDisabledAutostart()),
@@ -150,7 +120,6 @@ func startStatusServer(ctx context.Context, cfg *config.Config) error {
 	healthOptions := []health.Option{
 		health.WithDisabledAutostart(),
 		health.WithTimeout(healthStatusTimeout),
-		health.WithDatabaseChecker("pgx", connStr),
 		health.WithStatusListener(statusListener),
 	}
 
@@ -160,8 +129,7 @@ func startStatusServer(ctx context.Context, cfg *config.Config) error {
 		),
 	)
 
-	err = status.Start(ctx, &cfg.BaseConfig, liveness, readiness)
-	if err != nil {
+	if err := status.Start(ctx, &cfg.BaseConfig, liveness, readiness); err != nil {
 		return fmt.Errorf("starting status server: %w", err)
 	}
 

@@ -1,0 +1,34 @@
+# Dex mock OIDC identity provider config for local development.
+# Used by dev/docker-compose.yaml. See docs/local-dev.md.
+#
+# The issuer must be reachable at the SAME URL from both your browser and the
+# session-manager process, hence localhost:5556 (both run on the host / expose
+# the port there).
+issuer: http://localhost:5556/dex
+
+storage:
+  type: memory
+
+web:
+  http: 0.0.0.0:5556
+
+oauth2:
+  # Skip the "grant access?" screen so scripted/browser logins go straight through.
+  skipApprovalScreen: true
+
+staticClients:
+  - id: my-client
+    secret: secret
+    name: 'Session Manager'
+    redirectURIs:
+      # Must match sessionManager.callbackURL in config.yaml.
+      - http://localhost:8080/sm/callback
+
+enablePasswordDB: true
+staticPasswords:
+  # Login: admin@example.com / password
+  - email: "admin@example.com"
+    # bcrypt hash of "password"
+    hash: "$2a$10$PwgwRU2W7lJQGKzIIVYDY.1ZE9OFsuRSrh7nirkkc3PnQPCzMaUyC"
+    username: "admin"
+    userID: "08a8684b-db88-4b73-90a9-3cd1661f5466"

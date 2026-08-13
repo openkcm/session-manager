@@ -25,6 +25,7 @@ spec:
         app.kubernetes.io/component: migrate
     spec:
       restartPolicy: OnFailure
+      automountServiceAccountToken: false
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -53,6 +54,19 @@ spec:
           {{- end }}
           args: [ "migrate" ]
           env: []
+          resources:
+          {{- if .Values.resources }}
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- else }}
+            limits:
+              cpu: 200m
+              memory: 128Mi
+              ephemeral-storage: 512Mi
+            requests:
+              cpu: 100m
+              memory: 64Mi
+              ephemeral-storage: 128Mi
+          {{- end }}
           volumeMounts:
             - name: {{ include "session-manager.fullname" . }}-config-volume
               mountPath: /etc/{{ include "session-manager.name" . }}

@@ -43,6 +43,12 @@ data:
     database:
       {{- toYaml .database | nindent 6 }}
 
+    trust:
+      {{- toYaml .trust | nindent 6 }}
+
+    credentials:
+      {{- toYaml .credentials | nindent 6 }}
+
     valkey:
       {{- toYaml .valkey | nindent 6 }}
 
@@ -54,4 +60,7 @@ data:
 
     housekeeper:
       {{- toYaml .housekeeper | nindent 6 }}
+
+    apps:
+      {{- toYaml .apps | nindent 6 }}
     {{- end }}
