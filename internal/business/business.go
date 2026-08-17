@@ -2,6 +2,7 @@ package business
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -209,6 +210,10 @@ func newCredsBuilder(cfg *config.Config) (credentials.Builder, error) {
 		tlsConfig, err := commoncfg.LoadMTLSConfig(cfg.SessionManager.ClientAuth.MTLS)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load mTLS config: %w", err)
+		}
+
+		if cfg.SessionManager.ClientAuth.AllowTLSRenegotiationOnce {
+			tlsConfig.Renegotiation = tls.RenegotiateOnceAsClient
 		}
 
 		return func(clientID string) credentials.TransportCredentials {
