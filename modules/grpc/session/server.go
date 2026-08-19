@@ -68,10 +68,7 @@ func NewServer(
 
 	s.introspectionCache = ttlcache.New(ttlcache.WithTTL[string, oidc.Introspection](defaultIntrospectionCacheExpiration))
 	go s.introspectionCache.Start()
-	go func(ctx context.Context) {
-		<-ctx.Done()
-		s.introspectionCache.Stop()
-	}(ctx)
+	context.AfterFunc(ctx, s.introspectionCache.Stop)
 
 	return s
 }

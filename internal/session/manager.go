@@ -105,10 +105,7 @@ func NewManager(
 
 	m.wkocCache = ttlcache.New(ttlcache.WithTTL[string, *oidc.Configuration](defaultWKOCCacheExpiration))
 	go m.wkocCache.Start()
-	go func(ctx context.Context) {
-		<-ctx.Done()
-		m.wkocCache.Stop()
-	}(ctx)
+	context.AfterFunc(ctx, m.wkocCache.Stop)
 
 	return m, nil
 }
