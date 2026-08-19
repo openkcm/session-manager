@@ -196,6 +196,7 @@ func (m *Manager) getProviderKeySet(ctx context.Context, oidcConf *oidc.Configur
 	if err != nil {
 		return nil, fmt.Errorf("executing an http request: %w", err)
 	}
+	defer resp.Body.Close()
 
 	err = json.NewDecoder(resp.Body).Decode(&keySet)
 	if err != nil {

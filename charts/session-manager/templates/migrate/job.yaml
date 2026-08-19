@@ -55,8 +55,8 @@ spec:
           args: [ "migrate" ]
           env: []
           resources:
-          {{- if .Values.resources }}
-            {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.migrate.resources }}
+            {{- toYaml .Values.migrate.resources | nindent 12 }}
           {{- else }}
             limits:
               cpu: 200m

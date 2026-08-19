@@ -5,6 +5,7 @@
 package oauth2
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -60,6 +61,9 @@ func (m *Module) Provision(ctx *sessionmanager.Context) error {
 		tlsConfig, err := commoncfg.LoadMTLSConfig(clientAuth.MTLS)
 		if err != nil {
 			return fmt.Errorf("loading mTLS config: %w", err)
+		}
+		if clientAuth.AllowTLSRenegotiationOnce {
+			tlsConfig.Renegotiation = tls.RenegotiateOnceAsClient
 		}
 		m.builder = func(clientID string) credentials.TransportCredentials {
 			return credentials.NewTLS(clientID, tlsConfig)
