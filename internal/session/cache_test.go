@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/jellydator/ttlcache/v3"
-	"github.com/openkcm/common-sdk/pkg/oidc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zitadel/oidc/pkg/oidc"
 
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/session"
@@ -39,7 +39,7 @@ func TestWKOCCache_DisableTouchOnHit(t *testing.T) {
 
 		// Set an item with a short TTL for testing
 		key := "test-issuer-key"
-		value := &oidc.Configuration{Issuer: "https://test.example.com"}
+		value := &oidc.DiscoveryConfiguration{Issuer: "https://test.example.com"}
 		cache.Set(key, value, 100*time.Millisecond)
 
 		// Verify item is retrievable
@@ -81,13 +81,13 @@ func TestWKOCCache_DisableTouchOnHit(t *testing.T) {
 
 		// Create cache WITHOUT WithDisableTouchOnHit (default behavior)
 		cacheWithTouch := ttlcache.New(
-			ttlcache.WithTTL[string, *oidc.Configuration](ttl),
+			ttlcache.WithTTL[string, *oidc.DiscoveryConfiguration](ttl),
 		)
 		go cacheWithTouch.Start()
 		defer cacheWithTouch.Stop()
 
 		key := "test-issuer"
-		value := &oidc.Configuration{Issuer: "https://test.example.com"}
+		value := &oidc.DiscoveryConfiguration{Issuer: "https://test.example.com"}
 		cacheWithTouch.Set(key, value, ttlcache.DefaultTTL)
 
 		item := cacheWithTouch.Get(key)

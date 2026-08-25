@@ -4,13 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"errors"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/jellydator/ttlcache/v3"
-	"github.com/openkcm/common-sdk/pkg/oidc"
+	"github.com/zitadel/oidc/pkg/client/rs"
+	"github.com/zitadel/oidc/pkg/oidc"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 	"google.golang.org/grpc/status"
@@ -24,27 +23,24 @@ import (
 
 	sessionmanager "github.com/openkcm/session-manager"
 	"github.com/openkcm/session-manager/internal/credentials"
-	"github.com/openkcm/session-manager/internal/debugtools"
 	internalsession "github.com/openkcm/session-manager/internal/session"
+	"github.com/openkcm/session-manager/internal/validation"
 )
 
 const defaultIntrospectionCacheExpiration = 30 * time.Second
-
-var debugSettingSMDumpTransport = debugtools.NewSetting("smdumptransport")
 
 type Server struct {
 	sessionv1.UnimplementedServiceServer
 
 	sessionRepo internalsession.Repository
 	trust       sessionmanager.Trust
-	newCreds    credentials.Builder
+	cProvider   credentials.Provider
 
-	queryParametersIntrospect []string
-	idleSessionTimeout        time.Duration
-	allowHttpScheme           bool
+	idleSessionTimeout time.Duration
+	allowHttpScheme    bool
 
 	// cache introspection results
-	introspectionCache *ttlcache.Cache[string, oidc.Introspection]
+	introspectionCache *ttlcache.Cache[string, oidc.IntrospectionResponse]
 }
 
 func NewServer(
@@ -58,7 +54,7 @@ func NewServer(
 		sessionRepo:        sessionRepo,
 		trust:              trust,
 		idleSessionTimeout: idleSessionTimeout,
-		newCreds:           func(clientID string) credentials.TransportCredentials { return credentials.NewInsecure(clientID) },
+		cProvider:          credentials.InsecureProvider{},
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -67,8 +63,8 @@ func NewServer(
 	}
 
 	s.introspectionCache = ttlcache.New(
-		ttlcache.WithTTL[string, oidc.Introspection](defaultIntrospectionCacheExpiration),
-		ttlcache.WithDisableTouchOnHit[string, oidc.Introspection](),
+		ttlcache.WithTTL[string, oidc.IntrospectionResponse](defaultIntrospectionCacheExpiration),
+		ttlcache.WithDisableTouchOnHit[string, oidc.IntrospectionResponse](),
 	)
 	go s.introspectionCache.Start()
 	context.AfterFunc(ctx, s.introspectionCache.Stop)
@@ -161,14 +157,15 @@ func (s *Server) GetSession(ctx context.Context, req *sessionv1.GetSessionReques
 		slogctx.Error(ctx, "Could not introspect access token", "error", err)
 		return &sessionv1.GetSessionResponse{Valid: false}, err
 	}
-	if !result.Active {
+	if !result.IsActive() {
 		slogctx.Warn(ctx, "Access token is not active", "result", result)
 		span.SetStatus(codes.Ok, "access token is not active")
 		return &sessionv1.GetSessionResponse{Valid: false}, nil
 	}
 
-	if result.Groups != nil {
-		response.Groups = result.Groups
+	groups := result.GetClaim("groups")
+	if g := toStringSlice(groups); g != nil {
+		response.Groups = g
 	}
 
 	// Bump the session to keep it active
@@ -228,22 +225,11 @@ func (s *Server) GetTrust(ctx context.Context, req *sessionv1.GetTrustRequest) (
 	return &sessionv1.GetTrustResponse{Trust: trust}, nil
 }
 
-func (s *Server) httpClient(clientID string) (*http.Client, error) {
-	if clientID == "" {
-		return nil, errors.New("ClientID is missing")
-	}
-	creds := s.newCreds(clientID)
-	transport := creds.Transport()
-	if debugSettingSMDumpTransport.Value() == "1" {
-		transport = debugtools.NewTransport(transport)
-	}
-
-	return &http.Client{
-		Transport: transport,
-	}, nil
+func (s *Server) resourceServer(oidcTrust *oidcv1.OIDC) (rs.ResourceServer, error) {
+	return s.cProvider.ResourceServer(oidcTrust.GetClientId(), oidcTrust.GetIssuer())
 }
 
-func (s *Server) introspectToken(ctx context.Context, token string, oidcTrust *oidcv1.OIDC) (oidc.Introspection, error) {
+func (s *Server) introspectToken(ctx context.Context, token string, oidcTrust *oidcv1.OIDC) (oidc.IntrospectionResponse, error) {
 	// first check the cache for a recent introspection result for this token
 	hashedSuffix := sha256.Sum256([]byte(token))
 	cacheKey := base64.RawURLEncoding.EncodeToString(hashedSuffix[:])
@@ -251,35 +237,57 @@ func (s *Server) introspectToken(ctx context.Context, token string, oidcTrust *o
 		return item.Value(), nil
 	}
 
-	httpClient, err := s.httpClient(oidcTrust.GetClientId())
+	resServer, err := s.resourceServer(oidcTrust)
 	if err != nil {
-		slogctx.Error(ctx, "Could not create HTTP client for OpenID provider", "issuer", oidcTrust.GetIssuer(), "error", err)
-		return oidc.Introspection{Active: false}, err
+		slogctx.Error(ctx, "Could not create resource server for OpenID provider", "issuer", oidcTrust.GetIssuer(), "error", err)
+		return nil, fmt.Errorf("creating resource server: %w", err)
 	}
 
-	// create the provider for the given issuer
-	provider, err := oidc.NewProvider(oidcTrust.GetIssuer(), oidcTrust.GetAudiences(),
-		oidc.WithAllowHttpScheme(s.allowHttpScheme),
-		oidc.WithSecureHTTPClient(httpClient),
-	)
-	if err != nil {
-		slogctx.Error(ctx, "Could not create OpenID provider", "issuer", oidcTrust.GetIssuer(), "error", err)
-		return oidc.Introspection{Active: false}, err
+	intrURL := resServer.IntrospectionURL()
+
+	// When the provider does not expose an introspection endpoint, there is no
+	// way to introspect the token; treat it as active (the session and ID token
+	// checks still gate access).
+	if intrURL == "" {
+		slogctx.Debug(ctx, "No introspection endpoint configured", "issuer", oidcTrust.GetIssuer())
+		active := oidc.NewIntrospectionResponse()
+		active.SetActive(true)
+		return active, nil
 	}
 
-	// introspect the token
-	intr, err := provider.IntrospectToken(ctx, token)
+	if err := validation.SecureScheme(intrURL, s.allowHttpScheme); err != nil {
+		return nil, err
+	}
+
+	intr, err := rs.Introspect(ctx, resServer, token)
 	if err != nil {
-		if errors.Is(err, oidc.ErrNoIntrospectionEndpoint) {
-			slogctx.Debug(ctx, "No introspection endpoint configured", "issuer", provider.Issuer)
-			return oidc.Introspection{Active: true}, nil
-		}
-		slogctx.Error(ctx, "Could not introspect token", "error", err)
-		return oidc.Introspection{Active: false}, err
+		return nil, fmt.Errorf("executing introspection request: %w", err)
 	}
 
 	// Cache the result with TTL
 	s.introspectionCache.Set(cacheKey, intr, ttlcache.DefaultTTL)
 
 	return intr, nil
+}
+
+// toStringSlice converts a claim value into a []string. Introspection claims are
+// decoded from JSON, so a string array arrives as []interface{}; this coerces
+// both that and an already-typed []string, returning nil for anything else.
+func toStringSlice(v any) []string {
+	switch t := v.(type) {
+	case []string:
+		return t
+	case []any:
+		out := make([]string, 0, len(t))
+		for _, e := range t {
+			s, ok := e.(string)
+			if !ok {
+				return nil
+			}
+			out = append(out, s)
+		}
+		return out
+	default:
+		return nil
+	}
 }

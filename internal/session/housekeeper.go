@@ -1,17 +1,15 @@
 package session
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"time"
 
+	"github.com/zitadel/oidc/pkg/client/rp"
+
+	oidcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/v1"
 	slogctx "github.com/veqryn/slog-context"
 )
 
@@ -94,6 +92,10 @@ func (m *Manager) housekeepSession(ctx context.Context, s Session, refreshTrigge
 	}
 }
 
+func (m *Manager) relyingParty(oidc *oidcv1.OIDC) (rp.RelyingParty, error) {
+	return m.cProvider.RelyingParty(oidc, m.callbackURL.String())
+}
+
 // refreshAccessToken refreshes the access token for the given session using its refresh token.
 func (m *Manager) refreshAccessToken(ctx context.Context, s Session) error {
 	trust, err := m.trust.Get(ctx, s.TenantID)
@@ -102,50 +104,19 @@ func (m *Manager) refreshAccessToken(ctx context.Context, s Session) error {
 	}
 
 	oidc := trust.GetOidc()
-
-	openidConf, err := m.getOpenIDConfig(ctx, oidc.GetIssuer())
+	relyingParty, err := m.relyingParty(oidc)
 	if err != nil {
-		return fmt.Errorf("could not get OpenID configuration: %w", err)
+		return fmt.Errorf("creating relying party: %w", err)
 	}
 
-	data := url.Values{}
-	data.Set("grant_type", "refresh_token")
-	data.Set("refresh_token", s.RefreshToken)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, openidConf.TokenEndpoint, bytes.NewBufferString(data.Encode()))
+	token, err := rp.RefreshAccessToken(relyingParty, s.RefreshToken, "", "")
 	if err != nil {
-		return fmt.Errorf("creating request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	client, err := m.httpClient(oidc.GetClientId())
-	if err != nil {
-		return fmt.Errorf("creating http client: %w", err)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("executing request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("could not read token endpoint response body: %w", err)
+		return fmt.Errorf("refreshing access token: %w", err)
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("token endpoint returned non-200 status: %d, body: %s", resp.StatusCode, string(body))
-	}
-
-	var respData tokenResponse
-	err = json.Unmarshal(body, &respData)
-	if err != nil {
-		return fmt.Errorf("could not unmarshal token endpoint response: %w", err)
-	}
-
-	s.AccessToken = respData.AccessToken
-	s.RefreshToken = respData.RefreshToken
-	s.AccessTokenExpiry = time.Now().Add(time.Duration(respData.ExpiresIn) * time.Second)
+	s.AccessToken = token.AccessToken
+	s.RefreshToken = token.RefreshToken
+	s.AccessTokenExpiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
 
 	err = m.sessions.StoreSession(ctx, s)
 	if err != nil {
