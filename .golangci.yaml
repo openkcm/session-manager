@@ -10,12 +10,7 @@ run:
 linters:
   default: all
   disable:
-    - gomodguard # Replaced by gomodguard_v2, enabled by default: all
-    - nilerr
-    - tagliatelle
     - bodyclose
-    - gomoddirectives
-    - gomodguard
     - contextcheck
     - cyclop
     - depguard
@@ -23,7 +18,9 @@ linters:
     - err113
     - exhaustive
     - exhaustruct
+    - exhaustruct_v5
     - forbidigo
+    - funcorder
     - funlen
     - ginkgolinter
     - gochecknoglobals
@@ -32,24 +29,28 @@ linters:
     - gocritic
     - godot
     - godox
+    - gomoddirectives
+    - gomodguard
+    - gomodguard # Replaced by gomodguard_v2, enabled by default: all
     - gosec
     - ireturn
     - lll
     - mnd
     - musttag
     - nestif
+    - nilerr
     - nlreturn
+    - noinlineerr
+    - nonamedreturns
     - revive
     - tagalign
+    - tagliatelle
     - testpackage
     - unparam
     - varnamelen
     - wrapcheck
     - wsl
     - wsl_v5
-    - funcorder
-    - nonamedreturns
-    - noinlineerr
   settings:
     errcheck:
       exclude-functions:
