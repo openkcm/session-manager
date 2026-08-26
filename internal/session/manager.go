@@ -103,7 +103,10 @@ func NewManager(
 		}
 	}
 
-	m.wkocCache = ttlcache.New(ttlcache.WithTTL[string, *oidc.Configuration](defaultWKOCCacheExpiration))
+	m.wkocCache = ttlcache.New(
+		ttlcache.WithTTL[string, *oidc.Configuration](defaultWKOCCacheExpiration),
+		ttlcache.WithDisableTouchOnHit[string, *oidc.Configuration](),
+	)
 	go m.wkocCache.Start()
 	context.AfterFunc(ctx, m.wkocCache.Stop)
 
