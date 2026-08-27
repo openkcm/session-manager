@@ -66,7 +66,10 @@ func NewServer(
 		}
 	}
 
-	s.introspectionCache = ttlcache.New(ttlcache.WithTTL[string, oidc.Introspection](defaultIntrospectionCacheExpiration))
+	s.introspectionCache = ttlcache.New(
+		ttlcache.WithTTL[string, oidc.Introspection](defaultIntrospectionCacheExpiration),
+		ttlcache.WithDisableTouchOnHit[string, oidc.Introspection](),
+	)
 	go s.introspectionCache.Start()
 	context.AfterFunc(ctx, s.introspectionCache.Stop)
 
