@@ -7,7 +7,6 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"hash"
 	"log/slog"
@@ -21,7 +20,9 @@ import (
 	"github.com/gofrs/uuid/v5"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/openkcm/common-sdk/pkg/csrf"
-	"github.com/openkcm/common-sdk/pkg/oidc"
+	"github.com/zitadel/oidc/pkg/client/rp"
+	"github.com/zitadel/oidc/pkg/oidc"
+	"golang.org/x/oauth2"
 	"google.golang.org/protobuf/proto"
 
 	flowv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/flow/v1"
@@ -32,25 +33,22 @@ import (
 	sessionmanager "github.com/openkcm/session-manager"
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/credentials"
-	"github.com/openkcm/session-manager/internal/debugtools"
 	"github.com/openkcm/session-manager/internal/pkce"
 	"github.com/openkcm/session-manager/pkg/serviceerr"
 )
 
 const defaultWKOCCacheExpiration = 30 * time.Minute
 
-var debugSettingSMDumpTransport = debugtools.NewSetting("smdumptransport")
-
 const (
 	LoginCSRFCookieName = "__Host-LoginCSRF"
 )
 
 type Manager struct {
-	trust    sessionmanager.Trust
-	sessions Repository
-	pkce     pkce.Source
-	audit    *otlpaudit.AuditLogger
-	newCreds credentials.Builder
+	trust     sessionmanager.Trust
+	sessions  Repository
+	pkce      pkce.Source
+	audit     *otlpaudit.AuditLogger
+	cProvider credentials.Provider
 
 	sessionDuration    time.Duration
 	idleSessionTimeout time.Duration
@@ -66,7 +64,7 @@ type Manager struct {
 	allowedRedirectBaseURLs []*url.URL
 
 	// cache well known OpenID configuration results
-	wkocCache *ttlcache.Cache[string, *oidc.Configuration]
+	wkocCache *ttlcache.Cache[string, *oidc.DiscoveryConfiguration]
 }
 
 func NewManager(
@@ -92,7 +90,7 @@ func NewManager(
 		csrfCookieTemplate:      cfg.CSRFCookieTemplate,
 		loginCSRFCookieTemplate: cfg.LoginCSRFCookieTemplate,
 		callbackURL:             callbackURL,
-		newCreds:                func(clientID string) credentials.TransportCredentials { return credentials.NewInsecure(clientID) },
+		cProvider:               credentials.InsecureProvider{},
 		csrfSecret:              cfg.CSRFSecretParsed,
 		allowedRedirectBaseURLs: parseURLs(cfg.AllowedRedirectBaseURLs),
 	}
@@ -104,8 +102,8 @@ func NewManager(
 	}
 
 	m.wkocCache = ttlcache.New(
-		ttlcache.WithTTL[string, *oidc.Configuration](defaultWKOCCacheExpiration),
-		ttlcache.WithDisableTouchOnHit[string, *oidc.Configuration](),
+		ttlcache.WithTTL[string, *oidc.DiscoveryConfiguration](defaultWKOCCacheExpiration),
+		ttlcache.WithDisableTouchOnHit[string, *oidc.DiscoveryConfiguration](),
 	)
 	go m.wkocCache.Start()
 	context.AfterFunc(ctx, m.wkocCache.Stop)
@@ -121,11 +119,6 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, requestURI, errorUR
 	}
 
 	oidc := trust.GetOidc()
-
-	openidConf, err := m.getOpenIDConfig(ctx, oidc.GetIssuer())
-	if err != nil {
-		return "", "", fmt.Errorf("getting an openid config: %w", err)
-	}
 
 	stateID := m.pkce.State()
 	pkce := m.pkce.PKCE()
@@ -150,7 +143,7 @@ func (m *Manager) MakeAuthURI(ctx context.Context, tenantID, requestURI, errorUR
 		return "", "", fmt.Errorf("storing session: %w", err)
 	}
 
-	u, err := m.authURI(openidConf, state, pkce, oidc)
+	u, err := m.authURI(state, pkce, oidc)
 	if err != nil {
 		return "", "", fmt.Errorf("generating auth uri: %w", err)
 	}
@@ -162,35 +155,28 @@ func (m *Manager) LoadState(ctx context.Context, stateID string) (State, error) 
 	return m.sessions.LoadState(ctx, stateID)
 }
 
-func (m *Manager) authURI(openidConf *oidc.Configuration, state State, pkce pkce.PKCE, oidc *oidcv1.OIDC) (string, error) {
-	u, err := url.Parse(openidConf.AuthorizationEndpoint)
+func (m *Manager) authURI(state State, pkce pkce.PKCE, oidcTrust *oidcv1.OIDC) (string, error) {
+	relyingParty, err := m.relyingParty(oidcTrust)
 	if err != nil {
-		return "", fmt.Errorf("parsing authorisation endpoint url: %w", err)
+		return "", fmt.Errorf("creating relying party: %w", err)
 	}
 
-	q := u.Query()
-	q.Set("scope", "openid profile email groups")
-	q.Set("response_type", "code")
-	q.Set("client_id", oidc.GetClientId())
-	q.Set("state", state.ID)
-	q.Set("code_challenge", pkce.Challenge)
-	q.Set("code_challenge_method", pkce.Method)
-	q.Set("redirect_uri", m.callbackURL.String())
+	opts := []rp.AuthURLOpt{
+		rp.WithCodeChallenge(pkce.Challenge),
+		rp.AuthURLOpt(rp.WithURLParam("scope", "openid profile email groups")),
+	}
 
 	//nolint:forcetypeassert
-	for _, param := range proto.GetExtension(oidc, flowv1.E_AuthAttributes).([]*flowv1.Attribute) {
-		q.Set(param.GetKey(), param.GetValue())
+	for _, param := range proto.GetExtension(oidcTrust, flowv1.E_AuthAttributes).([]*flowv1.Attribute) {
+		opts = append(opts, rp.AuthURLOpt(rp.WithURLParam(param.GetKey(), param.GetValue())))
 	}
 
-	u.RawQuery = q.Encode()
-
-	return u.String(), nil
+	return rp.AuthURL(state.ID, relyingParty, opts...), nil
 }
 
-func (m *Manager) getProviderKeySet(ctx context.Context, oidcConf *oidc.Configuration) (*jose.JSONWebKeySet, error) {
+func (m *Manager) getProviderKeySet(ctx context.Context, oidcConf *oidc.DiscoveryConfiguration) (*jose.JSONWebKeySet, error) {
 	var keySet jose.JSONWebKeySet
-	uri := oidcConf.JwksURI
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, oidcConf.JwksURI, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating a new HTTP request: %w", err)
 	}
@@ -236,14 +222,13 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (
 	}
 
 	oidc := trust.GetOidc()
-
 	openidConf, err := m.getOpenIDConfig(ctx, oidc.GetIssuer())
 	if err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get openid configuration")
 		return OIDCSessionData{}, fmt.Errorf("getting openid configuration: %w", err)
 	}
 
-	tokens, err := m.exchangeCode(ctx, openidConf, code, state.PKCEVerifier, oidc)
+	tokens, err := m.exchangeCode(ctx, code, state.PKCEVerifier, oidc)
 	if err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to exchange code for tokens")
 		return OIDCSessionData{}, fmt.Errorf("exchanging code for tokens: %w", err)
@@ -285,10 +270,18 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (
 	var standardClaims jwt.Claims
 	var customClaims CustomClaims
 	var extraClaims ExtraClaims
-	err = token.Claims(keyset, &standardClaims, &customClaims, &extraClaims)
-	if err != nil {
+	if err := token.Claims(keyset, &standardClaims, &customClaims, &extraClaims); err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get JWT claims")
 		return OIDCSessionData{}, fmt.Errorf("getting JWT claims: %w", err)
+	}
+
+	if err := standardClaims.Validate(jwt.Expected{
+		Issuer:      oidc.GetIssuer(),
+		AnyAudience: jwt.Audience{oidc.GetClientId()},
+		Time:        time.Now(),
+	}); err != nil {
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "invalid id token claims")
+		return OIDCSessionData{}, fmt.Errorf("validating id token claims: %w", err)
 	}
 
 	if extraClaims.AtHash != "" {
@@ -478,7 +471,6 @@ func (m *Manager) BCLogout(ctx context.Context, logoutJWT string) error {
 	}
 
 	oidc := trust.GetOidc()
-
 	oidcConf, err := m.getOpenIDConfig(ctx, oidc.GetIssuer())
 	if err != nil {
 		return fmt.Errorf("getting oidc config: %w", err)
@@ -649,59 +641,29 @@ func parseURLs(raw []string) []*url.URL {
 	return parsed
 }
 
-func (m *Manager) httpClient(clientID string) (*http.Client, error) {
-	if clientID == "" {
-		return nil, errors.New("ClientID is missing")
-	}
-	creds := m.newCreds(clientID)
-	transport := creds.Transport()
-	if debugSettingSMDumpTransport.Value() == "1" {
-		transport = debugtools.NewTransport(transport)
+func (m *Manager) exchangeCode(ctx context.Context, code, codeVerifier string, oidcTrust *oidcv1.OIDC) (*oidc.Tokens, error) {
+	relyingParty, err := m.relyingParty(oidcTrust)
+	if err != nil {
+		return nil, fmt.Errorf("creating relying party: %w", err)
 	}
 
-	return &http.Client{
-		Transport: transport,
-	}, nil
-}
-
-func (m *Manager) exchangeCode(ctx context.Context, openidConf *oidc.Configuration, code, codeVerifier string, oidc *oidcv1.OIDC) (tokenResponse, error) {
-	data := url.Values{}
-	data.Set("grant_type", "authorization_code")
-	data.Set("code", code)
-	data.Set("code_verifier", codeVerifier)
-	data.Set("redirect_uri", m.callbackURL.String())
+	opts := []oauth2.AuthCodeOption{
+		oauth2.SetAuthURLParam("code_verifier", codeVerifier),
+	}
 	//nolint:forcetypeassert
-	for _, param := range proto.GetExtension(oidc, flowv1.E_TokenAttributes).([]*flowv1.Attribute) {
-		data.Set(param.GetKey(), param.GetValue())
+	for _, param := range proto.GetExtension(oidcTrust, flowv1.E_TokenAttributes).([]*flowv1.Attribute) {
+		opts = append(opts, oauth2.SetAuthURLParam(param.GetKey(), param.GetValue()))
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, openidConf.TokenEndpoint, strings.NewReader(data.Encode()))
+	oauthCtx := context.WithValue(ctx, oauth2.HTTPClient, relyingParty.HttpClient())
+	token, err := relyingParty.OAuthConfig().Exchange(oauthCtx, code, opts...)
 	if err != nil {
-		return tokenResponse{}, fmt.Errorf("creating request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	client, err := m.httpClient(oidc.GetClientId())
-	if err != nil {
-		return tokenResponse{}, fmt.Errorf("creating http client: %w", err)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return tokenResponse{}, fmt.Errorf("executing request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return tokenResponse{}, fmt.Errorf("token exchange failed with status: %d", resp.StatusCode)
+		return nil, fmt.Errorf("exchanging code: %w", err)
 	}
 
-	var tokens tokenResponse
-	err = json.NewDecoder(resp.Body).Decode(&tokens)
-	if err != nil {
-		return tokenResponse{}, fmt.Errorf("decoding response: %w", err)
-	}
+	idToken, _ := token.Extra("id_token").(string)
 
-	return tokens, nil
+	return &oidc.Tokens{Token: token, IDToken: idToken}, nil
 }
 
 func (m *Manager) ValidateCSRFToken(token, sessionID string) bool {

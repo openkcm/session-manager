@@ -10,8 +10,8 @@ func WithAllowHttpScheme(allowHttpScheme bool) ManagerOption {
 	}
 }
 
-func WithTransportCredentials(b credentials.Builder) ManagerOption {
+func WithCredentialsProvider(p credentials.Provider) ManagerOption {
 	return func(m *Manager) {
-		m.newCreds = b
+		m.cProvider = p
 	}
 }

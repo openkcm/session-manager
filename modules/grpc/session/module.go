@@ -23,30 +23,22 @@ const moduleID = "service.module.grpc.session"
 func init() {
 	sessionmanager.RegisterModule(new(Module))
 	sessionmanager.RegisterDepInterface("session.Repository", reflect.TypeFor[internalsession.Repository]())
-	sessionmanager.RegisterDepInterface("credentials.Builder", reflect.TypeFor[credentialsBuilder]())
+	sessionmanager.RegisterDepInterface("credentials.Provider", reflect.TypeFor[credentials.Provider]())
 }
 
 func newModule() sessionmanager.Module {
 	return new(Module)
 }
 
-// credentialsBuilder is the interface satisfied by a credentials module
-// (e.g. credentials.module.oauth2).
-type credentialsBuilder interface {
-	Builder() credentials.Builder
-}
-
 // Module is the service.module.grpc.session module. It wires its three
 // dependencies (trust, session store, credentials) by ID via ctx.GetModule
 // and owns a *Server that implements the proto.
 type Module struct {
-	Mod          string `yaml:"module"`
-	Trust        string `yaml:"trust"        default:"trust.module.oidc"        dep:"sessionmanager.Trust"`
-	SessionStore string `yaml:"sessionStore" default:"sessionstore.module.valkey" dep:"session.Repository"`
-	Credentials  string `yaml:"credentials"  default:"credentials.module.oauth2"  dep:"credentials.Builder"`
-
-	AllowHttpScheme           bool     `yaml:"allowHttpScheme"`
-	QueryParametersIntrospect []string `yaml:"queryParametersIntrospect"`
+	Mod             string `yaml:"module"`
+	Trust           string `yaml:"trust"        default:"trust.module.oidc"        dep:"sessionmanager.Trust"`
+	SessionStore    string `yaml:"sessionStore" default:"sessionstore.module.valkey" dep:"session.Repository"`
+	Credentials     string `yaml:"credentials"  default:"credentials.module.oauth2"  dep:"credentials.Provider"`
+	AllowHttpScheme bool   `yaml:"allowHttpScheme"`
 
 	server *Server
 }
@@ -74,17 +66,14 @@ func (m *Module) Provision(ctx *sessionmanager.Context) error {
 		return fmt.Errorf("getting session-store module %q: %w", m.SessionStore, err)
 	}
 
-	creds, err := sessionmanager.GetModuleAs[credentialsBuilder](ctx, m.Credentials)
+	creds, err := sessionmanager.GetModuleAs[credentials.Provider](ctx, m.Credentials)
 	if err != nil {
 		return fmt.Errorf("getting credentials module %q: %w", m.Credentials, err)
 	}
 
 	opts := []Option{
-		WithTransportCredentials(creds.Builder()),
+		WithCredentialsProvider(creds),
 		WithAllowHttpScheme(m.AllowHttpScheme),
-	}
-	if m.QueryParametersIntrospect != nil {
-		opts = append(opts, WithQueryParametersIntrospect(m.QueryParametersIntrospect))
 	}
 
 	m.server = NewServer(

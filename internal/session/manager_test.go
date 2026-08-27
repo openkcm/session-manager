@@ -19,6 +19,8 @@ import (
 	"github.com/openkcm/common-sdk/pkg/oidc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zitadel/oidc/pkg/client/rp"
+	"github.com/zitadel/oidc/pkg/client/rs"
 
 	oidcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/v1"
 	trustv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/v1"
@@ -491,7 +493,7 @@ func TestManager_BCLogout(t *testing.T) {
 				trust,
 				sessionMock,
 				auditLogger,
-				session.WithTransportCredentials(newTCBuilder(rt)),
+				session.WithCredentialsProvider(newTCBuilder(rt)),
 			)
 			require.NoError(t, err)
 
@@ -688,7 +690,7 @@ func TestManager_BCLogout_ErrorCases(t *testing.T) {
 				CSRFSecretParsed: []byte(testCSRFSecret),
 			}
 
-			m, err := session.NewManager(ctx, cfg, trust, sessionMock, auditLogger, session.WithTransportCredentials(newTCBuilder(rt)))
+			m, err := session.NewManager(ctx, cfg, trust, sessionMock, auditLogger, session.WithCredentialsProvider(newTCBuilder(rt)))
 			require.NoError(t, err)
 
 			err = m.BCLogout(ctx, tt.jwt)
@@ -730,20 +732,26 @@ func (l localRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 	return w.Result(), nil
 }
 
+// transportCredentials is a credentials.Provider whose resource server and
+// relying party route all HTTP calls through the test round tripper.
 type transportCredentials struct {
 	rt localRoundTripper
 }
 
-func (tc transportCredentials) Transport() http.RoundTripper {
-	return tc.rt
+func (tc transportCredentials) client() *http.Client {
+	return &http.Client{Transport: tc.rt}
 }
 
-func newTCBuilder(rt localRoundTripper) credentials.Builder {
-	return func(clientID string) credentials.TransportCredentials {
-		return transportCredentials{
-			rt: rt,
-		}
-	}
+func (tc transportCredentials) ResourceServer(clientID, issuer string) (rs.ResourceServer, error) {
+	return rs.NewResourceServerClientCredentials(issuer, clientID, "", rs.WithClient(tc.client()))
+}
+
+func (tc transportCredentials) RelyingParty(oidc *oidcv1.OIDC, redirectURI string) (rp.RelyingParty, error) {
+	return rp.NewRelyingPartyOIDC(oidc.GetIssuer(), oidc.GetClientId(), "", redirectURI, nil, rp.WithHTTPClient(tc.client()))
+}
+
+func newTCBuilder(rt localRoundTripper) credentials.Provider {
+	return transportCredentials{rt: rt}
 }
 
 func TestManager_IsValidRequestURI(t *testing.T) {
@@ -839,4 +847,166 @@ func newTestManager(t *testing.T, allowedRedirectBaseURLs []string) *session.Man
 	)
 	require.NoError(t, err)
 	return m
+}
+
+func TestManager_FinaliseOIDCLogin_InvalidAudience(t *testing.T) {
+	const (
+		tenantID = "tenant-id"
+		stateID  = "test-state-id"
+		code     = "auth-code"
+	)
+	ctx := t.Context()
+
+	oidcServer := StartOIDCServer(t, false)
+	defer oidcServer.Close()
+
+	auditServer := StartAuditServer(t)
+	defer auditServer.Close()
+
+	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	require.NoError(t, err)
+
+	jwksURI, err := url.JoinPath(oidcServer.URL, "/.well-known/jwks.json")
+	require.NoError(t, err)
+
+	issuer := oidcServer.URL
+	blocked := false
+	tid := tenantID
+	// ClientId differs from the ID token's audience (testClientID), so the
+	// audience check in FinaliseOIDCLogin must reject the token.
+	unexpectedClient := "unexpected-client"
+	trust := trustv1.Trust_builder{
+		TenantId: &tid,
+		Blocked:  &blocked,
+		Oidc: oidcv1.OIDC_builder{
+			Issuer:   &issuer,
+			JwksUri:  &jwksURI,
+			ClientId: &unexpectedClient,
+		}.Build(),
+	}.Build()
+
+	oidcMock := mocktrust.NewInMemRepository(mocktrust.WithTrust(trust))
+	sessions := sessionmock.NewInMemRepository(sessionmock.WithState(session.State{
+		ID:           stateID,
+		TenantID:     tenantID,
+		PKCEVerifier: "verifier",
+		RequestURI:   "http://cmk.example.com/ui",
+		Expiry:       time.Now().Add(time.Hour),
+	}))
+
+	m, err := session.NewManager(ctx, &config.SessionManager{
+		SessionDuration:  time.Hour,
+		CallbackURL:      "http://sm.example.com/sm/callback",
+		CSRFSecretParsed: []byte(testCSRFSecret),
+	}, newTrust(oidcMock), sessions, auditLogger, session.WithAllowHttpScheme(true))
+	require.NoError(t, err)
+
+	_, err = m.FinaliseOIDCLogin(ctx, stateID, code)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "validating id token claims")
+}
+
+func TestManager_Logout_RejectsInsecureIssuerScheme(t *testing.T) {
+	const (
+		tenantID  = "tenant-id"
+		sessionID = "session-id"
+	)
+	ctx := t.Context()
+
+	auditServer := StartAuditServer(t)
+	defer auditServer.Close()
+
+	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	require.NoError(t, err)
+
+	// An unreachable host: if the http scheme is rejected before discovery, the
+	// error is a scheme error rather than a dial/DNS failure.
+	issuer := "http://issuer.invalid"
+	blocked := false
+	tid := tenantID
+	clientID := "client-id"
+	trust := trustv1.Trust_builder{
+		TenantId: &tid,
+		Blocked:  &blocked,
+		Oidc: oidcv1.OIDC_builder{
+			Issuer:   &issuer,
+			ClientId: &clientID,
+		}.Build(),
+	}.Build()
+
+	oidcMock := mocktrust.NewInMemRepository(mocktrust.WithTrust(trust))
+	sessions := sessionmock.NewInMemRepository(sessionmock.WithSession(session.Session{
+		ID:       sessionID,
+		TenantID: tenantID,
+		Issuer:   issuer,
+	}))
+
+	// allowHttpScheme defaults to false (WithAllowHttpScheme not set).
+	m, err := session.NewManager(ctx, &config.SessionManager{
+		SessionDuration:  time.Hour,
+		CallbackURL:      "http://sm.example.com/sm/callback",
+		CSRFSecretParsed: []byte(testCSRFSecret),
+	}, newTrust(oidcMock), sessions, auditLogger)
+	require.NoError(t, err)
+
+	_, err = m.Logout(ctx, sessionID, "http://app.example.com/logged-out")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "scheme is not allowed")
+}
+
+func TestManager_Logout_AllowsInsecureIssuerWhenEnabled(t *testing.T) {
+	const (
+		tenantID  = "tenant-id"
+		sessionID = "session-id"
+	)
+	ctx := t.Context()
+
+	// A discovery server without an end_session_endpoint: Logout falls back to
+	// the post-logout redirect URL, proving discovery ran (the http scheme was
+	// accepted) rather than being rejected up front.
+	var oidcServer *httptest.Server
+	oidcServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/.well-known/openid-configuration" {
+			_ = json.NewEncoder(w).Encode(oidc.Configuration{Issuer: oidcServer.URL})
+		}
+	}))
+	defer oidcServer.Close()
+
+	auditServer := StartAuditServer(t)
+	defer auditServer.Close()
+
+	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	require.NoError(t, err)
+
+	issuer := oidcServer.URL
+	blocked := false
+	tid := tenantID
+	clientID := "client-id"
+	trust := trustv1.Trust_builder{
+		TenantId: &tid,
+		Blocked:  &blocked,
+		Oidc: oidcv1.OIDC_builder{
+			Issuer:   &issuer,
+			ClientId: &clientID,
+		}.Build(),
+	}.Build()
+
+	oidcMock := mocktrust.NewInMemRepository(mocktrust.WithTrust(trust))
+	sessions := sessionmock.NewInMemRepository(sessionmock.WithSession(session.Session{
+		ID:       sessionID,
+		TenantID: tenantID,
+		Issuer:   issuer,
+	}))
+
+	const postLogoutURL = "http://app.example.com/logged-out"
+	m, err := session.NewManager(ctx, &config.SessionManager{
+		SessionDuration:  time.Hour,
+		CallbackURL:      "http://sm.example.com/sm/callback",
+		CSRFSecretParsed: []byte(testCSRFSecret),
+	}, newTrust(oidcMock), sessions, auditLogger, session.WithAllowHttpScheme(true))
+	require.NoError(t, err)
+
+	redirectURL, err := m.Logout(ctx, sessionID, postLogoutURL)
+	require.NoError(t, err)
+	assert.Equal(t, postLogoutURL, redirectURL)
 }
