@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.19.0](https://github.com/openkcm/session-manager/compare/v0.18.0...v0.19.0) (2026-08-31)
+
+
+### Features
+
+* add allowTLSRenegotiationOnce ([#348](https://github.com/openkcm/session-manager/issues/348)) ([f6ac747](https://github.com/openkcm/session-manager/commit/f6ac747e67eb3870ca93b979f9c466553d486a2b))
+
+
+### Bug Fixes
+
+* close JWKS HTTP response body in getProviderKeySet ([#335](https://github.com/openkcm/session-manager/issues/335)) ([f9b1add](https://github.com/openkcm/session-manager/commit/f9b1addadcb8dcb17c6f4d0f184a1b717ed45f34))
+* **deps:** bump github.com/google/cel-go from 0.26.1 to 0.29.0 ([#333](https://github.com/openkcm/session-manager/issues/333)) ([a59a0bf](https://github.com/openkcm/session-manager/commit/a59a0bf6ea73b15ecc4d718d69dc17484e70c7fd))
+* **deps:** bump google.golang.org/protobuf ([52c358e](https://github.com/openkcm/session-manager/commit/52c358ebd74ef2cee30bcfb88c51b9d5dfade99f))
+* **deps:** bump google.golang.org/protobuf from 1.36.12-0.20260120151049-f2248ac996af to 1.36.12 ([#346](https://github.com/openkcm/session-manager/issues/346)) ([52c358e](https://github.com/openkcm/session-manager/commit/52c358ebd74ef2cee30bcfb88c51b9d5dfade99f))
+* **deps:** bump the gomod-group group across 1 directory with 13 updates ([#344](https://github.com/openkcm/session-manager/issues/344)) ([26d5b65](https://github.com/openkcm/session-manager/commit/26d5b6525a17d5f4be3f79ed4bae814f0fc7c607))
+* **deps:** bump the gomod-group group across 1 directory with 7 updates ([#355](https://github.com/openkcm/session-manager/issues/355)) ([13d9962](https://github.com/openkcm/session-manager/commit/13d9962d8c0295a8c9074b0a3e6b9565744ea7c9))
+* disable exhaustruct_v5 linter ([#357](https://github.com/openkcm/session-manager/issues/357)) ([4914807](https://github.com/openkcm/session-manager/commit/4914807d6c254f3d4916064758eab339e3c0c5d0))
+* do not extend cache TTL on access ([#358](https://github.com/openkcm/session-manager/issues/358)) ([3164f7c](https://github.com/openkcm/session-manager/commit/3164f7c017a8a01e6be338af54e35d967d091e27))
+* migration job ephemeral-storage validation error ([#349](https://github.com/openkcm/session-manager/issues/349)) ([45c32ad](https://github.com/openkcm/session-manager/commit/45c32ad388d4250a49c1328c6bbb57210d327941))
+* set toolchain=go1.26.6 ([#351](https://github.com/openkcm/session-manager/issues/351)) ([d2c279c](https://github.com/openkcm/session-manager/commit/d2c279c237bd75bfa1c320b3c331146d7acc61d8))
+* update golang.org/x/mod ([#352](https://github.com/openkcm/session-manager/issues/352)) ([61bef46](https://github.com/openkcm/session-manager/commit/61bef46c43b4c5a522ea0291090d3b12e34af983))
+* use context.AfterFunc to stop ttlcache on shutdown ([#337](https://github.com/openkcm/session-manager/issues/337)) ([e98d237](https://github.com/openkcm/session-manager/commit/e98d237d69f5363fbfed708b67eea4746a196bec))
+
 ## [0.18.0](https://github.com/openkcm/session-manager/compare/v0.17.3...v0.18.0) (2026-08-13)
 
 
