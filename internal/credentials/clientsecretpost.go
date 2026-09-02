@@ -1,26 +1,35 @@
 package credentials
 
-import "net/http"
+import (
+	"context"
 
-type ClientSecretPost struct {
-	ClientID     string
-	ClientSecret string
-}
+	"github.com/zitadel/oidc/v3/pkg/client/rp"
+	"github.com/zitadel/oidc/v3/pkg/client/rs"
 
-// NewClientSecretPost returns a credentials implementation that
-// follows the client authentication method 'client_secret_post', defined by the OIDC specification:
+	httphelper "github.com/zitadel/oidc/v3/pkg/http"
+
+	"github.com/openkcm/session-manager/internal/debugtools"
+)
+
+// NewClientSecretPostRS returns an rs.ResourceServer that follows the
+// 'client_secret_post' client authentication method defined by the OIDC
+// specification: the client_id and client_secret are sent in the request body.
 // https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication
-func NewClientSecretPost(clientID, clientSecret string) *ClientSecretPost {
-	return &ClientSecretPost{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-	}
+func NewClientSecretPostRS(ctx context.Context, issuer, clientID, clientSecret string, opts ...Option) (rs.ResourceServer, error) {
+	httpClient := *httphelper.DefaultHTTPClient
+	httpClient.Transport = debugtools.DebugTransport(httpClient.Transport)
+	return newResourceServer(ctx, issuer, &httpClient, clientSecretPostAuth(clientID, clientSecret), opts...)
 }
 
-func (c *ClientSecretPost) Transport() http.RoundTripper {
-	return &clientAuthRoundTripper{
-		clientID:     c.ClientID,
-		clientSecret: c.ClientSecret,
-		next:         http.DefaultTransport,
+// NewClientSecretPostRP returns an rp.RelyingParty that follows the
+// 'client_secret_post' client authentication method defined by the OIDC
+// specification: the client_id and client_secret are sent in the request body.
+// https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication
+func NewClientSecretPostRP(ctx context.Context, issuer, clientID, clientSecret, redirectURI string, opts ...Option) (rp.RelyingParty, error) {
+	base := debugtools.DebugTransport(httphelper.DefaultHTTPClient.Transport)
+	httpClient, err := buildRPHTTPClient(issuer, base, opts)
+	if err != nil {
+		return nil, err
 	}
+	return rp.NewRelyingPartyOIDC(ctx, issuer, clientID, clientSecret, redirectURI, nil, rp.WithHTTPClient(httpClient))
 }

@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/jellydator/ttlcache/v3"
-	"github.com/openkcm/common-sdk/pkg/oidc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zitadel/oidc/v3/pkg/oidc"
 
 	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
 	"github.com/openkcm/session-manager/modules/grpc/session"
@@ -33,7 +33,7 @@ func TestIntrospectionCache_DisableTouchOnHit(t *testing.T) {
 
 		// Set an item with a short TTL for testing
 		key := "hashed-token-key"
-		value := oidc.Introspection{Active: true}
+		value := oidc.IntrospectionResponse{Active: true}
 		cache.Set(key, value, 100*time.Millisecond)
 
 		// Verify item is retrievable
@@ -75,13 +75,13 @@ func TestIntrospectionCache_DisableTouchOnHit(t *testing.T) {
 
 		// Create cache WITHOUT WithDisableTouchOnHit (default behavior)
 		cacheWithTouch := ttlcache.New(
-			ttlcache.WithTTL[string, oidc.Introspection](ttl),
+			ttlcache.WithTTL[string, oidc.IntrospectionResponse](ttl),
 		)
 		go cacheWithTouch.Start()
 		defer cacheWithTouch.Stop()
 
 		key := "hashed-token-key"
-		value := oidc.Introspection{Active: true}
+		value := oidc.IntrospectionResponse{Active: true}
 		cacheWithTouch.Set(key, value, ttlcache.DefaultTTL)
 
 		item := cacheWithTouch.Get(key)

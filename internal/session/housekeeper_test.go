@@ -595,3 +595,52 @@ func TestHousekeepSession_ErrorCases(t *testing.T) {
 		assert.Equal(t, "old-access-token", updatedSess.AccessToken)
 	})
 }
+
+func TestRefreshAccessToken_RelyingPartyError(t *testing.T) {
+	ctx := t.Context()
+	tenantID := "test-tenant"
+	sessionID := "test-session-id"
+
+	// Use an http:// issuer without AllowHttpScheme so relyingParty() returns an
+	// error, covering the error branch in refreshAccessToken.
+	trustData := trustv1.Trust_builder{
+		TenantId: new(tenantID),
+		Oidc: oidcv1.OIDC_builder{
+			Issuer:   new("http://insecure.example.com"),
+			ClientId: new("client-id"),
+		}.Build(),
+	}.Build()
+
+	oidcRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
+	trust := newTrust(oidcRepo)
+
+	sess := session.Session{
+		ID:                sessionID,
+		TenantID:          tenantID,
+		RefreshToken:      "old-refresh-token",
+		AccessToken:       "old-access-token",
+		AccessTokenExpiry: time.Now().Add(10 * time.Second),
+		Expiry:            time.Now().Add(1 * time.Hour),
+	}
+
+	sessions := sessionmock.NewInMemRepository(sessionmock.WithSession(sess))
+	require.NoError(t, sessions.BumpActive(ctx, sessionID, time.Hour))
+
+	cfg := &config.SessionManager{
+		CSRFSecretParsed: []byte(testCSRFSecret),
+	}
+
+	// AllowHttpScheme defaults to false → relyingParty validates the scheme and
+	// returns an error for http:// issuers, exercising housekeeper.go lines 107-108,122.
+	manager, err := session.NewManager(ctx, cfg, trust, sessions, nil)
+	require.NoError(t, err)
+
+	// Housekeeping logs the error but doesn't propagate it.
+	err = manager.TriggerHousekeeping(ctx, 1, 1*time.Minute)
+	require.NoError(t, err)
+
+	// Access token must remain unchanged since refresh failed.
+	updatedSess, err := sessions.LoadSession(ctx, sessionID)
+	require.NoError(t, err)
+	assert.Equal(t, "old-access-token", updatedSess.AccessToken)
+}
