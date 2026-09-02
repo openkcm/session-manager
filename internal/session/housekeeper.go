@@ -12,6 +12,9 @@ import (
 	"net/url"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
+	flowv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/flow/v1"
 	slogctx "github.com/veqryn/slog-context"
 )
 
@@ -111,6 +114,10 @@ func (m *Manager) refreshAccessToken(ctx context.Context, s Session) error {
 	data := url.Values{}
 	data.Set("grant_type", "refresh_token")
 	data.Set("refresh_token", s.RefreshToken)
+	//nolint:forcetypeassert
+	for _, param := range proto.GetExtension(oidc, flowv1.E_TokenAttributes).([]*flowv1.Attribute) {
+		data.Set(param.GetKey(), param.GetValue())
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, openidConf.TokenEndpoint, bytes.NewBufferString(data.Encode()))
 	if err != nil {

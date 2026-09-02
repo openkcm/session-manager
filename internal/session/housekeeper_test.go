@@ -10,7 +10,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
+	flowv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/flow/v1"
 	oidcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/v1"
 	trustv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/v1"
 
@@ -155,6 +157,94 @@ func TestRefreshAccessToken(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "new-access-token", updatedSess.AccessToken)
 		assert.Equal(t, "new-refresh-token", updatedSess.RefreshToken)
+	})
+
+	// Regression: set attributes from flowv1.E_TokenAttributes extension when calling to a token endpoint to refresh an access token.
+	t.Run("Success - forwards app_tid token attribute in the request body", func(t *testing.T) {
+		var tokenServerURL string
+		var discoveryServerURL string
+		discoveryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"issuer":         discoveryServerURL,
+				"token_endpoint": tokenServerURL,
+			})
+		}))
+		defer discoveryServer.Close()
+		discoveryServerURL = discoveryServer.URL
+
+		var gotAppTid string
+		tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_ = r.ParseForm()
+			gotAppTid = r.PostForm.Get("app_tid")
+
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"access_token":  "new-access-token",
+				"refresh_token": "new-refresh-token",
+				"expires_in":    3600,
+			})
+		}))
+		defer tokenServer.Close()
+		tokenServerURL = tokenServer.URL + "/token"
+
+		oidcTrust := oidcv1.OIDC_builder{
+			Issuer:   new(discoveryServerURL),
+			ClientId: new("test-client-id"),
+		}.Build()
+		proto.SetExtension(oidcTrust, flowv1.E_TokenAttributes, []*flowv1.Attribute{
+			flowv1.Attribute_builder{
+				Key:   new("app_tid"),
+				Value: new("tenant-app-tid"),
+			}.Build(),
+		})
+
+		trustData := trustv1.Trust_builder{
+			TenantId: new(tenantID),
+			Oidc:     oidcTrust,
+		}.Build()
+
+		oidcRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
+		trust := newTrust(oidcRepo)
+
+		sess := session.Session{
+			ID:                sessionID,
+			TenantID:          tenantID,
+			RefreshToken:      "old-refresh-token",
+			AccessToken:       "old-access-token",
+			AccessTokenExpiry: time.Now().Add(30 * time.Second),
+			Expiry:            time.Now().Add(1 * time.Hour),
+		}
+
+		sessions := sessionmock.NewInMemRepository(sessionmock.WithSession(sess))
+		err := sessions.BumpActive(ctx, sessionID, time.Hour)
+		require.NoError(t, err)
+
+		cfg := &config.SessionManager{
+			ClientAuth: config.ClientAuth{
+				ClientID: "test-client-id",
+			},
+			CSRFSecretParsed: []byte(testCSRFSecret),
+		}
+
+		manager, err := session.NewManager(ctx,
+			cfg,
+			trust,
+			sessions,
+			nil,
+			session.WithAllowHttpScheme(true),
+		)
+		require.NoError(t, err)
+
+		err = manager.TriggerHousekeeping(ctx, 1, 1*time.Minute)
+		require.NoError(t, err)
+
+		// The token endpoint must have received the app_tid body parameter.
+		assert.Equal(t, "tenant-app-tid", gotAppTid)
+
+		updatedSess, err := sessions.LoadSession(ctx, sessionID)
+		require.NoError(t, err)
+		assert.Equal(t, "new-access-token", updatedSess.AccessToken)
 	})
 
 	t.Run("Error - trust not found", func(t *testing.T) {
