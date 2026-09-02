@@ -48,7 +48,7 @@ func TestNewSessionServer(t *testing.T) {
 			sessionRepo,
 			trust,
 			idleSessionTimeout,
-			session.WithQueryParametersIntrospect([]string{"param1", "param2"}),
+			session.WithAllowHttpScheme(false),
 		)
 
 		assert.NotNil(t, server)
@@ -654,25 +654,6 @@ func TestGetSession(t *testing.T) {
 	})
 }
 
-func TestWithQueryParametersIntrospect(t *testing.T) {
-	ctx := t.Context()
-	t.Run("sets query parameters correctly", func(t *testing.T) {
-		params := []string{"param1", "param2", "param3"}
-		opt := session.WithQueryParametersIntrospect(params)
-
-		assert.NotNil(t, opt)
-
-		// Test that the option actually sets the parameters
-		sessionRepo := sessionmock.NewInMemRepository()
-		trustRepo := mocktrust.NewInMemRepository()
-		trust := newTrust(trustRepo)
-
-		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute, opt)
-
-		assert.NotNil(t, server)
-	})
-}
-
 func TestGetOIDCProvider(t *testing.T) {
 	ctx := t.Context()
 
@@ -739,4 +720,57 @@ func TestGetOIDCProvider(t *testing.T) {
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "getting odic provider")
 	})
+}
+
+func TestGetSession_RejectsInsecureIntrospectionEndpoint(t *testing.T) {
+	ctx := t.Context()
+
+	// Discovery advertises an http:// introspection endpoint.
+	var testServer *httptest.Server
+	testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/.well-known/openid-configuration" {
+			_ = json.NewEncoder(w).Encode(oidc.Configuration{
+				Issuer:                testServer.URL,
+				IntrospectionEndpoint: testServer.URL + "/introspect",
+			})
+		}
+	}))
+	defer testServer.Close()
+
+	tenantID := "tenant-insecure"
+	issuer := testServer.URL
+	blocked := false
+	clientID := "test-client-id"
+	trustData := trustv1.Trust_builder{
+		TenantId: &tenantID,
+		Blocked:  &blocked,
+		Oidc: oidcv1.OIDC_builder{
+			Issuer:   &issuer,
+			ClientId: &clientID,
+		}.Build(),
+	}.Build()
+
+	sess := internalsession.Session{
+		ID:          "session-insecure",
+		TenantID:    tenantID,
+		Issuer:      issuer,
+		AccessToken: "access-token",
+	}
+	sessionRepo := sessionmock.NewInMemRepository(sessionmock.WithSession(sess))
+	_ = sessionRepo.BumpActive(ctx, sess.ID, time.Hour)
+	trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
+	trust := newTrust(trustRepo)
+
+	// allowHttpScheme defaults to false (WithAllowHttpScheme not set), so the
+	// insecure introspection endpoint must be rejected.
+	server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute)
+
+	resp, err := server.GetSession(ctx, &sessionv1.GetSessionRequest{
+		SessionId: "session-insecure",
+		TenantId:  tenantID,
+	})
+	require.Error(t, err)
+	require.NotNil(t, resp)
+	assert.False(t, resp.GetValid())
+	assert.ErrorContains(t, err, "scheme is not allowed")
 }

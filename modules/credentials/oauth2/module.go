@@ -1,21 +1,34 @@
 // Package oauth2 provides the credentials.module.oauth2 module: a
-// credentials.Builder that produces transport credentials for OAuth2/OIDC
+// credentials.Provider that produces transport credentials for OAuth2/OIDC
 // client authentication. Source data lives under sessionManager.clientAuth in
 // the top-level config and is read via config.FromContext.
 package oauth2
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
+	"github.com/zitadel/oidc/v3/pkg/client/rp"
+	"github.com/zitadel/oidc/v3/pkg/client/rs"
+
+	oidcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/v1"
 
 	sessionmanager "github.com/openkcm/session-manager"
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/credentials"
 )
+
+type unknownAuthTypeError struct {
+	typ string
+}
+
+func (e unknownAuthTypeError) Error() string {
+	return fmt.Sprintf("unknown client auth type %q", e.typ)
+}
 
 const moduleID = "credentials.module.oauth2"
 
@@ -34,12 +47,14 @@ func newModule() sessionmanager.Module {
 	return new(Module)
 }
 
-// Module is the credentials.module.oauth2 module. It exposes a
-// credentials.Builder constructed from sessionManager.clientAuth.
+// Module is the credentials.module.oauth2 module. It implements credentials.Provider internface
+// that builds credentials from sessionManager.clientAuth config field.
 type Module struct {
 	Mod string `yaml:"module"`
 
-	builder credentials.Builder
+	typ       string
+	secret    string
+	tlsConfig *tls.Config
 }
 
 func (m *Module) Module() sessionmanager.ModuleInfo {
@@ -56,7 +71,8 @@ func (m *Module) Provision(ctx *sessionmanager.Context) error {
 	}
 
 	clientAuth := cfg.SessionManager.ClientAuth
-	switch clientAuth.Type {
+	m.typ = clientAuth.Type
+	switch m.typ {
 	case authMTLS:
 		tlsConfig, err := commoncfg.LoadMTLSConfig(clientAuth.MTLS)
 		if err != nil {
@@ -65,30 +81,48 @@ func (m *Module) Provision(ctx *sessionmanager.Context) error {
 		if clientAuth.AllowTLSRenegotiationOnce {
 			tlsConfig.Renegotiation = tls.RenegotiateOnceAsClient
 		}
-		m.builder = func(clientID string) credentials.TransportCredentials {
-			return credentials.NewTLS(clientID, tlsConfig)
-		}
+
+		m.tlsConfig = tlsConfig
 	case authClientSecret, authClientSecretPost:
 		secret, err := commoncfg.LoadValueFromSourceRef(clientAuth.ClientSecret)
 		if err != nil {
 			return fmt.Errorf("loading client secret: %w", err)
 		}
-		m.builder = func(clientID string) credentials.TransportCredentials {
-			return credentials.NewClientSecretPost(clientID, string(secret))
-		}
+
+		m.secret = string(secret)
 	case authInsecure:
 		slog.Warn("insecure credentials are used. Do not use this in production")
-		m.builder = func(clientID string) credentials.TransportCredentials {
-			return credentials.NewInsecure(clientID)
-		}
 	default:
-		return fmt.Errorf("unknown client auth type %q", clientAuth.Type)
+		return unknownAuthTypeError{typ: m.typ}
 	}
 
 	return nil
 }
 
-// Builder returns the credentials.Builder produced during Provision.
-func (m *Module) Builder() credentials.Builder {
-	return m.builder
+// ResourceServer implements [credentials.Provider]
+func (m *Module) ResourceServer(ctx context.Context, clientID, issuer string) (rs.ResourceServer, error) {
+	switch m.typ {
+	case authMTLS:
+		return credentials.NewTLSRS(ctx, issuer, clientID, m.tlsConfig)
+	case authClientSecret, authClientSecretPost:
+		return credentials.NewClientSecretPostRS(ctx, issuer, clientID, m.secret)
+	case authInsecure:
+		return credentials.NewInsecureRS(ctx, issuer, clientID)
+	default:
+		return nil, unknownAuthTypeError{typ: m.typ}
+	}
+}
+
+// RelyingParty implements [credentials.Provider]
+func (m *Module) RelyingParty(ctx context.Context, oidc *oidcv1.OIDC, redirectURI string) (rp.RelyingParty, error) {
+	switch m.typ {
+	case authMTLS:
+		return credentials.NewTLSRP(ctx, oidc.GetClientId(), oidc.GetIssuer(), redirectURI, m.tlsConfig)
+	case authClientSecret, authClientSecretPost:
+		return credentials.NewClientSecretPostRP(ctx, oidc.GetIssuer(), oidc.GetClientId(), m.secret, redirectURI)
+	case authInsecure:
+		return credentials.NewInsecureRP(ctx, oidc.GetClientId(), oidc.GetIssuer(), redirectURI)
+	default:
+		return nil, unknownAuthTypeError{typ: m.typ}
+	}
 }

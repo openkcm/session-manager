@@ -1,26 +1,32 @@
 package credentials
 
-import "net/http"
+import (
+	"context"
 
-type ClientSecretPost struct {
-	ClientID     string
-	ClientSecret string
-}
+	"github.com/zitadel/oidc/v3/pkg/client/rp"
+	"github.com/zitadel/oidc/v3/pkg/client/rs"
 
-// NewClientSecretPost returns a credentials implementation that
-// follows the client authentication method 'client_secret_post', defined by the OIDC specification:
+	httphelper "github.com/zitadel/oidc/v3/pkg/http"
+
+	"github.com/openkcm/session-manager/internal/debugtools"
+)
+
+// NewClientSecretPostRS returns an rs.ResourceServer that follows the
+// 'client_secret_post' client authentication method defined by the OIDC
+// specification: the client_id and client_secret are sent in the request body.
 // https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication
-func NewClientSecretPost(clientID, clientSecret string) *ClientSecretPost {
-	return &ClientSecretPost{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-	}
+func NewClientSecretPostRS(ctx context.Context, issuer, clientID, clientSecret string) (rs.ResourceServer, error) {
+	httpClient := *httphelper.DefaultHTTPClient // Create a copy
+	httpClient.Transport = debugtools.DebugTransport(httpClient.Transport)
+	return newResourceServer(ctx, issuer, &httpClient, clientSecretPostAuth(clientID, clientSecret))
 }
 
-func (c *ClientSecretPost) Transport() http.RoundTripper {
-	return &clientAuthRoundTripper{
-		clientID:     c.ClientID,
-		clientSecret: c.ClientSecret,
-		next:         http.DefaultTransport,
-	}
+// NewClientSecretPostRP returns an rp.RelyingParty that follows the
+// 'client_secret_post' client authentication method defined by the OIDC
+// specification: the client_id and client_secret are sent in the request body.
+// https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication
+func NewClientSecretPostRP(ctx context.Context, issuer, clientID, clientSecret, redirectURI string) (rp.RelyingParty, error) {
+	httpClient := *httphelper.DefaultHTTPClient // Create a copy
+	httpClient.Transport = debugtools.DebugTransport(httpClient.Transport)
+	return rp.NewRelyingPartyOIDC(ctx, issuer, clientID, clientSecret, redirectURI, nil, rp.WithHTTPClient(&httpClient))
 }

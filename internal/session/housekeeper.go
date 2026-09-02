@@ -1,21 +1,26 @@
 package session
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
+	"github.com/zitadel/oidc/v3/pkg/client/rp"
+	"github.com/zitadel/oidc/v3/pkg/oidc"
+	"golang.org/x/oauth2"
 	"google.golang.org/protobuf/proto"
 
 	flowv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/flow/v1"
+	oidcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/v1"
 	slogctx "github.com/veqryn/slog-context"
+	httphelper "github.com/zitadel/oidc/v3/pkg/http"
+
+	"github.com/openkcm/session-manager/internal/validation"
 )
 
 func (m *Manager) TriggerHousekeeping(ctx context.Context, concurrencyLimit int, refreshTriggerInterval time.Duration) error {
@@ -97,6 +102,13 @@ func (m *Manager) housekeepSession(ctx context.Context, s Session, refreshTrigge
 	}
 }
 
+func (m *Manager) relyingParty(ctx context.Context, oidc *oidcv1.OIDC) (rp.RelyingParty, error) {
+	if err := validation.SecureScheme(oidc.GetIssuer(), m.allowHttpScheme); err != nil {
+		return nil, err
+	}
+	return m.cProvider.RelyingParty(ctx, oidc, m.callbackURL.String())
+}
+
 // refreshAccessToken refreshes the access token for the given session using its refresh token.
 func (m *Manager) refreshAccessToken(ctx context.Context, s Session) error {
 	trust, err := m.trust.Get(ctx, s.TenantID)
@@ -105,54 +117,19 @@ func (m *Manager) refreshAccessToken(ctx context.Context, s Session) error {
 	}
 
 	oidc := trust.GetOidc()
-
-	openidConf, err := m.getOpenIDConfig(ctx, oidc.GetIssuer())
+	relyingParty, err := m.relyingParty(ctx, oidc)
 	if err != nil {
-		return fmt.Errorf("could not get OpenID configuration: %w", err)
+		return fmt.Errorf("creating relying party: %w", err)
 	}
 
-	data := url.Values{}
-	data.Set("grant_type", "refresh_token")
-	data.Set("refresh_token", s.RefreshToken)
-	//nolint:forcetypeassert
-	for _, param := range proto.GetExtension(oidc, flowv1.E_TokenAttributes).([]*flowv1.Attribute) {
-		data.Set(param.GetKey(), param.GetValue())
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, openidConf.TokenEndpoint, bytes.NewBufferString(data.Encode()))
+	token, err := refreshAccessTokenWithAttrs(ctx, relyingParty, s.RefreshToken, oidc)
 	if err != nil {
-		return fmt.Errorf("creating request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	client, err := m.httpClient(oidc.GetClientId())
-	if err != nil {
-		return fmt.Errorf("creating http client: %w", err)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("executing request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("could not read token endpoint response body: %w", err)
+		return fmt.Errorf("refreshing access token: %w", err)
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("token endpoint returned non-200 status: %d, body: %s", resp.StatusCode, string(body))
-	}
-
-	var respData tokenResponse
-	err = json.Unmarshal(body, &respData)
-	if err != nil {
-		return fmt.Errorf("could not unmarshal token endpoint response: %w", err)
-	}
-
-	s.AccessToken = respData.AccessToken
-	s.RefreshToken = respData.RefreshToken
-	s.AccessTokenExpiry = time.Now().Add(time.Duration(respData.ExpiresIn) * time.Second)
+	s.AccessToken = token.AccessToken
+	s.RefreshToken = token.RefreshToken
+	s.AccessTokenExpiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
 
 	err = m.sessions.StoreSession(ctx, s)
 	if err != nil {
@@ -160,4 +137,50 @@ func (m *Manager) refreshAccessToken(ctx context.Context, s Session) error {
 	}
 
 	return nil
+}
+
+// refreshAccessTokenWithAttrs performs a refresh_token grant against the token
+// endpoint, mirroring rp.RefreshAccessToken but additionally forwarding the
+// trust's token attributes in the request body.
+func refreshAccessTokenWithAttrs(ctx context.Context, relyingParty rp.RelyingParty, refreshToken string, oidcTrust *oidcv1.OIDC) (*oauth2.Token, error) {
+	cfg := relyingParty.OAuthConfig()
+
+	form := url.Values{}
+	form.Set("grant_type", string(oidc.GrantTypeRefreshToken))
+	form.Set("refresh_token", refreshToken)
+	form.Set("client_id", cfg.ClientID)
+	if cfg.ClientSecret != "" {
+		form.Set("client_secret", cfg.ClientSecret)
+	}
+	if len(cfg.Scopes) > 0 {
+		form.Set("scope", strings.Join(cfg.Scopes, " "))
+	}
+
+	// Forward the trust's token attributes as body parameters,
+	// consistent with the code-exchange flow (Manager.exchangeCode).
+	//nolint:forcetypeassert
+	for _, param := range proto.GetExtension(oidcTrust, flowv1.E_TokenAttributes).([]*flowv1.Attribute) {
+		form.Set(param.GetKey(), param.GetValue())
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.Endpoint.TokenURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("creating token request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	// Client authentication (mTLS client certificate) is carried by the relying
+	// party's HTTP client transport, exactly as in rp.RefreshAccessToken.
+	tokenRes := new(oidc.AccessTokenResponse)
+	if err := httphelper.HttpRequest(relyingParty.HttpClient(), req, tokenRes); err != nil {
+		return nil, fmt.Errorf("calling token endpoint: %w", err)
+	}
+
+	return &oauth2.Token{
+		AccessToken:  tokenRes.AccessToken,
+		TokenType:    tokenRes.TokenType,
+		RefreshToken: tokenRes.RefreshToken,
+		Expiry:       time.Now().Add(time.Duration(tokenRes.ExpiresIn) * time.Second),
+		ExpiresIn:    int64(tokenRes.ExpiresIn),
+	}, nil
 }
