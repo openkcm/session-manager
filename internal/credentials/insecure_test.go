@@ -1,52 +1,45 @@
 package credentials
 
 import (
-	"net/http"
-	"reflect"
 	"testing"
 )
 
-func TestNewInsecure(t *testing.T) {
-	tests := []struct {
-		name string
-		want TransportCredentials
-	}{
-		{
-			name: "New insecure",
-			want: &Insecure{
-				clientID: "client-id",
-			},
-		},
+func TestNewInsecureRS(t *testing.T) {
+	const introspectionURL = "https://example.com/introspect"
+	srv := newDiscoveryServer(t, introspectionURL)
+
+	got, err := NewInsecureRS("client-id", srv.URL)
+	if err != nil {
+		t.Fatalf("NewInsecureRS() error = %v", err)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := NewInsecure("client-id"); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("NewInsecure() = %v, want %v", got, tt.want)
-			}
-		})
+
+	if got.IntrospectionURL() != introspectionURL {
+		t.Errorf("IntrospectionURL() = %q, want %q", got.IntrospectionURL(), introspectionURL)
+	}
+
+	form := authForm(t, got)
+	if form.Get("client_id") != "client-id" {
+		t.Errorf("client_id = %q, want %q", form.Get("client_id"), "client-id")
+	}
+	if form.Has("client_secret") {
+		t.Errorf("client_secret set = %q, want none", form.Get("client_secret"))
 	}
 }
 
-func TestInsecure_Transport(t *testing.T) {
-	tests := []struct {
-		name string
-		c    *Insecure
-		want http.RoundTripper
-	}{
-		{
-			name: "Transport",
-			c:    &Insecure{clientID: "client-id"},
-			want: &clientAuthRoundTripper{
-				clientID: "client-id",
-				next:     http.DefaultTransport,
-			},
-		},
+func TestNewInsecureRP(t *testing.T) {
+	srv := newDiscoveryServer(t, "https://example.com/introspect")
+
+	got, err := NewInsecureRP("client-id", srv.URL, "https://app.example.com/callback")
+	if err != nil {
+		t.Fatalf("NewInsecureRP() error = %v", err)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.c.Transport(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Insecure.Transport() = %v, want %v", got, tt.want)
-			}
-		})
+	if got == nil {
+		t.Fatal("NewInsecureRP() = nil relying party")
+	}
+	if got.OAuthConfig().ClientID != "client-id" {
+		t.Errorf("ClientID = %q, want %q", got.OAuthConfig().ClientID, "client-id")
+	}
+	if got.OAuthConfig().ClientSecret != "" {
+		t.Errorf("ClientSecret = %q, want empty", got.OAuthConfig().ClientSecret)
 	}
 }

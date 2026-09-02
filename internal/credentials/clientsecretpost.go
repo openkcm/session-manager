@@ -1,26 +1,28 @@
 package credentials
 
-import "net/http"
+import (
+	"github.com/zitadel/oidc/pkg/client/rp"
+	"github.com/zitadel/oidc/pkg/client/rs"
 
-type ClientSecretPost struct {
-	ClientID     string
-	ClientSecret string
-}
+	httphelper "github.com/zitadel/oidc/pkg/http"
+)
 
-// NewClientSecretPost returns a credentials implementation that
-// follows the client authentication method 'client_secret_post', defined by the OIDC specification:
+// NewClientSecretPostRS returns an rs.ResourceServer that follows the
+// 'client_secret_post' client authentication method defined by the OIDC
+// specification: the client_id and client_secret are sent in the request body.
 // https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication
-func NewClientSecretPost(clientID, clientSecret string) *ClientSecretPost {
-	return &ClientSecretPost{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-	}
+func NewClientSecretPostRS(issuer, clientID, clientSecret string) (rs.ResourceServer, error) {
+	httpClient := *httphelper.DefaultHTTPClient // Create a copy
+	httpClient.Transport = debugTransport(httpClient.Transport)
+	return newResourceServer(issuer, &httpClient, clientSecretPostAuth(clientID, clientSecret))
 }
 
-func (c *ClientSecretPost) Transport() http.RoundTripper {
-	return &clientAuthRoundTripper{
-		clientID:     c.ClientID,
-		clientSecret: c.ClientSecret,
-		next:         http.DefaultTransport,
-	}
+// NewClientSecretPostRP returns an rp.RelyingParty that follows the
+// 'client_secret_post' client authentication method defined by the OIDC
+// specification: the client_id and client_secret are sent in the request body.
+// https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication
+func NewClientSecretPostRP(issuer, clientID, clientSecret, redirectURI string) (rp.RelyingParty, error) {
+	httpClient := *httphelper.DefaultHTTPClient // Create a copy
+	httpClient.Transport = debugTransport(httpClient.Transport)
+	return rp.NewRelyingPartyOIDC(issuer, clientID, clientSecret, redirectURI, nil, rp.WithHTTPClient(&httpClient))
 }

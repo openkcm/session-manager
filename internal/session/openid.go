@@ -4,14 +4,18 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"net/http"
 
 	"github.com/jellydator/ttlcache/v3"
-	"github.com/openkcm/common-sdk/pkg/oidc"
+	"github.com/zitadel/oidc/pkg/client"
+	"github.com/zitadel/oidc/pkg/oidc"
 
 	slogctx "github.com/veqryn/slog-context"
+
+	"github.com/openkcm/session-manager/internal/validation"
 )
 
-func (m *Manager) getOpenIDConfig(ctx context.Context, issuerURL string) (*oidc.Configuration, error) {
+func (m *Manager) getOpenIDConfig(ctx context.Context, issuerURL string) (*oidc.DiscoveryConfiguration, error) {
 	// first check the cache for a recent WKOC configuration for this issuer
 	hashedSuffix := sha256.Sum256([]byte(issuerURL))
 	cacheKey := base64.RawURLEncoding.EncodeToString(hashedSuffix[:])
@@ -19,16 +23,11 @@ func (m *Manager) getOpenIDConfig(ctx context.Context, issuerURL string) (*oidc.
 		return item.Value(), nil
 	}
 
-	// otherwise, fetch the configuration
-	provider, err := oidc.NewProvider(issuerURL, []string{},
-		oidc.WithAllowHttpScheme(m.allowHttpScheme),
-	)
-	if err != nil {
-		slogctx.Error(ctx, "Could not create provider",
-			"issuerURL", issuerURL, "error", err)
+	if err := validation.SecureScheme(issuerURL, m.allowHttpScheme); err != nil {
 		return nil, err
 	}
-	cfg, err := provider.GetConfiguration(ctx)
+
+	config, err := client.Discover(issuerURL, http.DefaultClient)
 	if err != nil {
 		slogctx.Error(ctx, "Could not get OIDC provider configuration",
 			"issuerURL", issuerURL, "error", err)
@@ -36,7 +35,7 @@ func (m *Manager) getOpenIDConfig(ctx context.Context, issuerURL string) (*oidc.
 	}
 
 	// Cache the result with TTL
-	m.wkocCache.Set(cacheKey, cfg, ttlcache.DefaultTTL)
+	m.wkocCache.Set(cacheKey, config, ttlcache.DefaultTTL)
 
-	return cfg, nil
+	return config, nil
 }
