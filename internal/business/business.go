@@ -34,6 +34,7 @@ func Main(ctx context.Context, cfg *config.Config) error {
 
 	topLevel := []sessionmanager.LoadSpec{
 		{Cfg: &cfg.Database},
+		{Cfg: &cfg.Migrate},
 		{Cfg: &cfg.Trust},
 		{Cfg: &cfg.ValKey},
 		{Cfg: &cfg.Credentials},
@@ -44,6 +45,15 @@ func Main(ctx context.Context, cfg *config.Config) error {
 
 	if err := c.LoadAll(specs); err != nil {
 		return fmt.Errorf("loading modules: %w", err)
+	}
+
+	migrate, err := sessionmanager.GetModuleAs[sessionmanager.Migrate](c, cfg.Migrate.Module())
+	if err != nil {
+		return fmt.Errorf("getting migrate module: %w", err)
+	}
+
+	if err := migrate.ValidateSchema(ctx); err != nil {
+		return fmt.Errorf("schema validation failed: %w", err)
 	}
 
 	stopApps, err := startApps(c, cfg)
