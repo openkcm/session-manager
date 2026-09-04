@@ -17,4 +17,5 @@ type Database interface {
 
 type Migrate interface {
 	Migrate(ctx context.Context) error
+	ValidateSchema(ctx context.Context) error
 }
