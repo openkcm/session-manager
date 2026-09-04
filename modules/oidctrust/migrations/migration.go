@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"math"
 
@@ -61,7 +62,7 @@ func maxMigrationVersion() (int64, error) {
 		return 0, fmt.Errorf("collecting available migrations: %w", err)
 	}
 	if len(available) == 0 {
-		return 0, fmt.Errorf("no migrations found")
+		return 0, errors.New("no migrations found")
 	}
 	return available[len(available)-1].Version, nil
 }
