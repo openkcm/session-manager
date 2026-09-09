@@ -8,10 +8,12 @@ var debugSettingSMDumpTransport = NewSetting("smdumptransport")
 
 // DebugTransport wraps an [http.RoundTripper] with NewTransport if smdebugtransport setting is set.
 // Noop is the setting isn't set.
-func DebugTransport(transport http.RoundTripper) http.RoundTripper {
+func DebugTransport(rt http.RoundTripper) http.RoundTripper {
 	if debugSettingSMDumpTransport.Value() == "1" {
-		return NewTransport(transport)
+		if _, ok := rt.(*transport); !ok {
+			return NewTransport(rt)
+		}
 	}
 
-	return transport
+	return rt
 }

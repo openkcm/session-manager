@@ -18,7 +18,6 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/gofrs/uuid/v5"
-	"github.com/jellydator/ttlcache/v3"
 	"github.com/openkcm/common-sdk/pkg/csrf"
 	"github.com/zitadel/oidc/v3/pkg/client/rp"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
@@ -36,8 +35,6 @@ import (
 	"github.com/openkcm/session-manager/internal/pkce"
 	"github.com/openkcm/session-manager/pkg/serviceerr"
 )
-
-const defaultWKOCCacheExpiration = 30 * time.Minute
 
 const (
 	LoginCSRFCookieName = "__Host-LoginCSRF"
@@ -62,9 +59,6 @@ type Manager struct {
 
 	allowHttpScheme         bool
 	allowedRedirectBaseURLs []*url.URL
-
-	// cache well known OpenID configuration results
-	wkocCache *ttlcache.Cache[string, *oidc.DiscoveryConfiguration]
 }
 
 func NewManager(
@@ -100,13 +94,6 @@ func NewManager(
 			opt(m)
 		}
 	}
-
-	m.wkocCache = ttlcache.New(
-		ttlcache.WithTTL[string, *oidc.DiscoveryConfiguration](defaultWKOCCacheExpiration),
-		ttlcache.WithDisableTouchOnHit[string, *oidc.DiscoveryConfiguration](),
-	)
-	go m.wkocCache.Start()
-	context.AfterFunc(ctx, m.wkocCache.Stop)
 
 	return m, nil
 }

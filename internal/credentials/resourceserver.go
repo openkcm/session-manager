@@ -22,19 +22,32 @@ type resourceServer struct {
 
 var _ rs.ResourceServer = (*resourceServer)(nil)
 
-// newResourceServer discovers the issuer's OIDC configuration using httpClient
-// and returns a resource server that authorizes introspection requests with
-// authFn (a zitadel httphelper.FormAuthorization or RequestAuthorization).
-func newResourceServer(ctx context.Context, issuer string, httpClient *http.Client, authFn httphelper.FormAuthorization) (*resourceServer, error) {
-	conf, err := client.Discover(ctx, issuer, httpClient)
-	if err != nil {
-		return nil, fmt.Errorf("discovering OIDC configuration for issuer %q: %w", issuer, err)
+// newResourceServer returns a resource server for issuer. When a WithDiscoveryConfig
+// option is provided the OIDC discovery HTTP call is skipped and the endpoints are
+// taken from the supplied config; otherwise discovery is performed via httpClient.
+func newResourceServer(ctx context.Context, issuer string, httpClient *http.Client, authFn httphelper.FormAuthorization, opts ...Option) (*resourceServer, error) {
+	var tokenEndpoint, introspectionURL string
+	for _, opt := range opts {
+		if opt.discoveryConfig != nil {
+			tokenEndpoint = opt.discoveryConfig.TokenEndpoint
+			introspectionURL = opt.discoveryConfig.IntrospectionEndpoint
+			break
+		}
+	}
+
+	if tokenEndpoint == "" || introspectionURL == "" {
+		conf, err := client.Discover(ctx, issuer, httpClient)
+		if err != nil {
+			return nil, fmt.Errorf("discovering OIDC configuration for issuer %q: %w", issuer, err)
+		}
+		tokenEndpoint = conf.TokenEndpoint
+		introspectionURL = conf.IntrospectionEndpoint
 	}
 
 	return &resourceServer{
 		httpClient:       httpClient,
-		tokenEndpoint:    conf.TokenEndpoint,
-		introspectionURL: conf.IntrospectionEndpoint,
+		tokenEndpoint:    tokenEndpoint,
+		introspectionURL: introspectionURL,
 		authFn:           authFn,
 	}, nil
 }

@@ -25,6 +25,8 @@ import (
 	oidcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/v1"
 	trustv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/v1"
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
+	zitadelclient "github.com/zitadel/oidc/v3/pkg/client"
+	zitadeloidc "github.com/zitadel/oidc/v3/pkg/oidc"
 
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/credentials"
@@ -748,6 +750,10 @@ func (tc transportCredentials) ResourceServer(ctx context.Context, clientID, iss
 
 func (tc transportCredentials) RelyingParty(ctx context.Context, oidc *oidcv1.OIDC, redirectURI string) (rp.RelyingParty, error) {
 	return rp.NewRelyingPartyOIDC(ctx, oidc.GetIssuer(), oidc.GetClientId(), "", redirectURI, nil, rp.WithHTTPClient(tc.client()))
+}
+
+func (tc transportCredentials) GetDiscoveryConfig(ctx context.Context, issuer string) (*zitadeloidc.DiscoveryConfiguration, error) {
+	return zitadelclient.Discover(ctx, issuer, tc.client())
 }
 
 func newTCBuilder(rt localRoundTripper) credentials.Provider {

@@ -66,3 +66,27 @@ func TestNewClientSecretPostRP(t *testing.T) {
 		t.Errorf("ClientSecret = %q, want %q", got.OAuthConfig().ClientSecret, "secret")
 	}
 }
+
+func TestInsecureProvider_GetDiscoveryConfig(t *testing.T) {
+	srv := newDiscoveryServer(t, "https://example.com/introspect")
+
+	p := InsecureProvider{}
+	disc, err := p.GetDiscoveryConfig(t.Context(), srv.URL)
+	if err != nil {
+		t.Fatalf("GetDiscoveryConfig() error = %v", err)
+	}
+	if disc == nil {
+		t.Fatal("GetDiscoveryConfig() = nil")
+	}
+	if disc.Issuer != srv.URL {
+		t.Errorf("Issuer = %q, want %q", disc.Issuer, srv.URL)
+	}
+}
+
+func TestInsecureProvider_GetDiscoveryConfig_Error(t *testing.T) {
+	p := InsecureProvider{}
+	_, err := p.GetDiscoveryConfig(t.Context(), "http://127.0.0.1:0")
+	if err == nil {
+		t.Error("GetDiscoveryConfig() error = nil, want error for unreachable issuer")
+	}
+}

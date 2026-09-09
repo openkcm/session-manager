@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/zitadel/oidc/v3/pkg/client/rs"
+	zitadeloidc "github.com/zitadel/oidc/v3/pkg/oidc"
 
 	httphelper "github.com/zitadel/oidc/v3/pkg/http"
 )
@@ -58,4 +59,27 @@ func authForm(t *testing.T, r rs.ResourceServer) url.Values {
 	form := url.Values{}
 	fn(form)
 	return form
+}
+
+func TestNewResourceServer_WithDiscoveryConfig(t *testing.T) {
+	const tokenEndpoint = "https://example.com/token"
+	const introspectionURL = "https://example.com/introspect"
+
+	disc := &zitadeloidc.DiscoveryConfiguration{
+		Issuer:                "https://example.com",
+		TokenEndpoint:         tokenEndpoint,
+		IntrospectionEndpoint: introspectionURL,
+	}
+	authFn := clientSecretPostAuth("client-id", "")
+
+	srv, err := newResourceServer(t.Context(), "https://example.com", http.DefaultClient, authFn, WithDiscoveryConfig(disc))
+	if err != nil {
+		t.Fatalf("newResourceServer() error = %v", err)
+	}
+	if srv.IntrospectionURL() != introspectionURL {
+		t.Errorf("IntrospectionURL() = %q, want %q", srv.IntrospectionURL(), introspectionURL)
+	}
+	if srv.TokenEndpoint() != tokenEndpoint {
+		t.Errorf("TokenEndpoint() = %q, want %q", srv.TokenEndpoint(), tokenEndpoint)
+	}
 }

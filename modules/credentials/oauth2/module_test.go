@@ -156,3 +156,32 @@ func TestModule_RelyingPartyUnknownType(t *testing.T) {
 	_, err := m.RelyingParty(t.Context(), oidcFor("https://issuer.example.com", "client-id"), "https://app.example.com/callback")
 	require.Error(t, err)
 }
+
+func TestModule_GetDiscoveryConfig_CacheHit(t *testing.T) {
+	// Calling GetDiscoveryConfig (via ResourceServer) twice with the same issuer
+	// should return the cached result on the second call, covering the cache-hit
+	// branch (module.go line 173-174).
+	m, err := provisionWithAuth(t, config.ClientAuth{Type: "insecure"})
+	require.NoError(t, err)
+
+	srv := newDiscoveryServer(t)
+
+	disc1, err := m.GetDiscoveryConfig(t.Context(), srv.URL)
+	require.NoError(t, err)
+	require.NotNil(t, disc1)
+
+	// Second call: must hit the cache.
+	disc2, err := m.GetDiscoveryConfig(t.Context(), srv.URL)
+	require.NoError(t, err)
+	assert.Equal(t, disc1, disc2, "second call should return cached result")
+}
+
+func TestModule_GetDiscoveryConfig_DiscoveryError(t *testing.T) {
+	// After provisioning, a discovery request for an unreachable issuer must
+	// propagate the error (module.go lines 177-178).
+	m, err := provisionWithAuth(t, config.ClientAuth{Type: "insecure"})
+	require.NoError(t, err)
+
+	_, err = m.GetDiscoveryConfig(t.Context(), "http://127.0.0.1:0")
+	require.Error(t, err)
+}
