@@ -15,10 +15,10 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"uuid"
 
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
-	"github.com/gofrs/uuid/v5"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/openkcm/common-sdk/pkg/csrf"
 	"github.com/openkcm/common-sdk/pkg/oidc"
@@ -216,7 +216,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (
 	}
 
 	// audit log metadata
-	correlationId := uuid.Must(uuid.NewV4()).String()
+	correlationId := uuid.New().String()
 	metadata, err := otlpaudit.NewEventMetadata("session manager", state.TenantID, correlationId)
 	if err != nil {
 		return OIDCSessionData{}, fmt.Errorf("creating audit metadata: %w", err)

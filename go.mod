@@ -1,8 +1,6 @@
 module github.com/openkcm/session-manager
 
-go 1.26.5
-
-toolchain go1.26.6
+go 1.27.1
 
 tool (
 	github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
@@ -16,7 +14,6 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/goccy/go-yaml v1.19.2
-	github.com/gofrs/uuid/v5 v5.5.1
 	github.com/google/go-cmp v0.7.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/jellydator/ttlcache/v3 v3.4.1

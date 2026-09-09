@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -51,7 +50,7 @@ func newCtx(t *testing.T) (*sessionmanager.Context, *config.Config) {
 	t.Helper()
 	cfg := &config.Config{}
 	cfg.GRPC = config.GRPCServer{
-		GRPCServer:      commoncfg.GRPCServer{Address: "127.0.0.1:0"},
+		Address:         "127.0.0.1:0",
 		ShutdownTimeout: 2 * time.Second,
 	}
 	// Find a free port the deterministic way.

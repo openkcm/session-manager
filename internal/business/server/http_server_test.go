@@ -19,10 +19,8 @@ func TestStartHTTPServer_ContextCancellation(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 
 		cfg := &config.Config{
-			BaseConfig: commoncfg.BaseConfig{
-				Application: commoncfg.Application{
-					Name: "test-app",
-				},
+			Application: commoncfg.Application{
+				Name: "test-app",
 			},
 			HTTP: config.HTTPServer{
 				Address:         "localhost:0", // Use port 0 to get a random available port
@@ -59,10 +57,8 @@ func TestCreateHTTPServer(t *testing.T) {
 	t.Run("creates HTTP server with default config", func(t *testing.T) {
 		ctx := t.Context()
 		cfg := &config.Config{
-			BaseConfig: commoncfg.BaseConfig{
-				Application: commoncfg.Application{
-					Name: "test-app",
-				},
+			Application: commoncfg.Application{
+				Name: "test-app",
 			},
 			HTTP: config.HTTPServer{
 				Address: "localhost:8080",
@@ -83,10 +79,8 @@ func TestCreateHTTPServer(t *testing.T) {
 	t.Run("creates HTTP server with unix socket", func(t *testing.T) {
 		ctx := t.Context()
 		cfg := &config.Config{
-			BaseConfig: commoncfg.BaseConfig{
-				Application: commoncfg.Application{
-					Name: "test-app",
-				},
+			Application: commoncfg.Application{
+				Name: "test-app",
 			},
 			HTTP: config.HTTPServer{
 				Address: "unix:///tmp/test.sock",

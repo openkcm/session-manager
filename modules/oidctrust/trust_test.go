@@ -5,8 +5,8 @@ import (
 	"errors"
 	"os"
 	"testing"
+	"uuid"
 
-	"github.com/gofrs/uuid/v5"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,12 +45,12 @@ func TestService_Apply(t *testing.T) {
 
 	t.Run("success if", func(t *testing.T) {
 		t.Run("the trust does not exist", func(t *testing.T) {
-			expTenantID := uuid.Must(uuid.NewV4()).String()
+			expTenantID := uuid.New().String()
 			expTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Blocked:  new(false),
 				Oidc: oidcv1.OIDC_builder{
-					Issuer:    new(uuid.Must(uuid.NewV4()).String()),
+					Issuer:    new(uuid.New().String()),
 					JwksUri:   new(jwksURI),
 					Audiences: []string{requestURI},
 				}.Build(),
@@ -70,12 +70,12 @@ func TestService_Apply(t *testing.T) {
 		})
 
 		t.Run("the trust exists", func(t *testing.T) {
-			expTenantID := uuid.Must(uuid.NewV4()).String()
+			expTenantID := uuid.New().String()
 			expTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Blocked:  new(false),
 				Oidc: oidcv1.OIDC_builder{
-					Issuer:    new(uuid.Must(uuid.NewV4()).String()),
+					Issuer:    new(uuid.New().String()),
 					JwksUri:   new(jwksURI),
 					Audiences: []string{requestURI},
 				}.Build(),
@@ -110,11 +110,11 @@ func TestService_Apply(t *testing.T) {
 
 	t.Run("should return error if", func(t *testing.T) {
 		t.Run("Create returns an error", func(t *testing.T) {
-			expTenantID := uuid.Must(uuid.NewV4()).String()
+			expTenantID := uuid.New().String()
 			expTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Oidc: oidcv1.OIDC_builder{
-					Issuer:    new(uuid.Must(uuid.NewV4()).String()),
+					Issuer:    new(uuid.New().String()),
 					JwksUri:   new(jwksURI),
 					Audiences: []string{requestURI},
 				}.Build(),
@@ -137,11 +137,11 @@ func TestService_Apply(t *testing.T) {
 		})
 
 		t.Run("Update returns an error", func(t *testing.T) {
-			expTenantID := uuid.Must(uuid.NewV4()).String()
+			expTenantID := uuid.New().String()
 			expTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Oidc: oidcv1.OIDC_builder{
-					Issuer:    new(uuid.Must(uuid.NewV4()).String()),
+					Issuer:    new(uuid.New().String()),
 					JwksUri:   new(jwksURI),
 					Audiences: []string{requestURI},
 				}.Build(),
@@ -173,12 +173,12 @@ func TestService_Block(t *testing.T) {
 	t.Run("success if ", func(t *testing.T) {
 		t.Run("the trust is unblocked", func(t *testing.T) {
 			// given
-			expTenantID := uuid.Must(uuid.NewV4()).String()
+			expTenantID := uuid.New().String()
 			expUnblockedTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Blocked:  new(false),
 				Oidc: oidcv1.OIDC_builder{
-					Issuer:    new(uuid.Must(uuid.NewV4()).String()),
+					Issuer:    new(uuid.New().String()),
 					JwksUri:   new(jwksURI),
 					Audiences: []string{requestURI},
 				}.Build(),
@@ -205,12 +205,12 @@ func TestService_Block(t *testing.T) {
 
 		t.Run("the trust is blocked then it should not call Update", func(t *testing.T) {
 			// given
-			expTenantID := uuid.Must(uuid.NewV4()).String()
+			expTenantID := uuid.New().String()
 			expBlockedTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Blocked:  new(true),
 				Oidc: oidcv1.OIDC_builder{
-					Issuer:    new(uuid.Must(uuid.NewV4()).String()),
+					Issuer:    new(uuid.New().String()),
 					JwksUri:   new(jwksURI),
 					Audiences: []string{requestURI},
 				}.Build(),
@@ -239,12 +239,12 @@ func TestService_Block(t *testing.T) {
 		})
 		t.Run("the trust is not found during the Update", func(t *testing.T) {
 			// given
-			expTenantID := uuid.Must(uuid.NewV4()).String()
+			expTenantID := uuid.New().String()
 			expBlockedTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Blocked:  new(false),
 				Oidc: oidcv1.OIDC_builder{
-					Issuer:    new(uuid.Must(uuid.NewV4()).String()),
+					Issuer:    new(uuid.New().String()),
 					JwksUri:   new(jwksURI),
 					Audiences: []string{requestURI},
 				}.Build(),
@@ -272,7 +272,7 @@ func TestService_Block(t *testing.T) {
 		})
 		t.Run("the trust is not found", func(t *testing.T) {
 			// given
-			expTenantID := uuid.Must(uuid.NewV4()).String()
+			expTenantID := uuid.New().String()
 			repoWrapper := &RepoWrapper{Repo: repo}
 
 			subj := oidctrust.NewModule(repoWrapper)
@@ -288,7 +288,7 @@ func TestService_Block(t *testing.T) {
 	t.Run("should return error", func(t *testing.T) {
 		t.Run("if Get returns an error", func(t *testing.T) {
 			// given
-			expTenantID := uuid.Must(uuid.NewV4()).String()
+			expTenantID := uuid.New().String()
 			repoWrapper := &RepoWrapper{Repo: repo}
 
 			noOfGetCalls := 0
@@ -311,12 +311,12 @@ func TestService_Block(t *testing.T) {
 
 		t.Run("if Update returns an error", func(t *testing.T) {
 			// given
-			expTenantID := uuid.Must(uuid.NewV4()).String()
+			expTenantID := uuid.New().String()
 			expTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Blocked:  new(false),
 				Oidc: oidcv1.OIDC_builder{
-					Issuer:    new(uuid.Must(uuid.NewV4()).String()),
+					Issuer:    new(uuid.New().String()),
 					JwksUri:   new(jwksURI),
 					Audiences: []string{requestURI},
 				}.Build(),
@@ -353,12 +353,12 @@ func TestService_Unblock(t *testing.T) {
 	t.Run("success if ", func(t *testing.T) {
 		t.Run("the trust is blocked", func(t *testing.T) {
 			// given
-			expTenantID := uuid.Must(uuid.NewV4()).String()
+			expTenantID := uuid.New().String()
 			expBlockedTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Blocked:  new(true),
 				Oidc: oidcv1.OIDC_builder{
-					Issuer:    new(uuid.Must(uuid.NewV4()).String()),
+					Issuer:    new(uuid.New().String()),
 					JwksUri:   new(jwksURI),
 					Audiences: []string{requestURI},
 				}.Build(),
@@ -385,12 +385,12 @@ func TestService_Unblock(t *testing.T) {
 
 		t.Run("the trust is unblocked then it should not call Update", func(t *testing.T) {
 			// given
-			expTenantID := uuid.Must(uuid.NewV4()).String()
+			expTenantID := uuid.New().String()
 			expUnblockedTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Blocked:  new(false),
 				Oidc: oidcv1.OIDC_builder{
-					Issuer:    new(uuid.Must(uuid.NewV4()).String()),
+					Issuer:    new(uuid.New().String()),
 					JwksUri:   new(jwksURI),
 					Audiences: []string{requestURI},
 				}.Build(),
@@ -419,12 +419,12 @@ func TestService_Unblock(t *testing.T) {
 		})
 		t.Run("the trust is not found during the Update", func(t *testing.T) {
 			// given
-			expTenantID := uuid.Must(uuid.NewV4()).String()
+			expTenantID := uuid.New().String()
 			expUnblockedTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Blocked:  new(true),
 				Oidc: oidcv1.OIDC_builder{
-					Issuer:    new(uuid.Must(uuid.NewV4()).String()),
+					Issuer:    new(uuid.New().String()),
 					JwksUri:   new(jwksURI),
 					Audiences: []string{requestURI},
 				}.Build(),
@@ -452,7 +452,7 @@ func TestService_Unblock(t *testing.T) {
 		})
 		t.Run("the trust is not found", func(t *testing.T) {
 			// given
-			expTenantID := uuid.Must(uuid.NewV4()).String()
+			expTenantID := uuid.New().String()
 			repoWrapper := &RepoWrapper{Repo: repo}
 
 			subj := oidctrust.NewModule(repoWrapper)
@@ -467,7 +467,7 @@ func TestService_Unblock(t *testing.T) {
 	t.Run("should return error", func(t *testing.T) {
 		t.Run("if Get returns an error", func(t *testing.T) {
 			// given
-			expTenantID := uuid.Must(uuid.NewV4()).String()
+			expTenantID := uuid.New().String()
 			mockRepo := &RepoWrapper{Repo: repo}
 
 			noOfGetTenantCalls := 0
@@ -490,12 +490,12 @@ func TestService_Unblock(t *testing.T) {
 
 		t.Run("if Update returns an error", func(t *testing.T) {
 			// given
-			expTenantIDtoUpdate := uuid.Must(uuid.NewV4()).String()
+			expTenantIDtoUpdate := uuid.New().String()
 			expBlockedTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantIDtoUpdate),
 				Blocked:  new(true),
 				Oidc: oidcv1.OIDC_builder{
-					Issuer:    new(uuid.Must(uuid.NewV4()).String()),
+					Issuer:    new(uuid.New().String()),
 					JwksUri:   new(jwksURI),
 					Audiences: []string{requestURI},
 				}.Build(),
@@ -532,11 +532,11 @@ func TestService_Remove(t *testing.T) {
 	t.Run("success if", func(t *testing.T) {
 		t.Run("the trust exists", func(t *testing.T) {
 			// given
-			expTenantID := uuid.Must(uuid.NewV4()).String()
+			expTenantID := uuid.New().String()
 			expTrust := trustv1.Trust_builder{
 				TenantId: new(expTenantID),
 				Oidc: oidcv1.OIDC_builder{
-					Issuer:    new(uuid.Must(uuid.NewV4()).String()),
+					Issuer:    new(uuid.New().String()),
 					JwksUri:   new(jwksURI),
 					Audiences: []string{requestURI},
 				}.Build(),
@@ -563,7 +563,7 @@ func TestService_Remove(t *testing.T) {
 	t.Run("should return error if", func(t *testing.T) {
 		t.Run("the trust does not exist", func(t *testing.T) {
 			// given
-			expTenantID := uuid.Must(uuid.NewV4()).String()
+			expTenantID := uuid.New().String()
 			wrapper := &RepoWrapper{Repo: repo}
 			subj := oidctrust.NewModule(wrapper)
 
@@ -576,7 +576,7 @@ func TestService_Remove(t *testing.T) {
 
 		t.Run("Delete returns an error", func(t *testing.T) {
 			// given
-			expTenantID := uuid.Must(uuid.NewV4()).String()
+			expTenantID := uuid.New().String()
 			wrapper := &RepoWrapper{Repo: repo}
 
 			noOfDeleteCalls := 0
@@ -613,10 +613,10 @@ func TestService_Get(t *testing.T) {
 		{
 			name: "returns trust",
 			trust: trustv1.Trust_builder{
-				TenantId: new(uuid.Must(uuid.NewV4()).String()),
+				TenantId: new(uuid.New().String()),
 				Blocked:  new(false),
 				Oidc: oidcv1.OIDC_builder{
-					Issuer:    new(uuid.Must(uuid.NewV4()).String()),
+					Issuer:    new(uuid.New().String()),
 					JwksUri:   new(jwksURI),
 					Audiences: []string{requestURI},
 				}.Build(),
@@ -651,7 +651,7 @@ func TestService_Get(t *testing.T) {
 			if tt.trust != nil {
 				tenantID = tt.trust.GetTenantId()
 			} else {
-				tenantID = uuid.Must(uuid.NewV4()).String()
+				tenantID = uuid.New().String()
 			}
 
 			got, err := subj.Get(ctx, tenantID)

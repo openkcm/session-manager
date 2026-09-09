@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -101,7 +101,7 @@ func TestSessionGRPC(t *testing.T) {
 	t.Run("GetSession - session not active", func(t *testing.T) {
 		// Create a session but don't mark it as active
 		sess := session.Session{
-			ID:          uuid.Must(uuid.NewV4()).String(),
+			ID:          uuid.New().String(),
 			TenantID:    "tenant-inactive",
 			Issuer:      "https://issuer.example.com",
 			ProviderID:  "provider-123",
@@ -126,7 +126,7 @@ func TestSessionGRPC(t *testing.T) {
 	t.Run("GetSession - valid active session", func(t *testing.T) {
 		// Create and activate a session
 		sess := session.Session{
-			ID:          uuid.Must(uuid.NewV4()).String(),
+			ID:          uuid.New().String(),
 			TenantID:    "tenant-active",
 			Issuer:      "https://issuer.example.com",
 			ProviderID:  "provider-active",
@@ -162,7 +162,7 @@ func TestSessionGRPC(t *testing.T) {
 
 	t.Run("GetSession - tenant ID mismatch", func(t *testing.T) {
 		sess := session.Session{
-			ID:          uuid.Must(uuid.NewV4()).String(),
+			ID:          uuid.New().String(),
 			TenantID:    "correct-tenant",
 			Issuer:      "https://issuer.example.com",
 			ProviderID:  "provider-tenant",
