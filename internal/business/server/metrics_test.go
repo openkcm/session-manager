@@ -18,10 +18,8 @@ func TestInitMeters(t *testing.T) {
 	t.Run("initializes meters successfully", func(t *testing.T) {
 		ctx := t.Context()
 		cfg := &config.Config{
-			BaseConfig: commoncfg.BaseConfig{
-				Application: commoncfg.Application{
-					Name: "test-app",
-				},
+			Application: commoncfg.Application{
+				Name: "test-app",
 			},
 		}
 
@@ -34,10 +32,8 @@ func TestNewTraceMiddleware(t *testing.T) {
 	ctx := t.Context()
 	t.Run("creates trace middleware", func(t *testing.T) {
 		cfg := &config.Config{
-			BaseConfig: commoncfg.BaseConfig{
-				Application: commoncfg.Application{
-					Name: "test-app",
-				},
+			Application: commoncfg.Application{
+				Name: "test-app",
 			},
 		}
 
@@ -47,11 +43,9 @@ func TestNewTraceMiddleware(t *testing.T) {
 
 	t.Run("wraps handler function correctly", func(t *testing.T) {
 		cfg := &config.Config{
-			BaseConfig: commoncfg.BaseConfig{
-				Application: commoncfg.Application{
-					Name:        "test-app",
-					Environment: "test",
-				},
+			Application: commoncfg.Application{
+				Name:        "test-app",
+				Environment: "test",
 			},
 		}
 
@@ -91,10 +85,8 @@ func TestNewTraceMiddleware(t *testing.T) {
 
 	t.Run("propagates handler errors", func(t *testing.T) {
 		cfg := &config.Config{
-			BaseConfig: commoncfg.BaseConfig{
-				Application: commoncfg.Application{
-					Name: "test-app",
-				},
+			Application: commoncfg.Application{
+				Name: "test-app",
 			},
 		}
 
@@ -124,11 +116,9 @@ func TestNewTraceMiddleware(t *testing.T) {
 
 	t.Run("records metrics for request", func(t *testing.T) {
 		cfg := &config.Config{
-			BaseConfig: commoncfg.BaseConfig{
-				Application: commoncfg.Application{
-					Name:        "test-app",
-					Environment: "test",
-				},
+			Application: commoncfg.Application{
+				Name:        "test-app",
+				Environment: "test",
 			},
 		}
 
@@ -158,10 +148,8 @@ func TestNewTraceMiddleware(t *testing.T) {
 
 	t.Run("extracts parent trace context from headers", func(t *testing.T) {
 		cfg := &config.Config{
-			BaseConfig: commoncfg.BaseConfig{
-				Application: commoncfg.Application{
-					Name: "test-app",
-				},
+			Application: commoncfg.Application{
+				Name: "test-app",
 			},
 		}
 
@@ -193,10 +181,8 @@ func TestNewTraceMiddleware(t *testing.T) {
 
 	t.Run("handles multiple sequential requests", func(t *testing.T) {
 		cfg := &config.Config{
-			BaseConfig: commoncfg.BaseConfig{
-				Application: commoncfg.Application{
-					Name: "test-app",
-				},
+			Application: commoncfg.Application{
+				Name: "test-app",
 			},
 		}
 

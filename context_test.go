@@ -74,7 +74,7 @@ func (m *customNewModule) Module() sessionmanager.ModuleInfo {
 
 func TestNewContext_CancelCloseModules(t *testing.T) {
 	id := uniqueID(t, "closable")
-	cm := &closableModule{stubModule: stubModule{id: id}}
+	cm := &closableModule{id: id}
 
 	sessionmanager.RegisterModule(&customNewModule{
 		id:    id,
@@ -103,7 +103,7 @@ func TestNewContext_CloseErrorIsHandled(t *testing.T) {
 	id := uniqueID(t, "closeerr")
 	sessionmanager.RegisterModule(&customNewModule{
 		id:    id,
-		newFn: func() sessionmanager.Module { return &closeErrModule{stubModule: stubModule{id: id}} },
+		newFn: func() sessionmanager.Module { return &closeErrModule{id: id} },
 	})
 
 	ctx, cancel := sessionmanager.NewContext(t.Context())
@@ -127,7 +127,7 @@ func TestContext_WithValue(t *testing.T) {
 
 func TestLoadModule_Success(t *testing.T) {
 	id := uniqueID(t, "prov")
-	pm := &provisionableModule{stubModule: stubModule{id: id}}
+	pm := &provisionableModule{id: id}
 
 	sessionmanager.RegisterModule(&customNewModule{
 		id:    id,
@@ -173,7 +173,7 @@ func TestLoadModule_ProvisionError(t *testing.T) {
 	id := uniqueID(t, "failprov")
 	sessionmanager.RegisterModule(&customNewModule{
 		id:    id,
-		newFn: func() sessionmanager.Module { return &failingProvisionerModule{stubModule: stubModule{id: id}} },
+		newFn: func() sessionmanager.Module { return &failingProvisionerModule{id: id} },
 	})
 
 	ctx, cancel := sessionmanager.NewContext(t.Context())
@@ -238,7 +238,7 @@ func TestGetModuleAs_Success(t *testing.T) {
 	id := uniqueID(t, "as-ok")
 	sessionmanager.RegisterModule(&customNewModule{
 		id:    id,
-		newFn: func() sessionmanager.Module { return &appModule{stubModule: stubModule{id: id}} },
+		newFn: func() sessionmanager.Module { return &appModule{id: id} },
 	})
 
 	ctx, cancel := sessionmanager.NewContext(t.Context())
@@ -317,7 +317,7 @@ func (a *closableAppModule) Close() error {
 
 func TestLoadApp_Success(t *testing.T) {
 	id := uniqueID(t, "app")
-	am := &appModule{stubModule: stubModule{id: id}}
+	am := &appModule{id: id}
 
 	sessionmanager.RegisterModule(&customNewModule{
 		id:    id,
@@ -362,7 +362,7 @@ func TestLoadApp_DuplicateReturnsError(t *testing.T) {
 	id := uniqueID(t, "dupapp")
 	sessionmanager.RegisterModule(&customNewModule{
 		id:    id,
-		newFn: func() sessionmanager.Module { return &appModule{stubModule: stubModule{id: id}} },
+		newFn: func() sessionmanager.Module { return &appModule{id: id} },
 	})
 
 	ctx, cancel := sessionmanager.NewContext(t.Context())
@@ -388,7 +388,7 @@ func TestGetApp_NotLoaded(t *testing.T) {
 
 func TestNewContext_CancelClosesApps(t *testing.T) {
 	id := uniqueID(t, "closableapp")
-	cam := &closableAppModule{appModule: appModule{stubModule: stubModule{id: id}}}
+	cam := &closableAppModule{id: id}
 
 	sessionmanager.RegisterModule(&customNewModule{
 		id:    id,
@@ -428,14 +428,14 @@ func TestLoadAll_ProvisionFailureRollsBackEarlierSiblings(t *testing.T) {
 	// The first module is a Closer that loads cleanly; the second fails during
 	// Provision. LoadAll must roll back (Close + deregister) the first before
 	// returning the error.
-	c1 := &closableModule{stubModule: stubModule{id: okID}}
+	c1 := &closableModule{id: okID}
 	sessionmanager.RegisterModule(&customNewModule{
 		id:    okID,
 		newFn: func() sessionmanager.Module { return c1 },
 	})
 	sessionmanager.RegisterModule(&customNewModule{
 		id:    failID,
-		newFn: func() sessionmanager.Module { return &failingProvisionerModule{stubModule: stubModule{id: failID}} },
+		newFn: func() sessionmanager.Module { return &failingProvisionerModule{id: failID} },
 	})
 
 	ctx, cancel := sessionmanager.NewContext(t.Context())
@@ -467,7 +467,7 @@ func TestLoadAll_NonCloserSiblingIsRemovedOnRollback(t *testing.T) {
 	})
 	sessionmanager.RegisterModule(&customNewModule{
 		id:    failID,
-		newFn: func() sessionmanager.Module { return &failingProvisionerModule{stubModule: stubModule{id: failID}} },
+		newFn: func() sessionmanager.Module { return &failingProvisionerModule{id: failID} },
 	})
 
 	ctx, cancel := sessionmanager.NewContext(t.Context())
@@ -494,7 +494,7 @@ func TestNewContext_CloseInReverseLoadOrder(t *testing.T) {
 	for _, id := range []string{idA, idB, idC} {
 		sessionmanager.RegisterModule(&customNewModule{
 			id:    id,
-			newFn: func() sessionmanager.Module { return &closableOrderModule{stubModule: stubModule{id: id}, rec: rec} },
+			newFn: func() sessionmanager.Module { return &closableOrderModule{id: id, rec: rec} },
 		})
 	}
 
@@ -522,7 +522,7 @@ func TestNewContext_CloseSkipsNonClosersInReverseOrder(t *testing.T) {
 
 	sessionmanager.RegisterModule(&customNewModule{
 		id:    idA,
-		newFn: func() sessionmanager.Module { return &closableOrderModule{stubModule: stubModule{id: idA}, rec: rec} },
+		newFn: func() sessionmanager.Module { return &closableOrderModule{id: idA, rec: rec} },
 	})
 	sessionmanager.RegisterModule(&customNewModule{
 		id:    idB,
@@ -530,7 +530,7 @@ func TestNewContext_CloseSkipsNonClosersInReverseOrder(t *testing.T) {
 	})
 	sessionmanager.RegisterModule(&customNewModule{
 		id:    idC,
-		newFn: func() sessionmanager.Module { return &closableOrderModule{stubModule: stubModule{id: idC}, rec: rec} },
+		newFn: func() sessionmanager.Module { return &closableOrderModule{id: idC, rec: rec} },
 	})
 
 	ctx, cancel := sessionmanager.NewContext(t.Context())

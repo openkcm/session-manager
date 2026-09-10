@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -89,8 +89,8 @@ func TestGRPCServer(t *testing.T) {
 
 	t.Run("ApplyTrustMapping", func(t *testing.T) {
 		expJwks := "jks"
-		expTenantID := uuid.Must(uuid.NewV4()).String()
-		expIssuer := uuid.Must(uuid.NewV4()).String()
+		expTenantID := uuid.New().String()
+		expIssuer := uuid.New().String()
 		applyResp, err := trust.ApplyTrustMapping(ctx, trustmappingv1.ApplyTrustMappingRequest_builder{
 			TenantId: &expTenantID,
 			Oidc: oidcv1.OIDC_builder{
@@ -105,8 +105,8 @@ func TestGRPCServer(t *testing.T) {
 
 	t.Run("BlockTrustMapping", func(t *testing.T) {
 		expJwks := "jks"
-		expTenantID := uuid.Must(uuid.NewV4()).String()
-		expIssuer := uuid.Must(uuid.NewV4()).String()
+		expTenantID := uuid.New().String()
+		expIssuer := uuid.New().String()
 		applyResp, err := trust.ApplyTrustMapping(ctx, trustmappingv1.ApplyTrustMappingRequest_builder{
 			TenantId: &expTenantID,
 			Oidc: oidcv1.OIDC_builder{
@@ -127,8 +127,8 @@ func TestGRPCServer(t *testing.T) {
 
 	t.Run("UnblockTrustMapping", func(t *testing.T) {
 		expJwks := "jks"
-		expTenantID := uuid.Must(uuid.NewV4()).String()
-		expIssuer1 := uuid.Must(uuid.NewV4()).String()
+		expTenantID := uuid.New().String()
+		expIssuer1 := uuid.New().String()
 		applyRes, err := trust.ApplyTrustMapping(ctx, trustmappingv1.ApplyTrustMappingRequest_builder{
 			TenantId: &expTenantID,
 			Oidc: oidcv1.OIDC_builder{
@@ -155,8 +155,8 @@ func TestGRPCServer(t *testing.T) {
 
 	t.Run("RemoveTrustMapping", func(t *testing.T) {
 		expJwks := "jks"
-		expTenantID := uuid.Must(uuid.NewV4()).String()
-		expIssuer := uuid.Must(uuid.NewV4()).String()
+		expTenantID := uuid.New().String()
+		expIssuer := uuid.New().String()
 		applyRes, err := trust.ApplyTrustMapping(ctx, trustmappingv1.ApplyTrustMappingRequest_builder{
 			TenantId: &expTenantID,
 			Oidc: oidcv1.OIDC_builder{
@@ -177,8 +177,8 @@ func TestGRPCServer(t *testing.T) {
 
 	t.Run("ApplyTrustMapping with multiple audiences", func(t *testing.T) {
 		expJwks := "jks-multi"
-		expTenantID := uuid.Must(uuid.NewV4()).String()
-		expIssuer := uuid.Must(uuid.NewV4()).String()
+		expTenantID := uuid.New().String()
+		expIssuer := uuid.New().String()
 		audiences := []string{"aud1", "aud2", "aud3"}
 
 		applyResp, err := trust.ApplyTrustMapping(ctx, trustmappingv1.ApplyTrustMappingRequest_builder{
@@ -195,8 +195,8 @@ func TestGRPCServer(t *testing.T) {
 
 	t.Run("ApplyTrustMapping idempotent - applying same trust twice", func(t *testing.T) {
 		expJwks := "jks-idempotent"
-		expTenantID := uuid.Must(uuid.NewV4()).String()
-		expIssuer := uuid.Must(uuid.NewV4()).String()
+		expTenantID := uuid.New().String()
+		expIssuer := uuid.New().String()
 
 		// First application
 		applyResp1, err := trust.ApplyTrustMapping(ctx, trustmappingv1.ApplyTrustMappingRequest_builder{
@@ -227,8 +227,8 @@ func TestGRPCServer(t *testing.T) {
 
 	t.Run("BlockTrustMapping idempotent - blocking twice", func(t *testing.T) {
 		expJwks := "jks-block-twice"
-		expTenantID := uuid.Must(uuid.NewV4()).String()
-		expIssuer := uuid.Must(uuid.NewV4()).String()
+		expTenantID := uuid.New().String()
+		expIssuer := uuid.New().String()
 
 		applyResp, err := trust.ApplyTrustMapping(ctx, trustmappingv1.ApplyTrustMappingRequest_builder{
 			TenantId: &expTenantID,
@@ -261,8 +261,8 @@ func TestGRPCServer(t *testing.T) {
 
 	t.Run("UnblockTrustMapping idempotent - unblocking twice", func(t *testing.T) {
 		expJwks := "jks-unblock-twice"
-		expTenantID := uuid.Must(uuid.NewV4()).String()
-		expIssuer := uuid.Must(uuid.NewV4()).String()
+		expTenantID := uuid.New().String()
+		expIssuer := uuid.New().String()
 
 		applyRes, err := trust.ApplyTrustMapping(ctx, trustmappingv1.ApplyTrustMappingRequest_builder{
 			TenantId: &expTenantID,
@@ -302,8 +302,8 @@ func TestGRPCServer(t *testing.T) {
 
 	t.Run("Block and Unblock workflow", func(t *testing.T) {
 		expJwks := "jks-workflow"
-		expTenantID := uuid.Must(uuid.NewV4()).String()
-		expIssuer := uuid.Must(uuid.NewV4()).String()
+		expTenantID := uuid.New().String()
+		expIssuer := uuid.New().String()
 
 		// Apply trust
 		applyRes, err := trust.ApplyTrustMapping(ctx, trustmappingv1.ApplyTrustMappingRequest_builder{
@@ -353,8 +353,8 @@ func TestGRPCServer(t *testing.T) {
 
 	t.Run("RemoveTrustMapping idempotent - removing twice", func(t *testing.T) {
 		expJwks := "jks-remove-twice"
-		expTenantID := uuid.Must(uuid.NewV4()).String()
-		expIssuer := uuid.Must(uuid.NewV4()).String()
+		expTenantID := uuid.New().String()
+		expIssuer := uuid.New().String()
 
 		applyRes, err := trust.ApplyTrustMapping(ctx, trustmappingv1.ApplyTrustMappingRequest_builder{
 			TenantId: &expTenantID,
