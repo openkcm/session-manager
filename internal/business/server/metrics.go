@@ -7,7 +7,6 @@ import (
 	"time"
 	"uuid"
 
-	"github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/openkcm/common-sdk/pkg/otlp"
 	"github.com/samber/oops"
@@ -20,6 +19,7 @@ import (
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/session-manager/internal/config"
+	"github.com/openkcm/session-manager/internal/openapi"
 )
 
 var (
@@ -62,8 +62,8 @@ func initMeters(ctx context.Context, cfg *config.Config) error {
 }
 
 // newTraceMiddleware covers the openapi.StrictServerInterface with tracing.
-func newTraceMiddleware(cfg *config.Config) nethttp.StrictHTTPMiddlewareFunc {
-	return func(f nethttp.StrictHTTPHandlerFunc, operationID string) nethttp.StrictHTTPHandlerFunc {
+func newTraceMiddleware(cfg *config.Config) openapi.StrictMiddlewareFunc {
+	return func(f openapi.StrictHandlerFunc, operationID string) openapi.StrictHandlerFunc {
 		traceAttrs := otlp.CreateAttributesFrom(cfg.Application, attribute.String(commoncfg.AttrOperation, operationID))
 		tracer := otel.Tracer(operationID, trace.WithInstrumentationAttributes(traceAttrs...))
 
