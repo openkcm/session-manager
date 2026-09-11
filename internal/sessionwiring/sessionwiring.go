@@ -1,9 +1,8 @@
 // Package sessionwiring centralises the construction of the long-lived
 // session.Manager that the HTTP API server and the housekeeper subcommand
-// share. The Valkey-backed session.Repository and OAuth2 credentials.Builder
-// it needs are no longer built here; both come from the module registry,
-// loaded by business.Main (or the housekeeper subcommand) before this is
-// invoked.
+// share. The Valkey-backed session.Repository and OAuth2 credentials.Provider
+// session manager requires come from the module registry,
+// loaded by business.Main before this is invoked.
 package sessionwiring
 
 import (
@@ -18,13 +17,6 @@ import (
 	"github.com/openkcm/session-manager/internal/session"
 )
 
-// credentialsBuilder is the interface satisfied by a credentials module
-// (e.g. credentials.module.oauth2). Defined locally so this package does not
-// need to import the credentials module.
-type credentialsBuilder interface {
-	Builder() credentials.Builder
-}
-
 // InitSessionManager builds a session.Manager from the supplied config and
 // trust module, using session repository and credential modules already loaded
 // in ctx. The returned closeFn is a no-op kept for API compatibility — the
@@ -36,14 +28,14 @@ func InitSessionManager(ctx *sessionmanager.Context, cfg *config.Config, trust s
 		return nil, nil, fmt.Errorf("getting session repository: %w", err)
 	}
 
-	credsBuilder, err := CredsBuilder(ctx, cfg)
-	if err != nil {
-		return nil, nil, fmt.Errorf("getting credentials builder: %w", err)
-	}
-
 	auditLogger, err := otlpaudit.NewLogger(&cfg.Audit)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create audit logger: %w", err)
+	}
+
+	cProvider, err := sessionmanager.GetModuleAs[credentials.Provider](ctx, cfg.Credentials.Module())
+	if err != nil {
+		return nil, nil, fmt.Errorf("getting credentials provider module %q: %w", cfg.Credentials.Module(), err)
 	}
 
 	sessManager, err := session.NewManager(ctx,
@@ -51,8 +43,8 @@ func InitSessionManager(ctx *sessionmanager.Context, cfg *config.Config, trust s
 		trust,
 		repo,
 		auditLogger,
-		session.WithTransportCredentials(credsBuilder),
 		session.WithAllowHttpScheme(cfg.SessionManager.AllowHttpScheme),
+		session.WithCredentialsProvider(cProvider),
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create session manager: %w", err)
@@ -69,16 +61,6 @@ func SessionRepository(ctx *sessionmanager.Context, cfg *config.Config) (session
 		return nil, fmt.Errorf("getting session-store module %q: %w", cfg.ValKey.Module(), err)
 	}
 	return repo, nil
-}
-
-// CredsBuilder resolves the credentials module loaded under the ID configured
-// in cfg.Credentials.Module() and returns its credentials.Builder.
-func CredsBuilder(ctx *sessionmanager.Context, cfg *config.Config) (credentials.Builder, error) {
-	cb, err := sessionmanager.GetModuleAs[credentialsBuilder](ctx, cfg.Credentials.Module())
-	if err != nil {
-		return nil, fmt.Errorf("getting credentials module %q: %w", cfg.Credentials.Module(), err)
-	}
-	return cb.Builder(), nil
 }
 
 // Reference to context.Context to keep imports stable for callers using

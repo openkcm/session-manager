@@ -152,11 +152,11 @@ clean:
 
 .PHONY: fix-lint
 fix-lint:
-	golangci-lint run --fix --build-tags=integration ./...
+	golangci-lint run --fix ./...
 
 .PHONY: lint
 lint:
-	golangci-lint run --build-tags=integration ./...
+	golangci-lint run ./...
 
 .PHONY: build
 build:
