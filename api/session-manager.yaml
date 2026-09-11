@@ -1,7 +1,7 @@
-openapi: 3.0.4
+openapi: 3.1.0
 info:
     title: Session Manager
-    description:
+    description: OIDC Relying Party API
     version: 1.0.0
 servers:
     - url: "https://localhost:8080"
@@ -129,6 +129,7 @@ paths:
                             required: [logout_token]
             responses:
                 "200":
+                    description: Success
                     headers:
                         Cache-Control:
                             description: Always no-store
