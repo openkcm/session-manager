@@ -18,6 +18,7 @@ import (
 
 	"github.com/openkcm/session-manager/modules/oidctrust"
 	mocktrust "github.com/openkcm/session-manager/modules/oidctrust/mocks"
+	"github.com/openkcm/session-manager/modules/oidctrust/oidctrusttest"
 )
 
 var repo oidctrust.TrustRepository
@@ -57,7 +58,7 @@ func TestService_Apply(t *testing.T) {
 			}.Build()
 
 			wrapper := &RepoWrapper{Repo: repo}
-			subj := oidctrust.NewModule(wrapper)
+			subj := oidctrusttest.NewModule(wrapper)
 
 			err := subj.Apply(ctx, expTrust)
 			assert.NoError(t, err)
@@ -82,7 +83,7 @@ func TestService_Apply(t *testing.T) {
 			}.Build()
 
 			wrapper := &RepoWrapper{Repo: repo}
-			subj := oidctrust.NewModule(wrapper)
+			subj := oidctrusttest.NewModule(wrapper)
 
 			err := subj.Apply(ctx, expTrust)
 			assert.NoError(t, err)
@@ -129,7 +130,7 @@ func TestService_Apply(t *testing.T) {
 				return assert.AnError
 			}
 
-			subj := oidctrust.NewModule(wrapper)
+			subj := oidctrusttest.NewModule(wrapper)
 			err := subj.Apply(ctx, expTrust)
 
 			assert.ErrorIs(t, err, assert.AnError)
@@ -155,7 +156,7 @@ func TestService_Apply(t *testing.T) {
 				noOfCalls++
 				return assert.AnError
 			}
-			subj := oidctrust.NewModule(wrapper)
+			subj := oidctrusttest.NewModule(wrapper)
 
 			err := subj.Apply(ctx, expTrust)
 			assert.NoError(t, err)
@@ -187,7 +188,7 @@ func TestService_Block(t *testing.T) {
 			wrapper := &RepoWrapper{Repo: repo}
 			err := wrapper.Repo.Create(ctx, expUnblockedTrust)
 			require.NoError(t, err)
-			subj := oidctrust.NewModule(wrapper)
+			subj := oidctrusttest.NewModule(wrapper)
 
 			// when
 			err = subj.Block(ctx, expTenantID)
@@ -224,7 +225,7 @@ func TestService_Block(t *testing.T) {
 				noOfUpdateCalls++
 				return assert.AnError
 			}
-			subj := oidctrust.NewModule(repoWrapper)
+			subj := oidctrusttest.NewModule(repoWrapper)
 
 			// when
 			err = subj.Block(t.Context(), expTenantID)
@@ -261,7 +262,7 @@ func TestService_Block(t *testing.T) {
 				assert.NoError(t, err)
 				return nil
 			}
-			subj := oidctrust.NewModule(repoWrapper)
+			subj := oidctrusttest.NewModule(repoWrapper)
 
 			// when
 			err = subj.Block(t.Context(), expTenantID)
@@ -275,7 +276,7 @@ func TestService_Block(t *testing.T) {
 			expTenantID := uuid.New().String()
 			repoWrapper := &RepoWrapper{Repo: repo}
 
-			subj := oidctrust.NewModule(repoWrapper)
+			subj := oidctrusttest.NewModule(repoWrapper)
 
 			// when
 			err := subj.Block(t.Context(), expTenantID)
@@ -299,7 +300,7 @@ func TestService_Block(t *testing.T) {
 					Oidc: oidcv1.OIDC_builder{}.Build(),
 				}.Build(), assert.AnError
 			}
-			subj := oidctrust.NewModule(repoWrapper)
+			subj := oidctrusttest.NewModule(repoWrapper)
 
 			// when
 			err := subj.Block(t.Context(), expTenantID)
@@ -331,7 +332,7 @@ func TestService_Block(t *testing.T) {
 				noOfUpdateCalls++
 				return assert.AnError
 			}
-			subj := oidctrust.NewModule(repoWrapper)
+			subj := oidctrusttest.NewModule(repoWrapper)
 
 			// when
 			err = subj.Block(t.Context(), expTenantID)
@@ -367,7 +368,7 @@ func TestService_Unblock(t *testing.T) {
 			wrapper := &RepoWrapper{Repo: repo}
 			err := wrapper.Repo.Create(ctx, expBlockedTrust)
 			require.NoError(t, err)
-			subj := oidctrust.NewModule(wrapper)
+			subj := oidctrusttest.NewModule(wrapper)
 
 			// when
 			err = subj.Unblock(t.Context(), expTenantID)
@@ -404,7 +405,7 @@ func TestService_Unblock(t *testing.T) {
 				noOfUpdateCalls++
 				return assert.AnError
 			}
-			subj := oidctrust.NewModule(repoWrapper)
+			subj := oidctrusttest.NewModule(repoWrapper)
 
 			// when
 			err = subj.Unblock(t.Context(), expTenantID)
@@ -441,7 +442,7 @@ func TestService_Unblock(t *testing.T) {
 				assert.NoError(t, err)
 				return nil
 			}
-			subj := oidctrust.NewModule(repoWrapper)
+			subj := oidctrusttest.NewModule(repoWrapper)
 
 			// when
 			err = subj.Unblock(t.Context(), expTenantID)
@@ -455,7 +456,7 @@ func TestService_Unblock(t *testing.T) {
 			expTenantID := uuid.New().String()
 			repoWrapper := &RepoWrapper{Repo: repo}
 
-			subj := oidctrust.NewModule(repoWrapper)
+			subj := oidctrusttest.NewModule(repoWrapper)
 
 			// when
 			err := subj.Unblock(t.Context(), expTenantID)
@@ -478,7 +479,7 @@ func TestService_Unblock(t *testing.T) {
 					Oidc: oidcv1.OIDC_builder{}.Build(),
 				}.Build(), assert.AnError
 			}
-			subj := oidctrust.NewModule(mockRepo)
+			subj := oidctrusttest.NewModule(mockRepo)
 
 			// when
 			err := subj.Unblock(t.Context(), expTenantID)
@@ -510,7 +511,7 @@ func TestService_Unblock(t *testing.T) {
 				noOfUpdateCalls++
 				return assert.AnError
 			}
-			subj := oidctrust.NewModule(repoWrapper)
+			subj := oidctrusttest.NewModule(repoWrapper)
 
 			// when
 			err = subj.Unblock(t.Context(), expTenantIDtoUpdate)
@@ -546,7 +547,7 @@ func TestService_Remove(t *testing.T) {
 			err := wrapper.Repo.Create(ctx, expTrust)
 			require.NoError(t, err)
 
-			subj := oidctrust.NewModule(wrapper)
+			subj := oidctrusttest.NewModule(wrapper)
 
 			// when
 			err = subj.Remove(ctx, expTenantID)
@@ -565,7 +566,7 @@ func TestService_Remove(t *testing.T) {
 			// given
 			expTenantID := uuid.New().String()
 			wrapper := &RepoWrapper{Repo: repo}
-			subj := oidctrust.NewModule(wrapper)
+			subj := oidctrusttest.NewModule(wrapper)
 
 			// when
 			err := subj.Remove(ctx, expTenantID)
@@ -586,7 +587,7 @@ func TestService_Remove(t *testing.T) {
 				return assert.AnError
 			}
 
-			subj := oidctrust.NewModule(wrapper)
+			subj := oidctrusttest.NewModule(wrapper)
 
 			// when
 			err := subj.Remove(ctx, expTenantID)
@@ -645,7 +646,7 @@ func TestService_Get(t *testing.T) {
 			}
 
 			mockRepo := mocktrust.NewInMemRepository(opts...)
-			subj := oidctrust.NewModule(mockRepo)
+			subj := oidctrusttest.NewModule(mockRepo)
 
 			var tenantID string
 			if tt.trust != nil {
