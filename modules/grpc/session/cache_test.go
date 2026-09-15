@@ -11,6 +11,7 @@ import (
 
 	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
 	"github.com/openkcm/session-manager/modules/grpc/session"
+	"github.com/openkcm/session-manager/modules/oidctrust"
 	mocktrust "github.com/openkcm/session-manager/modules/oidctrust/mocks"
 )
 
@@ -24,7 +25,7 @@ func TestIntrospectionCache_DisableTouchOnHit(t *testing.T) {
 		idleSessionTimeout := 90 * time.Minute
 
 		// newTrust is imported via go:linkname in import_test.go
-		server := session.NewServer(ctx, sessionRepo, newTrust(trustRepo), idleSessionTimeout)
+		server := session.NewServer(ctx, sessionRepo, oidctrust.NewModule(trustRepo), idleSessionTimeout)
 		require.NotNil(t, server)
 
 		// Get the actual cache from the Server

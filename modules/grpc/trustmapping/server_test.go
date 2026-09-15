@@ -14,6 +14,7 @@ import (
 	trustv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/v1"
 
 	"github.com/openkcm/session-manager/modules/grpc/trustmapping"
+	"github.com/openkcm/session-manager/modules/oidctrust"
 	mocktrust "github.com/openkcm/session-manager/modules/oidctrust/mocks"
 	"github.com/openkcm/session-manager/pkg/serviceerr"
 )
@@ -21,7 +22,7 @@ import (
 func TestNewTrustMappingServer(t *testing.T) {
 	t.Run("creates server successfully", func(t *testing.T) {
 		repo := mocktrust.NewInMemRepository()
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := trustmapping.NewServer(svc)
 
 		assert.NotNil(t, server)
@@ -33,7 +34,7 @@ func TestApplyTrustMapping(t *testing.T) {
 
 	t.Run("success - creates new trust", func(t *testing.T) {
 		repo := mocktrust.NewInMemRepository()
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := trustmapping.NewServer(svc)
 
 		jwksUri := "https://issuer.example.com/.well-known/jwks.json"
@@ -66,7 +67,7 @@ func TestApplyTrustMapping(t *testing.T) {
 		repo := mocktrust.NewInMemRepository(
 			mocktrust.WithTrust(existingTrust),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := trustmapping.NewServer(svc)
 
 		jwksUri := "https://new-issuer.example.com/jwks.json"
@@ -90,7 +91,7 @@ func TestApplyTrustMapping(t *testing.T) {
 		repo := mocktrust.NewInMemRepository(
 			mocktrust.WithCreateError(serviceerr.ErrNotFound),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := trustmapping.NewServer(svc)
 
 		jwksUri := "https://issuer.example.com/jwks.json"
@@ -116,7 +117,7 @@ func TestApplyTrustMapping(t *testing.T) {
 		repo := mocktrust.NewInMemRepository(
 			mocktrust.WithCreateError(internalErr),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := trustmapping.NewServer(svc)
 
 		jwksUri := "https://issuer.example.com/jwks.json"
@@ -151,7 +152,7 @@ func TestApplyTrustMapping(t *testing.T) {
 			mocktrust.WithTrust(existingTrust),
 			mocktrust.WithUpdateError(updateErr),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := trustmapping.NewServer(svc)
 
 		jwksUri := "https://new-issuer.example.com/jwks.json"
@@ -188,7 +189,7 @@ func TestBlockTrustMapping(t *testing.T) {
 		repo := mocktrust.NewInMemRepository(
 			mocktrust.WithTrust(existingTrust),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := trustmapping.NewServer(svc)
 
 		req := trustmappingv1.BlockTrustMappingRequest_builder{
@@ -214,7 +215,7 @@ func TestBlockTrustMapping(t *testing.T) {
 		repo := mocktrust.NewInMemRepository(
 			mocktrust.WithTrust(existingTrust),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := trustmapping.NewServer(svc)
 
 		req := trustmappingv1.BlockTrustMappingRequest_builder{
@@ -232,7 +233,7 @@ func TestBlockTrustMapping(t *testing.T) {
 		repo := mocktrust.NewInMemRepository(
 			mocktrust.WithGetError(serviceerr.ErrNotFound),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := trustmapping.NewServer(svc)
 
 		req := trustmappingv1.BlockTrustMappingRequest_builder{
@@ -251,7 +252,7 @@ func TestBlockTrustMapping(t *testing.T) {
 		repo := mocktrust.NewInMemRepository(
 			mocktrust.WithGetError(internalErr),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := trustmapping.NewServer(svc)
 
 		req := trustmappingv1.BlockTrustMappingRequest_builder{
@@ -285,7 +286,7 @@ func TestRemoveTrustMapping(t *testing.T) {
 		repo := mocktrust.NewInMemRepository(
 			mocktrust.WithTrust(existingTrust),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := trustmapping.NewServer(svc)
 
 		req := trustmappingv1.RemoveTrustMappingRequest_builder{
@@ -305,7 +306,7 @@ func TestRemoveTrustMapping(t *testing.T) {
 		repo := mocktrust.NewInMemRepository(
 			mocktrust.WithDeleteError(deleteErr),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := trustmapping.NewServer(svc)
 
 		req := trustmappingv1.RemoveTrustMappingRequest_builder{
@@ -329,7 +330,7 @@ func TestRemoveTrustMapping(t *testing.T) {
 		repo := mocktrust.NewInMemRepository(
 			mocktrust.WithDeleteError(serviceerr.ErrNotFound),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := trustmapping.NewServer(svc)
 
 		req := trustmappingv1.RemoveTrustMappingRequest_builder{
@@ -359,7 +360,7 @@ func TestUnblockTrustMapping(t *testing.T) {
 		repo := mocktrust.NewInMemRepository(
 			mocktrust.WithTrust(existingTrust),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := trustmapping.NewServer(svc)
 
 		req := trustmappingv1.UnblockTrustMappingRequest_builder{
@@ -385,7 +386,7 @@ func TestUnblockTrustMapping(t *testing.T) {
 		repo := mocktrust.NewInMemRepository(
 			mocktrust.WithTrust(existingTrust),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := trustmapping.NewServer(svc)
 
 		req := trustmappingv1.UnblockTrustMappingRequest_builder{
@@ -403,7 +404,7 @@ func TestUnblockTrustMapping(t *testing.T) {
 		repo := mocktrust.NewInMemRepository(
 			mocktrust.WithGetError(serviceerr.ErrNotFound),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := trustmapping.NewServer(svc)
 
 		req := trustmappingv1.UnblockTrustMappingRequest_builder{
@@ -430,7 +431,7 @@ func TestUnblockTrustMapping(t *testing.T) {
 			mocktrust.WithTrust(existingTrust),
 			mocktrust.WithUpdateError(internalErr),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := trustmapping.NewServer(svc)
 
 		req := trustmappingv1.UnblockTrustMappingRequest_builder{

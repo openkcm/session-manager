@@ -14,13 +14,14 @@ import (
 	trustv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/v1"
 
 	"github.com/openkcm/session-manager/modules/grpc/oidcmapping"
+	"github.com/openkcm/session-manager/modules/oidctrust"
 	mocktrust "github.com/openkcm/session-manager/modules/oidctrust/mocks"
 	"github.com/openkcm/session-manager/pkg/serviceerr"
 )
 
 func TestNewOIDCMappingServer(t *testing.T) {
 	repo := mocktrust.NewInMemRepository()
-	svc := newTrust(repo)
+	svc := oidctrust.NewModule(repo)
 	server := oidcmapping.NewServer(svc)
 	assert.NotNil(t, server)
 }
@@ -30,7 +31,7 @@ func TestApplyOIDCMapping(t *testing.T) {
 
 	t.Run("forwards issuer, jwks_uri, audiences, client_id when set", func(t *testing.T) {
 		repo := mocktrust.NewInMemRepository()
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		jwksURI := "https://issuer.example.com/.well-known/jwks.json"
@@ -60,7 +61,7 @@ func TestApplyOIDCMapping(t *testing.T) {
 
 	t.Run("client_id omitted leaves new oidc.client_id unset", func(t *testing.T) {
 		repo := mocktrust.NewInMemRepository()
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		req := &oidcmappingv1.ApplyOIDCMappingRequest{
@@ -80,7 +81,7 @@ func TestApplyOIDCMapping(t *testing.T) {
 
 	t.Run("non-empty properties map is dropped", func(t *testing.T) {
 		repo := mocktrust.NewInMemRepository()
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		clientID := "client-xyz"
@@ -115,7 +116,7 @@ func TestApplyOIDCMapping(t *testing.T) {
 		repo := mocktrust.NewInMemRepository(
 			mocktrust.WithCreateError(serviceerr.ErrNotFound),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		req := &oidcmappingv1.ApplyOIDCMappingRequest{
@@ -135,7 +136,7 @@ func TestApplyOIDCMapping(t *testing.T) {
 		repo := mocktrust.NewInMemRepository(
 			mocktrust.WithCreateError(internalErr),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		req := &oidcmappingv1.ApplyOIDCMappingRequest{
@@ -165,7 +166,7 @@ func TestRemoveOIDCMapping(t *testing.T) {
 			}.Build(),
 		}.Build()
 		repo := mocktrust.NewInMemRepository(mocktrust.WithTrust(existing))
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		req := &oidcmappingv1.RemoveOIDCMappingRequest{TenantId: "tenant-123"}
@@ -179,7 +180,7 @@ func TestRemoveOIDCMapping(t *testing.T) {
 		repo := mocktrust.NewInMemRepository(
 			mocktrust.WithDeleteError(serviceerr.ErrNotFound),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		req := &oidcmappingv1.RemoveOIDCMappingRequest{TenantId: "tenant-gone"}
@@ -191,7 +192,7 @@ func TestRemoveOIDCMapping(t *testing.T) {
 	t.Run("other errors map to codes.Internal", func(t *testing.T) {
 		deleteErr := errors.New("delete failed")
 		repo := mocktrust.NewInMemRepository(mocktrust.WithDeleteError(deleteErr))
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		req := &oidcmappingv1.RemoveOIDCMappingRequest{TenantId: "tenant-boom"}
@@ -219,7 +220,7 @@ func TestBlockOIDCMapping(t *testing.T) {
 			}.Build(),
 		}.Build()
 		repo := mocktrust.NewInMemRepository(mocktrust.WithTrust(existing))
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		req := &oidcmappingv1.BlockOIDCMappingRequest{TenantId: "tenant-123"}
@@ -232,7 +233,7 @@ func TestBlockOIDCMapping(t *testing.T) {
 	t.Run("error maps to codes.Internal with message", func(t *testing.T) {
 		internalErr := errors.New("database error")
 		repo := mocktrust.NewInMemRepository(mocktrust.WithGetError(internalErr))
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		req := &oidcmappingv1.BlockOIDCMappingRequest{TenantId: "tenant-123"}
@@ -260,7 +261,7 @@ func TestUnblockOIDCMapping(t *testing.T) {
 			}.Build(),
 		}.Build()
 		repo := mocktrust.NewInMemRepository(mocktrust.WithTrust(existing))
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		req := &oidcmappingv1.UnblockOIDCMappingRequest{TenantId: "tenant-123"}
@@ -283,7 +284,7 @@ func TestUnblockOIDCMapping(t *testing.T) {
 			mocktrust.WithTrust(existing),
 			mocktrust.WithUpdateError(internalErr),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		req := &oidcmappingv1.UnblockOIDCMappingRequest{TenantId: "tenant-123"}

@@ -14,6 +14,7 @@ import (
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/session"
 	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
+	"github.com/openkcm/session-manager/modules/oidctrust"
 	mocktrust "github.com/openkcm/session-manager/modules/oidctrust/mocks"
 )
 
@@ -516,7 +517,7 @@ func TestManager_Logout(t *testing.T) {
 			tt.setupSession(sessionRepo)
 
 			oidcRepo := tt.setupOIDCRepo(t)
-			trust := newTrust(oidcRepo)
+			trust := oidctrust.NewModule(oidcRepo)
 
 			m, err := session.NewManager(ctx, tt.cfg, trust, sessionRepo, nil, session.WithAllowHttpScheme(true))
 			require.NoError(t, err)
