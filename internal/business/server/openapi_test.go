@@ -123,7 +123,7 @@ func TestOpenAPIServer_Auth_DisallowedRequestURI(t *testing.T) {
 		require.True(t, ok)
 		assert.Equal(t, string(serviceerr.CodeInvalidRequest), r.Body.Error)
 		assert.Equal(t, http.StatusBadRequest, r.StatusCode)
-		assert.Equal(t, "request URI does not match an allowed redirect base URL", *r.Body.ErrorDescription)
+		assert.Equal(t, "request URI does not match an allowed redirect base URL", r.Body.ErrorDescription)
 	})
 }
 
@@ -518,7 +518,7 @@ func TestOpenAPIServer_Logout_DisallowedRedirectURI(t *testing.T) {
 		require.True(t, ok)
 		assert.Equal(t, string(serviceerr.CodeInvalidRequest), r.Body.Error)
 		assert.Equal(t, http.StatusBadRequest, r.StatusCode)
-		assert.Equal(t, "post logout redirect URI does not match an allowed redirect base URL", *r.Body.ErrorDescription)
+		assert.Equal(t, "post logout redirect URI does not match an allowed redirect base URL", r.Body.ErrorDescription)
 	})
 }
 
@@ -595,7 +595,7 @@ func TestOpenAPIServer_Logout_MissingSessionCookie(t *testing.T) {
 		require.True(t, ok)
 		assert.Equal(t, string(serviceerr.CodeInvalidRequest), r.Body.Error)
 		assert.Equal(t, http.StatusBadRequest, r.StatusCode)
-		assert.Contains(t, *r.Body.ErrorDescription, "missing session id")
+		assert.Contains(t, r.Body.ErrorDescription, "missing session id")
 	})
 }
 
@@ -695,7 +695,7 @@ func TestNewBadRequest(t *testing.T) {
 
 		assert.Equal(t, string(serviceerr.CodeInvalidRequest), model.Error)
 		assert.NotNil(t, model.ErrorDescription)
-		assert.Equal(t, description, *model.ErrorDescription)
+		assert.Equal(t, description, model.ErrorDescription)
 		assert.Equal(t, http.StatusBadRequest, status)
 	})
 
@@ -710,7 +710,7 @@ func TestNewBadRequest(t *testing.T) {
 			model, status := newBadRequest(desc)
 
 			assert.Equal(t, string(serviceerr.CodeInvalidRequest), model.Error)
-			assert.Equal(t, desc, *model.ErrorDescription)
+			assert.Equal(t, desc, model.ErrorDescription)
 			assert.Equal(t, http.StatusBadRequest, status)
 		}
 	})
