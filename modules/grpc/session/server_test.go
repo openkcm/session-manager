@@ -22,6 +22,7 @@ import (
 	internalsession "github.com/openkcm/session-manager/internal/session"
 	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
 	"github.com/openkcm/session-manager/modules/grpc/session"
+	"github.com/openkcm/session-manager/modules/oidctrust"
 	mocktrust "github.com/openkcm/session-manager/modules/oidctrust/mocks"
 )
 
@@ -30,7 +31,7 @@ func TestNewSessionServer(t *testing.T) {
 	t.Run("creates server successfully", func(t *testing.T) {
 		sessionRepo := sessionmock.NewInMemRepository()
 		trustRepo := mocktrust.NewInMemRepository()
-		trust := newTrust(trustRepo)
+		trust := oidctrust.NewModule(trustRepo)
 		idleSessionTimeout := 90 * time.Minute
 
 		server := session.NewServer(ctx, sessionRepo, trust, idleSessionTimeout)
@@ -41,7 +42,7 @@ func TestNewSessionServer(t *testing.T) {
 	t.Run("creates server with options", func(t *testing.T) {
 		sessionRepo := sessionmock.NewInMemRepository()
 		trustRepo := mocktrust.NewInMemRepository()
-		trust := newTrust(trustRepo)
+		trust := oidctrust.NewModule(trustRepo)
 		idleSessionTimeout := 90 * time.Minute
 
 		server := session.NewServer(ctx,
@@ -57,7 +58,7 @@ func TestNewSessionServer(t *testing.T) {
 	t.Run("handles nil option gracefully", func(t *testing.T) {
 		sessionRepo := sessionmock.NewInMemRepository()
 		trustRepo := mocktrust.NewInMemRepository()
-		trust := newTrust(trustRepo)
+		trust := oidctrust.NewModule(trustRepo)
 		idleSessionTimeout := 90 * time.Minute
 
 		server := session.NewServer(ctx,
@@ -125,7 +126,7 @@ func TestGetSession(t *testing.T) {
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
 		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
-		trust := newTrust(trustRepo)
+		trust := oidctrust.NewModule(trustRepo)
 		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute,
 			session.WithAllowHttpScheme(true),
 		)
@@ -195,7 +196,7 @@ func TestGetSession(t *testing.T) {
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
 		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
-		trust := newTrust(trustRepo)
+		trust := oidctrust.NewModule(trustRepo)
 		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute,
 			session.WithAllowHttpScheme(true),
 		)
@@ -251,7 +252,7 @@ func TestGetSession(t *testing.T) {
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
 		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
-		trust := newTrust(trustRepo)
+		trust := oidctrust.NewModule(trustRepo)
 		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute,
 			session.WithAllowHttpScheme(true),
 		)
@@ -274,7 +275,7 @@ func TestGetSession(t *testing.T) {
 			sessionmock.WithIsActiveError(isActiveErr),
 		)
 		trustRepo := mocktrust.NewInMemRepository()
-		trust := newTrust(trustRepo)
+		trust := oidctrust.NewModule(trustRepo)
 		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute)
 
 		req := &sessionv1.GetSessionRequest{
@@ -301,7 +302,7 @@ func TestGetSession(t *testing.T) {
 		// Don't bump active - session is not active
 
 		trustRepo := mocktrust.NewInMemRepository()
-		trust := newTrust(trustRepo)
+		trust := oidctrust.NewModule(trustRepo)
 		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute)
 
 		req := &sessionv1.GetSessionRequest{
@@ -327,7 +328,7 @@ func TestGetSession(t *testing.T) {
 		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
 
 		trustRepo := mocktrust.NewInMemRepository()
-		trust := newTrust(trustRepo)
+		trust := oidctrust.NewModule(trustRepo)
 		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute)
 
 		req := &sessionv1.GetSessionRequest{
@@ -356,7 +357,7 @@ func TestGetSession(t *testing.T) {
 
 		// No trust added to repo
 		trustRepo := mocktrust.NewInMemRepository()
-		trust := newTrust(trustRepo)
+		trust := oidctrust.NewModule(trustRepo)
 		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute)
 
 		req := &sessionv1.GetSessionRequest{
@@ -391,7 +392,7 @@ func TestGetSession(t *testing.T) {
 			}.Build(),
 		}.Build()
 		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
-		trust := newTrust(trustRepo)
+		trust := oidctrust.NewModule(trustRepo)
 
 		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute)
 
@@ -439,7 +440,7 @@ func TestGetSession(t *testing.T) {
 			}.Build(),
 		}.Build()
 		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
-		trust := newTrust(trustRepo)
+		trust := oidctrust.NewModule(trustRepo)
 
 		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute)
 
@@ -475,7 +476,7 @@ func TestGetSession(t *testing.T) {
 			}.Build(),
 		}.Build()
 		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
-		trust := newTrust(trustRepo)
+		trust := oidctrust.NewModule(trustRepo)
 
 		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute)
 
@@ -528,7 +529,7 @@ func TestGetSession(t *testing.T) {
 			}.Build(),
 		}.Build()
 		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
-		trust := newTrust(trustRepo)
+		trust := oidctrust.NewModule(trustRepo)
 
 		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute,
 			session.WithAllowHttpScheme(true),
@@ -585,7 +586,7 @@ func TestGetSession(t *testing.T) {
 			}.Build(),
 		}.Build()
 		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
-		trust := newTrust(trustRepo)
+		trust := oidctrust.NewModule(trustRepo)
 
 		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute,
 			session.WithAllowHttpScheme(true),
@@ -635,7 +636,7 @@ func TestGetSession(t *testing.T) {
 			}.Build(),
 		}.Build()
 		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
-		trust := newTrust(trustRepo)
+		trust := oidctrust.NewModule(trustRepo)
 
 		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute,
 			session.WithAllowHttpScheme(true),
@@ -668,7 +669,7 @@ func TestGetOIDCProvider(t *testing.T) {
 			}.Build(),
 		}.Build()
 		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
-		trust := newTrust(trustRepo)
+		trust := oidctrust.NewModule(trustRepo)
 		sessionRepo := sessionmock.NewInMemRepository()
 
 		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute)
@@ -690,7 +691,7 @@ func TestGetOIDCProvider(t *testing.T) {
 	t.Run("error - provider not found", func(t *testing.T) {
 		sessionRepo := sessionmock.NewInMemRepository()
 		trustRepo := mocktrust.NewInMemRepository()
-		trust := newTrust(trustRepo)
+		trust := oidctrust.NewModule(trustRepo)
 		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute)
 		req := &sessionv1.GetOIDCProviderRequest{
 			TenantId: "non-existent-tenant",
@@ -708,7 +709,7 @@ func TestGetOIDCProvider(t *testing.T) {
 		trustRepo := mocktrust.NewInMemRepository(
 			mocktrust.WithGetError(errors.New("database connection error")),
 		)
-		trust := newTrust(trustRepo)
+		trust := oidctrust.NewModule(trustRepo)
 		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute)
 		req := &sessionv1.GetOIDCProviderRequest{
 			TenantId: "tenant-123",
@@ -759,7 +760,7 @@ func TestGetSession_RejectsInsecureIntrospectionEndpoint(t *testing.T) {
 	sessionRepo := sessionmock.NewInMemRepository(sessionmock.WithSession(sess))
 	_ = sessionRepo.BumpActive(ctx, sess.ID, time.Hour)
 	trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
-	trust := newTrust(trustRepo)
+	trust := oidctrust.NewModule(trustRepo)
 
 	// allowHttpScheme defaults to false (WithAllowHttpScheme not set), so the
 	// insecure introspection endpoint must be rejected.
