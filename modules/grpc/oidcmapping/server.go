@@ -6,8 +6,11 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/runtime/protoimpl"
 
 	oidcmappingv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/oidcmapping/v1"
+	flowv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/flow/v1"
 	oidcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/v1"
 	trustv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/v1"
 	slogctx "github.com/veqryn/slog-context"
@@ -38,6 +41,21 @@ func (srv *Server) ApplyOIDCMapping(ctx context.Context, req *oidcmappingv1.Appl
 		oidcBuilder.ClientId = new(req.GetClientId())
 	}
 	oidc := oidcBuilder.Build()
+
+	if props := req.GetProperties(); len(props) > 0 {
+		attrs := make([]*flowv1.Attribute, 0, len(props))
+		for k, v := range props {
+			attrs = append(attrs, flowv1.Attribute_builder{Key: new(k), Value: new(v)}.Build())
+		}
+		for _, ext := range []*protoimpl.ExtensionInfo{
+			flowv1.E_AuthAttributes,
+			flowv1.E_TokenAttributes,
+			flowv1.E_LogoutAttributes,
+			flowv1.E_AuthContext,
+		} {
+			proto.SetExtension(oidc, ext, attrs)
+		}
+	}
 
 	trust := trustv1.Trust_builder{
 		TenantId: new(req.GetTenantId()),
