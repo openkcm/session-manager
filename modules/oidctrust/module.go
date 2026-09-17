@@ -43,4 +43,9 @@ func (m *TrustModule) Provision(ctx *sessionmanager.Context) error {
 	return nil
 }
 
+// NewModule creates a TrustModule backed by the given repository. Intended for use in tests.
+func NewModule(repo TrustRepository) *TrustModule {
+	return &TrustModule{repository: repo}
+}
+
 var _ sessionmanager.Trust = (*TrustModule)(nil)

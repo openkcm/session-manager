@@ -32,6 +32,7 @@ import (
 	"github.com/openkcm/session-manager/internal/credentials"
 	"github.com/openkcm/session-manager/internal/session"
 	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
+	"github.com/openkcm/session-manager/modules/oidctrust"
 	mocktrust "github.com/openkcm/session-manager/modules/oidctrust/mocks"
 )
 
@@ -144,7 +145,7 @@ func TestManager_Auth(t *testing.T) {
 
 			m, err := session.NewManager(ctx,
 				tt.cfg,
-				newTrust(tt.oidc),
+				oidctrust.NewModule(tt.oidc),
 				tt.sessions,
 				auditLogger,
 				session.WithAllowHttpScheme(true),
@@ -338,7 +339,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 
 			m, err := session.NewManager(ctx,
 				tt.cfg,
-				newTrust(tt.oidc),
+				oidctrust.NewModule(tt.oidc),
 				tt.sessions,
 				auditLogger,
 				session.WithAllowHttpScheme(true),
@@ -469,7 +470,7 @@ func TestManager_BCLogout(t *testing.T) {
 			require.NoError(t, err)
 
 			oidcMock := mocktrust.NewInMemRepository()
-			trust := newTrust(oidcMock)
+			trust := oidctrust.NewModule(oidcMock)
 			sessionMock := sessionmock.NewInMemRepository()
 
 			rt := localRoundTripper{
@@ -555,7 +556,7 @@ func TestManager_LogoutEdgeCases(t *testing.T) {
 			require.NoError(t, err)
 
 			oidcMock := mocktrust.NewInMemRepository()
-			trust := newTrust(oidcMock)
+			trust := oidctrust.NewModule(oidcMock)
 			sessionMock := sessionmock.NewInMemRepository()
 
 			tt.setupMock(oidcMock, sessionMock)
@@ -673,7 +674,7 @@ func TestManager_BCLogout_ErrorCases(t *testing.T) {
 			require.NoError(t, err)
 
 			oidcMock := mocktrust.NewInMemRepository()
-			trust := newTrust(oidcMock)
+			trust := oidctrust.NewModule(oidcMock)
 			sessionMock := sessionmock.NewInMemRepository()
 
 			rt := localRoundTripper{
@@ -714,7 +715,7 @@ func TestManager_NewManager_Error(t *testing.T) {
 		CSRFSecretParsed: []byte(testCSRFSecret),
 	}
 
-	trust := newTrust(mocktrust.NewInMemRepository())
+	trust := oidctrust.NewModule(mocktrust.NewInMemRepository())
 
 	m, err := session.NewManager(ctx, cfg, trust, sessionmock.NewInMemRepository(), auditLogger)
 	assert.Error(t, err)
@@ -847,7 +848,7 @@ func newTestManager(t *testing.T, allowedRedirectBaseURLs []string) *session.Man
 			CSRFSecretParsed:        []byte(testCSRFSecret),
 			AllowedRedirectBaseURLs: allowedRedirectBaseURLs,
 		},
-		newTrust(mocktrust.NewInMemRepository()),
+		oidctrust.NewModule(mocktrust.NewInMemRepository()),
 		sessionmock.NewInMemRepository(),
 		auditLogger,
 	)
@@ -904,7 +905,7 @@ func TestManager_FinaliseOIDCLogin_InvalidAudience(t *testing.T) {
 		SessionDuration:  time.Hour,
 		CallbackURL:      "http://sm.example.com/sm/callback",
 		CSRFSecretParsed: []byte(testCSRFSecret),
-	}, newTrust(oidcMock), sessions, auditLogger, session.WithAllowHttpScheme(true))
+	}, oidctrust.NewModule(oidcMock), sessions, auditLogger, session.WithAllowHttpScheme(true))
 	require.NoError(t, err)
 
 	_, err = m.FinaliseOIDCLogin(ctx, stateID, code)
@@ -952,7 +953,7 @@ func TestManager_Logout_RejectsInsecureIssuerScheme(t *testing.T) {
 		SessionDuration:  time.Hour,
 		CallbackURL:      "http://sm.example.com/sm/callback",
 		CSRFSecretParsed: []byte(testCSRFSecret),
-	}, newTrust(oidcMock), sessions, auditLogger)
+	}, oidctrust.NewModule(oidcMock), sessions, auditLogger)
 	require.NoError(t, err)
 
 	_, err = m.Logout(ctx, sessionID, "http://app.example.com/logged-out")
@@ -1009,7 +1010,7 @@ func TestManager_Logout_AllowsInsecureIssuerWhenEnabled(t *testing.T) {
 		SessionDuration:  time.Hour,
 		CallbackURL:      "http://sm.example.com/sm/callback",
 		CSRFSecretParsed: []byte(testCSRFSecret),
-	}, newTrust(oidcMock), sessions, auditLogger, session.WithAllowHttpScheme(true))
+	}, oidctrust.NewModule(oidcMock), sessions, auditLogger, session.WithAllowHttpScheme(true))
 	require.NoError(t, err)
 
 	redirectURL, err := m.Logout(ctx, sessionID, postLogoutURL)

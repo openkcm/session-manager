@@ -19,6 +19,7 @@ import (
 	"github.com/openkcm/session-manager/internal/config"
 	"github.com/openkcm/session-manager/internal/session"
 	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
+	"github.com/openkcm/session-manager/modules/oidctrust"
 	mocktrust "github.com/openkcm/session-manager/modules/oidctrust/mocks"
 	"github.com/openkcm/session-manager/pkg/serviceerr"
 )
@@ -117,7 +118,7 @@ func TestRefreshAccessToken(t *testing.T) {
 		}.Build()
 
 		oidcRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
-		trust := newTrust(oidcRepo)
+		trust := oidctrust.NewModule(oidcRepo)
 
 		sess := session.Session{
 			ID:                sessionID,
@@ -205,7 +206,7 @@ func TestRefreshAccessToken(t *testing.T) {
 		}.Build()
 
 		oidcRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
-		trust := newTrust(oidcRepo)
+		trust := oidctrust.NewModule(oidcRepo)
 
 		sess := session.Session{
 			ID:                sessionID,
@@ -249,7 +250,7 @@ func TestRefreshAccessToken(t *testing.T) {
 
 	t.Run("Error - trust not found", func(t *testing.T) {
 		oidcRepo := mocktrust.NewInMemRepository()
-		trust := newTrust(oidcRepo)
+		trust := oidctrust.NewModule(oidcRepo)
 
 		sess := session.Session{
 			ID:                sessionID,
@@ -327,7 +328,7 @@ func TestRefreshAccessToken(t *testing.T) {
 
 		manager, err := session.NewManager(ctx,
 			cfg,
-			newTrust(oidcRepo),
+			oidctrust.NewModule(oidcRepo),
 			sessions,
 			nil,
 			session.WithAllowHttpScheme(true),
@@ -387,7 +388,7 @@ func TestRefreshAccessToken(t *testing.T) {
 
 		manager, err := session.NewManager(ctx,
 			cfg,
-			newTrust(oidcRepo),
+			oidctrust.NewModule(oidcRepo),
 			sessions,
 			nil,
 			session.WithAllowHttpScheme(true),
@@ -557,7 +558,7 @@ func TestHousekeepSession_ErrorCases(t *testing.T) {
 		}.Build()
 
 		oidcRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
-		trust := newTrust(oidcRepo)
+		trust := oidctrust.NewModule(oidcRepo)
 
 		sess := session.Session{
 			ID:                sessionID,
@@ -612,7 +613,7 @@ func TestRefreshAccessToken_RelyingPartyError(t *testing.T) {
 	}.Build()
 
 	oidcRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
-	trust := newTrust(oidcRepo)
+	trust := oidctrust.NewModule(oidcRepo)
 
 	sess := session.Session{
 		ID:                sessionID,

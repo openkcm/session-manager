@@ -8,19 +8,23 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/runtime/protoimpl"
 
 	oidcmappingv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/oidcmapping/v1"
+	flowv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/flow/v1"
 	oidcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/oidc/v1"
 	trustv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/trust/v1"
 
 	"github.com/openkcm/session-manager/modules/grpc/oidcmapping"
+	"github.com/openkcm/session-manager/modules/oidctrust"
 	mocktrust "github.com/openkcm/session-manager/modules/oidctrust/mocks"
 	"github.com/openkcm/session-manager/pkg/serviceerr"
 )
 
 func TestNewOIDCMappingServer(t *testing.T) {
 	repo := mocktrust.NewInMemRepository()
-	svc := newTrust(repo)
+	svc := oidctrust.NewModule(repo)
 	server := oidcmapping.NewServer(svc)
 	assert.NotNil(t, server)
 }
@@ -30,7 +34,7 @@ func TestApplyOIDCMapping(t *testing.T) {
 
 	t.Run("forwards issuer, jwks_uri, audiences, client_id when set", func(t *testing.T) {
 		repo := mocktrust.NewInMemRepository()
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		jwksURI := "https://issuer.example.com/.well-known/jwks.json"
@@ -60,7 +64,7 @@ func TestApplyOIDCMapping(t *testing.T) {
 
 	t.Run("client_id omitted leaves new oidc.client_id unset", func(t *testing.T) {
 		repo := mocktrust.NewInMemRepository()
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		req := &oidcmappingv1.ApplyOIDCMappingRequest{
@@ -78,44 +82,85 @@ func TestApplyOIDCMapping(t *testing.T) {
 		assert.False(t, stored.GetOidc().HasClientId(), "client_id should remain unset when request omits it")
 	})
 
-	t.Run("non-empty properties map is dropped", func(t *testing.T) {
+	t.Run("forwards properties into all flow attribute extensions", func(t *testing.T) {
 		repo := mocktrust.NewInMemRepository()
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		clientID := "client-xyz"
-		reqWithProps := &oidcmappingv1.ApplyOIDCMappingRequest{
+		req := &oidcmappingv1.ApplyOIDCMappingRequest{
 			TenantId:   "tenant-with-props",
 			Issuer:     "https://issuer.example.com",
 			ClientId:   clientID,
 			Properties: map[string]string{"foo": "bar", "baz": "qux"},
 		}
 
-		resp, err := server.ApplyOIDCMapping(ctx, reqWithProps)
+		resp, err := server.ApplyOIDCMapping(ctx, req)
 		require.NoError(t, err)
 		assert.True(t, resp.GetSuccess())
 
 		stored := repo.TGet("tenant-with-props")
 		require.NotNil(t, stored)
-		// The new oidc.OIDC has no properties field; verify the stored Trust matches what
-		// we'd get by building it from the same request without properties.
-		expected := trustv1.Trust_builder{
-			TenantId: new("tenant-with-props"),
-			Oidc: oidcv1.OIDC_builder{
-				Issuer:   new("https://issuer.example.com"),
-				ClientId: new(clientID),
-			}.Build(),
-		}.Build()
-		assert.Equal(t, expected.GetTenantId(), stored.GetTenantId())
-		assert.Equal(t, expected.GetOidc().GetIssuer(), stored.GetOidc().GetIssuer())
-		assert.Equal(t, expected.GetOidc().GetClientId(), stored.GetOidc().GetClientId())
+		require.NotNil(t, stored.GetOidc())
+
+		// Forwarding properties must not clobber the other request fields.
+		assert.Equal(t, "tenant-with-props", stored.GetTenantId())
+		assert.Equal(t, "https://issuer.example.com", stored.GetOidc().GetIssuer())
+		assert.Equal(t, clientID, stored.GetOidc().GetClientId())
+
+		// Every flow extension bucket must carry the full properties map as attributes.
+		for _, ext := range []*protoimpl.ExtensionInfo{
+			flowv1.E_AuthAttributes,
+			flowv1.E_TokenAttributes,
+			flowv1.E_LogoutAttributes,
+			flowv1.E_AuthContext,
+		} {
+			attrs, ok := proto.GetExtension(stored.GetOidc(), ext).([]*flowv1.Attribute)
+			require.Truef(t, ok, "extension %s should be []*flowv1.Attribute", ext.TypeDescriptor().FullName())
+
+			got := make(map[string]string, len(attrs))
+			for _, a := range attrs {
+				got[a.GetKey()] = a.GetValue()
+			}
+			assert.Equalf(t, map[string]string{"foo": "bar", "baz": "qux"}, got,
+				"extension %s should carry every property", ext.TypeDescriptor().FullName())
+		}
+	})
+
+	t.Run("empty properties map leaves flow extensions unset", func(t *testing.T) {
+		repo := mocktrust.NewInMemRepository()
+		svc := oidctrust.NewModule(repo)
+		server := oidcmapping.NewServer(svc)
+
+		req := &oidcmappingv1.ApplyOIDCMappingRequest{
+			TenantId: "tenant-no-props",
+			Issuer:   "https://issuer.example.com",
+		}
+
+		resp, err := server.ApplyOIDCMapping(ctx, req)
+		require.NoError(t, err)
+		assert.True(t, resp.GetSuccess())
+
+		stored := repo.TGet("tenant-no-props")
+		require.NotNil(t, stored)
+		require.NotNil(t, stored.GetOidc())
+
+		for _, ext := range []*protoimpl.ExtensionInfo{
+			flowv1.E_AuthAttributes,
+			flowv1.E_TokenAttributes,
+			flowv1.E_LogoutAttributes,
+			flowv1.E_AuthContext,
+		} {
+			assert.Falsef(t, proto.HasExtension(stored.GetOidc(), ext),
+				"extension %s should be unset when no properties are provided", ext.TypeDescriptor().FullName())
+		}
 	})
 
 	t.Run("ErrNotFound from Apply yields non-success response with message and no gRPC error", func(t *testing.T) {
 		repo := mocktrust.NewInMemRepository(
 			mocktrust.WithCreateError(serviceerr.ErrNotFound),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		req := &oidcmappingv1.ApplyOIDCMappingRequest{
@@ -135,7 +180,7 @@ func TestApplyOIDCMapping(t *testing.T) {
 		repo := mocktrust.NewInMemRepository(
 			mocktrust.WithCreateError(internalErr),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		req := &oidcmappingv1.ApplyOIDCMappingRequest{
@@ -165,7 +210,7 @@ func TestRemoveOIDCMapping(t *testing.T) {
 			}.Build(),
 		}.Build()
 		repo := mocktrust.NewInMemRepository(mocktrust.WithTrust(existing))
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		req := &oidcmappingv1.RemoveOIDCMappingRequest{TenantId: "tenant-123"}
@@ -179,7 +224,7 @@ func TestRemoveOIDCMapping(t *testing.T) {
 		repo := mocktrust.NewInMemRepository(
 			mocktrust.WithDeleteError(serviceerr.ErrNotFound),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		req := &oidcmappingv1.RemoveOIDCMappingRequest{TenantId: "tenant-gone"}
@@ -191,7 +236,7 @@ func TestRemoveOIDCMapping(t *testing.T) {
 	t.Run("other errors map to codes.Internal", func(t *testing.T) {
 		deleteErr := errors.New("delete failed")
 		repo := mocktrust.NewInMemRepository(mocktrust.WithDeleteError(deleteErr))
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		req := &oidcmappingv1.RemoveOIDCMappingRequest{TenantId: "tenant-boom"}
@@ -219,7 +264,7 @@ func TestBlockOIDCMapping(t *testing.T) {
 			}.Build(),
 		}.Build()
 		repo := mocktrust.NewInMemRepository(mocktrust.WithTrust(existing))
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		req := &oidcmappingv1.BlockOIDCMappingRequest{TenantId: "tenant-123"}
@@ -232,7 +277,7 @@ func TestBlockOIDCMapping(t *testing.T) {
 	t.Run("error maps to codes.Internal with message", func(t *testing.T) {
 		internalErr := errors.New("database error")
 		repo := mocktrust.NewInMemRepository(mocktrust.WithGetError(internalErr))
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		req := &oidcmappingv1.BlockOIDCMappingRequest{TenantId: "tenant-123"}
@@ -260,7 +305,7 @@ func TestUnblockOIDCMapping(t *testing.T) {
 			}.Build(),
 		}.Build()
 		repo := mocktrust.NewInMemRepository(mocktrust.WithTrust(existing))
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		req := &oidcmappingv1.UnblockOIDCMappingRequest{TenantId: "tenant-123"}
@@ -283,7 +328,7 @@ func TestUnblockOIDCMapping(t *testing.T) {
 			mocktrust.WithTrust(existing),
 			mocktrust.WithUpdateError(internalErr),
 		)
-		svc := newTrust(repo)
+		svc := oidctrust.NewModule(repo)
 		server := oidcmapping.NewServer(svc)
 
 		req := &oidcmappingv1.UnblockOIDCMappingRequest{TenantId: "tenant-123"}
