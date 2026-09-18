@@ -29,7 +29,7 @@ var (
 
 func initMeters(ctx context.Context, cfg *config.Config) error {
 	meter := otel.Meter(
-		"kms20/"+cfg.Application.Name,
+		cfg.Application.Name,
 		metric.WithInstrumentationVersion(otel.Version()),
 		metric.WithInstrumentationAttributes(otlp.CreateAttributesFrom(cfg.Application)...),
 	)
