@@ -9,8 +9,8 @@ tool (
 )
 
 require (
-	github.com/creasty/defaults v1.8.0
-	github.com/exaring/otelpgx v0.11.1
+	github.com/creasty/defaults v1.10.0
+	github.com/exaring/otelpgx v0.12.0
 	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/goccy/go-yaml v1.19.2
@@ -21,17 +21,17 @@ require (
 	github.com/knadh/koanf/v2 v2.3.6
 	github.com/moby/moby/api v1.56.0
 	github.com/oapi-codegen/runtime v1.7.0
-	github.com/openkcm/api-sdk v0.19.4
+	github.com/openkcm/api-sdk v0.20.0
 	github.com/openkcm/common-sdk v1.19.2
 	github.com/pressly/goose/v3 v3.28.0
-	github.com/samber/oops v1.23.1
+	github.com/samber/oops v1.23.2
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/valkey v0.44.0
-	github.com/valkey-io/valkey-go v1.0.77
+	github.com/valkey-io/valkey-go v1.0.78
 	github.com/veqryn/slog-context v0.9.0
-	github.com/zitadel/oidc/v3 v3.49.6
+	github.com/zitadel/oidc/v3 v3.51.0
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/metric v1.46.0
 	go.opentelemetry.io/otel/trace v1.46.0
