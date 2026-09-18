@@ -19,9 +19,13 @@ import (
 
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
+	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/openkcm/common-sdk/pkg/csrf"
 	"github.com/zitadel/oidc/v3/pkg/client/rp"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/oauth2"
 	"google.golang.org/protobuf/proto"
 
@@ -42,6 +46,8 @@ const (
 	LoginCSRFCookieName = "__Host-LoginCSRF"
 )
 
+var userLastSeenGauge metric.Int64Gauge
+
 type Manager struct {
 	trust     sessionmanager.Trust
 	sessions  Repository
@@ -61,6 +67,7 @@ type Manager struct {
 
 	allowHttpScheme         bool
 	allowedRedirectBaseURLs []*url.URL
+	application             commoncfg.Application
 }
 
 func NewManager(
@@ -95,6 +102,21 @@ func NewManager(
 		if opt != nil {
 			opt(m)
 		}
+	}
+
+	var gaugeErr error
+	meterName := m.application.Name
+	if meterName == "" {
+		// Fallback for callers (e.g. tests) that do not supply WithApplication.
+		meterName = "session-manager"
+	}
+	userLastSeenGauge, gaugeErr = otel.Meter(meterName).Int64Gauge(
+		"user.last_seen",
+		metric.WithDescription("Unix timestamp of the most recent successful login per user."),
+		metric.WithUnit("s"),
+	)
+	if gaugeErr != nil {
+		return nil, fmt.Errorf("creating user.last_seen gauge: %w", gaugeErr)
 	}
 
 	return m, nil
@@ -344,6 +366,9 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (
 	}
 
 	slogctx.Debug(ctx, "sent audit log for user login success")
+
+	userHash := fmt.Sprintf("%x", sha256.Sum256([]byte(standardClaims.Subject)))
+	userLastSeenGauge.Record(ctx, time.Now().Unix(), metric.WithAttributes(attribute.String("user.hash", userHash)))
 
 	return OIDCSessionData{
 		SessionID:  sessionID,
