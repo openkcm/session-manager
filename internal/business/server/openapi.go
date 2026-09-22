@@ -73,11 +73,7 @@ func (s *openAPIServer) Auth(ctx context.Context, request openapi.AuthRequestObj
 	defer slogctx.Debug(ctx, "Auth() completed")
 
 	// Extract error_uri (optional, for backward compatibility with old UI that doesn't send it)
-	errorURI := ""
-	if request.Params.ErrorURI != nil {
-		errorURI = *request.Params.ErrorURI
-	}
-
+	errorURI := request.Params.ErrorURI
 	if !s.isAllowedRedirectBaseURL(request.Params.RequestURI) {
 		svcerr := &serviceerr.Error{
 			Err:         serviceerr.CodeInvalidRequest,
@@ -353,7 +349,7 @@ func (s *openAPIServer) toErrorModel(err error) (model openapi.ErrorModel, httpS
 
 	return openapi.ErrorModel{
 		Error:            string(serviceErr.Err),
-		ErrorDescription: &serviceErr.Description,
+		ErrorDescription: serviceErr.Description,
 	}, serviceErr.HTTPStatus()
 }
 
@@ -369,7 +365,7 @@ func (s *openAPIServer) isAllowedRedirectBaseURL(url string) bool {
 func newBadRequest(description string) (model openapi.ErrorModel, httpStatus int) {
 	return openapi.ErrorModel{
 		Error:            string(serviceerr.CodeInvalidRequest),
-		ErrorDescription: &description,
+		ErrorDescription: description,
 	}, http.StatusBadRequest
 }
 
