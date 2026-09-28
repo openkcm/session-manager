@@ -27,9 +27,13 @@ var (
 	hist    metric.Int64Histogram
 )
 
+// meterName is the instrumentation scope name for OpenTelemetry metrics.
+// Per the OTEL spec, the import path of the instrumentation package is used.
+const meterName = "github.com/openkcm/session-manager/internal/business/server"
+
 func initMeters(ctx context.Context, cfg *config.Config) error {
 	meter := otel.Meter(
-		"kms20/"+cfg.Application.Name,
+		meterName,
 		metric.WithInstrumentationVersion(otel.Version()),
 		metric.WithInstrumentationAttributes(otlp.CreateAttributesFrom(cfg.Application)...),
 	)
