@@ -22,7 +22,7 @@ require (
 	github.com/moby/moby/api v1.56.0
 	github.com/oapi-codegen/runtime v1.7.0
 	github.com/openkcm/api-sdk v0.21.0
-	github.com/openkcm/common-sdk v1.19.3
+	github.com/openkcm/common-sdk v1.19.4
 	github.com/pressly/goose/v3 v3.28.0
 	github.com/samber/oops v1.23.2
 	github.com/spf13/cobra v1.10.2
