@@ -259,10 +259,10 @@ type ClientAuth struct {
 	MTLS *commoncfg.MTLS `yaml:"mTLS"`
 	// ClientSecret contains the client secret source reference when Type is set to "clientSecret".
 	ClientSecret commoncfg.SourceRef `yaml:"clientSecret"`
-	// AllowTLSRenegotiationOnce enables TLS renegotiation as a client.
-	// When true, sets tls.Config.Renegotiation to tls.RenegotiateOnceAsClient,
-	// allowing exactly one renegotiation per connection. This may be required
-	// by some identity providers. Default is false (tls.RenegotiateNever).
+	// Deprecated: AllowTLSRenegotiationOnce is deprecated. Set
+	// clientAuth.mTLS.attributes.allowTLSRenegotiationOnce instead, which is
+	// handled directly by commoncfg.LoadMTLSConfig. This field will be removed
+	// in a future release once all environments have been migrated.
 	AllowTLSRenegotiationOnce bool `yaml:"allowTLSRenegotiationOnce"`
 
 	// Deprecated: ClientID is no longer used in the application code, but is still required in the config
