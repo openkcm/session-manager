@@ -6,6 +6,8 @@ package valkey
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/valkey-io/valkey-go"
@@ -30,12 +32,14 @@ func newModule() sessionmanager.Module {
 type Module struct {
 	*sessionvalkey.Repository
 
-	Mod       string              `yaml:"module"`
-	Host      commoncfg.SourceRef `yaml:"host"`
-	User      commoncfg.SourceRef `yaml:"user"`
-	Password  commoncfg.SourceRef `yaml:"password"`
-	Prefix    string              `yaml:"prefix"`
-	SecretRef commoncfg.SecretRef `yaml:"secretRef"`
+	Mod                     string              `yaml:"module"`
+	Host                    commoncfg.SourceRef `yaml:"host"`
+	User                    commoncfg.SourceRef `yaml:"user"`
+	Password                commoncfg.SourceRef `yaml:"password"`
+	Prefix                  string              `yaml:"prefix"`
+	SecretRef               commoncfg.SecretRef `yaml:"secretRef"`
+	MasterSet               string              `yaml:"masterSet"`
+	TopologyRefreshInterval time.Duration       `yaml:"topologyRefreshInterval"`
 
 	client valkey.Client
 }
@@ -52,6 +56,7 @@ func (m *Module) Provision(_ *sessionmanager.Context) error {
 	if err != nil {
 		return fmt.Errorf("loading valkey host: %w", err)
 	}
+	hosts := strings.Split(string(host), ",")
 	user, err := commoncfg.LoadValueFromSourceRef(m.User)
 	if err != nil {
 		return fmt.Errorf("loading valkey user: %w", err)
@@ -62,7 +67,7 @@ func (m *Module) Provision(_ *sessionmanager.Context) error {
 	}
 
 	opts := valkey.ClientOption{
-		InitAddress: []string{string(host)},
+		InitAddress: hosts,
 		Username:    string(user),
 		Password:    string(password),
 	}
@@ -73,6 +78,14 @@ func (m *Module) Provision(_ *sessionmanager.Context) error {
 			return fmt.Errorf("loading valkey mTLS config: %w", err)
 		}
 		opts.TLSConfig = tlsConfig
+	}
+
+	opts.Sentinel = valkey.SentinelOption{
+		MasterSet:               m.MasterSet,
+		TopologyRefreshInterval: m.TopologyRefreshInterval,
+		Username:                opts.Username,
+		Password:                opts.Password,
+		TLSConfig:               opts.TLSConfig,
 	}
 
 	client, err := valkey.NewClient(opts)

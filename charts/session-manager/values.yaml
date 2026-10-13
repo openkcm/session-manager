@@ -328,7 +328,7 @@ config:
     module: sessionstore.module.valkey
     host:
       source: embedded
-      value: host.ns.svc.cluster.local
+      value: host.ns.svc.cluster.local # Comma-separated list of hosts. Multiple hosts may be added if valkey is running in a cluster mode.
     user:
       source: embedded
       value: ""
@@ -348,6 +348,11 @@ config:
       #   serverCa:
       #     source: embedded
       #     value: value
+    # masterSet: ""               # If set, valkey connects to the sentinel cluster.
+    # topologyRefreshInterval: 5s # A few seconds is a reasonable value; 5s works well.
+    #                             # There is no benefit to a very small interval:
+    #                             # it only adds load on the sentinels, and recovery
+    #                             # just needs to catch a missed event, not react instantly.
 
   sessionManager:
     sessionDuration: 12h
