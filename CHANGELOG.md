@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.20.1](https://github.com/openkcm/session-manager/compare/v0.20.0...v0.20.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* default to http.DefaultTransport if base transport is nil. ([be56a72](https://github.com/openkcm/session-manager/commit/be56a728e60c7495a53bf790dbc3b77fbbb20184))
+* nil debug transport ([#379](https://github.com/openkcm/session-manager/issues/379)) ([be56a72](https://github.com/openkcm/session-manager/commit/be56a728e60c7495a53bf790dbc3b77fbbb20184))
+
 ## [0.20.0](https://github.com/openkcm/session-manager/compare/v0.19.0...v0.20.0) (2026-10-14)
 
 
