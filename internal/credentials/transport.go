@@ -15,7 +15,13 @@ import (
 // intercepts the well-known discovery URL and serves the cached document from
 // memory, so rp.NewRelyingPartyOIDC performs no network round-trip for discovery.
 // All other requests are forwarded to base.
+//
+// If base is nil, [http.DefaultTransport] is used.
 func buildRPHTTPClient(issuer string, base http.RoundTripper, opts []Option) (*http.Client, error) {
+	if base == nil {
+		base = http.DefaultTransport
+	}
+
 	for _, opt := range opts {
 		if opt.discoveryConfig != nil {
 			discJSON, err := json.Marshal(opt.discoveryConfig)

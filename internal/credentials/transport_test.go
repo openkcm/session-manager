@@ -60,6 +60,35 @@ func Test_buildRPHTTPClient_withoutDiscoveryConfig(t *testing.T) {
 	}
 }
 
+func Test_buildRPHTTPClient_nilBase(t *testing.T) {
+	// Regression: a nil base must not panic and must fall back to
+	// http.DefaultTransport.
+	t.Run("without discovery config", func(t *testing.T) {
+		client, err := buildRPHTTPClient("https://example.com", nil, nil)
+		if err != nil {
+			t.Fatalf("buildRPHTTPClient() error = %v", err)
+		}
+		if client.Transport != http.DefaultTransport {
+			t.Errorf("Transport = %v, want http.DefaultTransport", client.Transport)
+		}
+	})
+
+	t.Run("with discovery config", func(t *testing.T) {
+		disc := &oidc.DiscoveryConfiguration{Issuer: "https://example.com"}
+		client, err := buildRPHTTPClient("https://example.com", nil, []Option{WithDiscoveryConfig(disc)})
+		if err != nil {
+			t.Fatalf("buildRPHTTPClient() error = %v", err)
+		}
+		cdt, ok := client.Transport.(*cachedDiscoveryTransport)
+		if !ok {
+			t.Fatalf("Transport is %T, want *cachedDiscoveryTransport", client.Transport)
+		}
+		if cdt.base != http.DefaultTransport {
+			t.Errorf("base = %v, want http.DefaultTransport", cdt.base)
+		}
+	})
+}
+
 func Test_cachedDiscoveryTransport_wellKnownURL(t *testing.T) {
 	const wellKnownURL = "https://example.com/.well-known/openid-configuration"
 	body := []byte(`{"issuer":"https://example.com"}`)

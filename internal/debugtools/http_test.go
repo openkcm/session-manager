@@ -17,6 +17,18 @@ func (rt dummyRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
 	return rt.resp, rt.err
 }
 
+func Test_NewTransport_nilBase(t *testing.T) {
+	// Regression: a nil base must not panic and must fall back to
+	// http.DefaultTransport.
+	tr, ok := NewTransport(nil).(*transport)
+	if !ok {
+		t.Fatalf("NewTransport returned %T, want *transport", NewTransport(nil))
+	}
+	if tr.base != http.DefaultTransport {
+		t.Errorf("base = %v, want http.DefaultTransport", tr.base)
+	}
+}
+
 func Test_transport_RoundTrip(t *testing.T) {
 	ctx := t.Context()
 	const url = "http://localhost"

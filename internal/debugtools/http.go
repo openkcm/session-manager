@@ -13,7 +13,13 @@ type transport struct {
 	base http.RoundTripper
 }
 
+// NewTransport creates a new http.RoundTripper which logs the request and response dumps.
+//
+// If base is nil, [http.DefaultTransport] is used.
 func NewTransport(base http.RoundTripper) http.RoundTripper {
+	if base == nil {
+		base = http.DefaultTransport
+	}
 	return &transport{
 		base: base,
 	}
