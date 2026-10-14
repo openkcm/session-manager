@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.20.0](https://github.com/openkcm/session-manager/compare/v0.19.0...v0.20.0) (2026-10-14)
+
+
+### Features
+
+* emit user.last_seen gauge metric on login ([5a86afe](https://github.com/openkcm/session-manager/commit/5a86afe355f2f6cfe9e451a71f6a9f363ffae23d))
+* **KMS20-7826:** emit user_last_seen gauge metric on login ([#371](https://github.com/openkcm/session-manager/issues/371)) ([5a86afe](https://github.com/openkcm/session-manager/commit/5a86afe355f2f6cfe9e451a71f6a9f363ffae23d))
+* **KMS20-7947:** bump common-sdk to v1.19.4, deprecate AllowTLSRenegotiationOnce ([#373](https://github.com/openkcm/session-manager/issues/373)) ([d6020fa](https://github.com/openkcm/session-manager/commit/d6020fa978054e07636187c4329c9416d9c53b9b))
+* **valkey:** support sentinel mode ([#376](https://github.com/openkcm/session-manager/issues/376)) ([dac61a0](https://github.com/openkcm/session-manager/commit/dac61a02d9e17ee093f7fac027262f11e54ed342))
+
+
+### Bug Fixes
+
+* **deps:** bump golang from 1.26 to 1.27 in the docker-group group across 1 directory ([#359](https://github.com/openkcm/session-manager/issues/359)) ([0084af5](https://github.com/openkcm/session-manager/commit/0084af5dc1ef770f46a6d188672ed15dc50fda6e))
+* **deps:** bump golang in the docker-group group across 1 directory ([0084af5](https://github.com/openkcm/session-manager/commit/0084af5dc1ef770f46a6d188672ed15dc50fda6e))
+* **deps:** bump the gomod-group group across 1 directory with 12 updates ([#375](https://github.com/openkcm/session-manager/issues/375)) ([129699d](https://github.com/openkcm/session-manager/commit/129699d8cd7f40399306e458201ec387af65ad91))
+* **deps:** bump the gomod-group group across 1 directory with 7 updates ([#362](https://github.com/openkcm/session-manager/issues/362)) ([6f5508d](https://github.com/openkcm/session-manager/commit/6f5508dce85e2dd27b23adc9e0350c2d64a1451e))
+* **deps:** bump the gomod-group group with 6 updates ([#372](https://github.com/openkcm/session-manager/issues/372)) ([3f2e3c8](https://github.com/openkcm/session-manager/commit/3f2e3c84c538c46cf215948fcc7c7710013f0a61))
+* **deps:** bump the gomod-group group with 9 updates ([#368](https://github.com/openkcm/session-manager/issues/368)) ([c99309f](https://github.com/openkcm/session-manager/commit/c99309f52c889a64df3d5fb4f63dd60d038e1dce))
+* forward properties ([#370](https://github.com/openkcm/session-manager/issues/370)) ([f30c96c](https://github.com/openkcm/session-manager/commit/f30c96c7d44c30a34671178fa38f3030eeb85ba9))
+* forward properties in oidcmapping compatibility layer ([f30c96c](https://github.com/openkcm/session-manager/commit/f30c96c7d44c30a34671178fa38f3030eeb85ba9))
+* handle token attributes in refresh token flow ([#363](https://github.com/openkcm/session-manager/issues/363)) ([86048a7](https://github.com/openkcm/session-manager/commit/86048a7c6516cb7e7af1cc4fa1ecb2b28cfd3ea8))
+* update security policy link ([8311d43](https://github.com/openkcm/session-manager/commit/8311d4339f4756deeb8ee2f5233b8202d56c6955))
+
 ## [0.19.0](https://github.com/openkcm/session-manager/compare/v0.18.0...v0.19.0) (2026-08-31)
 
 
