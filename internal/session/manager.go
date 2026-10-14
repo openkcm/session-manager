@@ -339,17 +339,20 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (
 
 	err = m.sessions.StoreSession(ctx, session)
 	if err != nil {
+		// empty reason becomes UNSPECIFIED. No fail reason from common-sdk was adequate here.
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "")
 		return OIDCSessionData{}, fmt.Errorf("storing session: %w", err)
 	}
 
 	if err := m.sessions.BumpActive(ctx, session.ID, m.idleSessionTimeout); err != nil {
+		// empty reason becomes UNSPECIFIED. No fail reason from common-sdk was adequate here.
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "")
 		return OIDCSessionData{}, fmt.Errorf("bumping session active status: %w", err)
 	}
 
 	err = m.sessions.DeleteState(ctx, stateID)
 	if err != nil {
+		// empty reason becomes UNSPECIFIED. No fail reason from common-sdk was adequate here.
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "")
 		return OIDCSessionData{}, fmt.Errorf("deleting state: %w", err)
 	}
