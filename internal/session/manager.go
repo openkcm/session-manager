@@ -224,12 +224,14 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (
 	ctx = slogctx.With(ctx, "tenantId", state.TenantID)
 
 	if time.Now().After(state.Expiry) {
+		metadata[otlpaudit.UserInitiatorIDKey] = "unknown - state expired"
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "state expired")
 		return OIDCSessionData{}, serviceerr.ErrStateExpired
 	}
 
 	trust, err := m.trust.Get(ctx, state.TenantID)
 	if err != nil {
+		metadata[otlpaudit.UserInitiatorIDKey] = "unknown - failed to get trust"
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get trust")
 		return OIDCSessionData{}, fmt.Errorf("getting trust: %w", err)
 	}
@@ -237,12 +239,14 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (
 	oidc := trust.GetOidc()
 	openidConf, err := m.getOpenIDConfig(ctx, oidc.GetIssuer())
 	if err != nil {
+		metadata[otlpaudit.UserInitiatorIDKey] = "unknown - failed to get openid configuration"
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get openid configuration")
 		return OIDCSessionData{}, fmt.Errorf("getting openid configuration: %w", err)
 	}
 
 	tokens, err := m.exchangeCode(ctx, code, state.PKCEVerifier, oidc)
 	if err != nil {
+		metadata[otlpaudit.UserInitiatorIDKey] = "unknown - failed to exchange code for tokens"
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to exchange code for tokens")
 		return OIDCSessionData{}, fmt.Errorf("exchanging code for tokens: %w", err)
 	}
@@ -257,12 +261,14 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (
 	}
 	token, err := jwt.ParseSigned(tokens.IDToken, algs)
 	if err != nil {
+		metadata[otlpaudit.UserInitiatorIDKey] = "unknown - failed to parse id token"
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to parse id token")
 		return OIDCSessionData{}, fmt.Errorf("parsing id token: %w, %s", err, algs)
 	}
 
 	keyset, err := m.getProviderKeySet(ctx, openidConf)
 	if err != nil {
+		metadata[otlpaudit.UserInitiatorIDKey] = "unknown - failed to get jwks for provider"
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get jwks for provider")
 		return OIDCSessionData{}, fmt.Errorf("getting jwks for a provider: %w", err)
 	}
@@ -284,9 +290,12 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (
 	var customClaims CustomClaims
 	var extraClaims ExtraClaims
 	if err := token.Claims(keyset, &standardClaims, &customClaims, &extraClaims); err != nil {
+		metadata[otlpaudit.UserInitiatorIDKey] = "unknown - failed to get JWT claims"
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "failed to get JWT claims")
 		return OIDCSessionData{}, fmt.Errorf("getting JWT claims: %w", err)
 	}
+
+	metadata[otlpaudit.UserInitiatorIDKey] = customClaims.UserUUID
 
 	if err := standardClaims.Validate(jwt.Expected{
 		Issuer:      oidc.GetIssuer(),
