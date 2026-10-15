@@ -224,26 +224,26 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (
 	ctx = slogctx.With(ctx, "tenantId", state.TenantID)
 
 	if time.Now().After(state.Expiry) {
-		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, string(otlpaudit.FAILREASON_SESSIONEXPIRED))
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, otlpaudit.FAILREASON_SESSIONEXPIRED)
 		return OIDCSessionData{}, serviceerr.ErrStateExpired
 	}
 
 	trust, err := m.trust.Get(ctx, state.TenantID)
 	if err != nil {
-		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, string(otlpaudit.FAILREASON_TOKENINVALID))
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, otlpaudit.FAILREASON_TOKENINVALID)
 		return OIDCSessionData{}, fmt.Errorf("getting trust: %w", err)
 	}
 
 	oidc := trust.GetOidc()
 	openidConf, err := m.getOpenIDConfig(ctx, oidc.GetIssuer())
 	if err != nil {
-		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, string(otlpaudit.FAILREASON_TOKENINVALID))
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, otlpaudit.FAILREASON_TOKENINVALID)
 		return OIDCSessionData{}, fmt.Errorf("getting openid configuration: %w", err)
 	}
 
 	tokens, err := m.exchangeCode(ctx, code, state.PKCEVerifier, oidc)
 	if err != nil {
-		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, string(otlpaudit.FAILREASON_TOKENINVALID))
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, otlpaudit.FAILREASON_TOKENINVALID)
 		return OIDCSessionData{}, fmt.Errorf("exchanging code for tokens: %w", err)
 	}
 
@@ -257,13 +257,13 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (
 	}
 	token, err := jwt.ParseSigned(tokens.IDToken, algs)
 	if err != nil {
-		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, string(otlpaudit.FAILREASON_TOKENINVALID))
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, otlpaudit.FAILREASON_TOKENINVALID)
 		return OIDCSessionData{}, fmt.Errorf("parsing id token: %w, %s", err, algs)
 	}
 
 	keyset, err := m.getProviderKeySet(ctx, openidConf)
 	if err != nil {
-		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, string(otlpaudit.FAILREASON_TOKENINVALID))
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, otlpaudit.FAILREASON_TOKENINVALID)
 		return OIDCSessionData{}, fmt.Errorf("getting jwks for a provider: %w", err)
 	}
 
@@ -284,7 +284,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (
 	var customClaims CustomClaims
 	var extraClaims ExtraClaims
 	if err := token.Claims(keyset, &standardClaims, &customClaims, &extraClaims); err != nil {
-		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, string(otlpaudit.FAILREASON_TOKENINVALID))
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, otlpaudit.FAILREASON_TOKENINVALID)
 		return OIDCSessionData{}, fmt.Errorf("getting JWT claims: %w", err)
 	}
 
@@ -295,7 +295,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (
 		AnyAudience: jwt.Audience{oidc.GetClientId()},
 		Time:        time.Now(),
 	}); err != nil {
-		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, string(otlpaudit.FAILREASON_TOKENINVALID))
+		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, otlpaudit.FAILREASON_TOKENINVALID)
 		return OIDCSessionData{}, fmt.Errorf("validating id token claims: %w", err)
 	}
 
@@ -588,13 +588,13 @@ func checkCookie(ctx context.Context, csrfCookie *http.Cookie) {
 // sendUserLoginFailureAudit creates the user-login-failure audit event and sends it.
 // The function logs any errors encountered while creating or sending the event but
 // does not propagate them to the caller.
-func (m *Manager) sendUserLoginFailureAudit(ctx context.Context, metadata otlpaudit.EventMetadata, objectID, reason string) {
+func (m *Manager) sendUserLoginFailureAudit(ctx context.Context, metadata otlpaudit.EventMetadata, objectID string, reason otlpaudit.FailReason) {
 	if m.audit == nil {
 		slogctx.Warn(ctx, "audit logger is nil; skipping user login failure event")
 		return
 	}
 
-	event, err := otlpaudit.NewUserLoginFailureEvent(metadata, objectID, otlpaudit.LOGINMETHOD_OPENIDCONNECT, otlpaudit.FailReason(reason), objectID)
+	event, err := otlpaudit.NewUserLoginFailureEvent(metadata, objectID, otlpaudit.LOGINMETHOD_OPENIDCONNECT, reason, nil)
 	if err != nil {
 		slogctx.Error(ctx, "creating audit log", "error", err)
 		return
