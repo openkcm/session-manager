@@ -30,8 +30,8 @@ func TestHPARendering(t *testing.T) {
 			values: "--set autoscaling.enabled=true",
 			expected: []string{
 				"kind: HorizontalPodAutoscaler",
-				"minReplicas: 1",
-				"maxReplicas: 1",
+				"minReplicas: 2",
+				"maxReplicas: 5",
 				"averageUtilization: 80",
 			},
 			shouldExist: true,
@@ -57,6 +57,16 @@ func TestHPARendering(t *testing.T) {
 				"averageUtilization: 70",
 				"name: memory",
 				"averageUtilization: 85",
+			},
+			shouldExist: true,
+		},
+		{
+			name:   "HPA with only a CPU target and scaling behavior",
+			values: "--set autoscaling.enabled=true --set autoscaling.targetMemoryUtilizationPercentage=null --set autoscaling.behavior.scaleDown.stabilizationWindowSeconds=300",
+			expected: []string{
+				"name: cpu",
+				"behavior:",
+				"stabilizationWindowSeconds: 300",
 			},
 			shouldExist: true,
 		},

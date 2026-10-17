@@ -1,0 +1,47 @@
+{{- if .Values.networkPolicy.enabled }}
+---
+# Applies to all pods of the release: API server, housekeeper and migration job.
+# Outgoing traffic is not restricted.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "session-manager.fullname" . }}
+  namespace: {{ include "session-manager.namespace" . }}
+  labels:
+    {{- include "session-manager.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "session-manager.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    {{- with .Values.networkPolicy.http.from }}
+    # /sm/* endpoints for browser sign-in: only the listed callers (Envoy Gateway).
+    - ports:
+        - port: http
+          protocol: TCP
+      from:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.networkPolicy.grpc.from }}
+    # gRPC API: only the listed callers (ExtAuthZ and CMK).
+    - ports:
+        - port: grpc
+          protocol: TCP
+      from:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.networkPolicy.status.from }}
+    # Status endpoints (metrics). Probes from the kubelet are not affected by
+    # NetworkPolicies on most network plugins.
+    - ports:
+        - port: http-status
+          protocol: TCP
+      from:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.networkPolicy.extraIngress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}

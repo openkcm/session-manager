@@ -12,9 +12,10 @@ import (
 func TestDeploymentRendering(t *testing.T) {
 	ctx := t.Context()
 	tests := []struct {
-		name     string
-		values   string
-		expected []string
+		name       string
+		values     string
+		expected   []string
+		unexpected []string
 	}{
 		{
 			name:   "default values",
@@ -25,6 +26,22 @@ func TestDeploymentRendering(t *testing.T) {
 				"app.kubernetes.io/name: session-manager",
 				"app.kubernetes.io/component: session-manager",
 				"replicas: 1",
+				"namespace: default",
+				"checksum/config:",
+				"automountServiceAccountToken: false",
+				"enableServiceLinks: false",
+				"runAsNonRoot: true",
+				"runAsUser: 65532",
+				"readOnlyRootFilesystem: true",
+				"allowPrivilegeEscalation: false",
+				"mountPath: /tmp",
+				`args: ["api-server"]`,
+				"ephemeral-storage: 256Mi",
+				"ephemeral-storage: 1Gi",
+			},
+			unexpected: []string{
+				"command:",
+				"initContainers:",
 			},
 		},
 		{
@@ -38,7 +55,7 @@ func TestDeploymentRendering(t *testing.T) {
 			name:   "custom image tag",
 			values: "--set image.tag=v1.2.3",
 			expected: []string{
-				`image: "ghcr.io/openkcm/images/session-manager:v1.2.3"`,
+				`image: "ghcr.io/openkcm/session-manager/images/session-manager:v1.2.3"`,
 			},
 		},
 		{
@@ -55,14 +72,18 @@ func TestDeploymentRendering(t *testing.T) {
 				"kind: Deployment",
 				"selector:",
 			},
+			unexpected: []string{
+				"replicas:",
+			},
 		},
 		{
 			name:   "custom pod annotations",
 			values: "--set pod.annotations.prometheus\\.io/scrape=true --set pod.annotations.prometheus\\.io/port=8080",
 			expected: []string{
 				"annotations:",
-				"prometheus.io/port: 8080",
-				"prometheus.io/scrape: true",
+				// Annotation values are always rendered as strings.
+				`prometheus.io/port: "8080"`,
+				`prometheus.io/scrape: "true"`,
 			},
 		},
 		{
@@ -136,13 +157,53 @@ func TestDeploymentRendering(t *testing.T) {
 			values: "",
 			expected: []string{
 				"volumeMounts:",
-				"name: session-manager-config-volume",
+				"name: config",
 				"mountPath: /etc/session-manager",
 				"readOnly: true",
 				"volumes:",
-				"projected:",
 				"configMap:",
-				"name: session-manager-config",
+				"name: tmp",
+				"emptyDir:",
+			},
+			unexpected: []string{
+				"projected:",
+				"session-manager-config",
+			},
+		},
+		{
+			name:   "configuration path does not depend on nameOverride",
+			values: "--set nameOverride=custom-name",
+			expected: []string{
+				"mountPath: /etc/session-manager",
+				"app.kubernetes.io/name: custom-name",
+			},
+			unexpected: []string{
+				"mountPath: /etc/custom-name",
+			},
+		},
+		{
+			name:   "with image command as a string",
+			values: "--set image.command=/custom/command",
+			expected: []string{
+				"command:",
+				`- "/custom/command"`,
+			},
+		},
+		{
+			name:   "with lifecycle",
+			values: "--set lifecycle.preStop.sleep.seconds=5",
+			expected: []string{
+				"lifecycle:",
+				"preStop:",
+				"seconds: 5",
+			},
+		},
+		{
+			name:   "with topologySpreadConstraints",
+			values: "--set topologySpreadConstraints[0].maxSkew=1 --set topologySpreadConstraints[0].topologyKey=topology.kubernetes.io/zone",
+			expected: []string{
+				"topologySpreadConstraints:",
+				"topologyKey: topology.kubernetes.io/zone",
 			},
 		},
 		{
@@ -303,6 +364,11 @@ func TestDeploymentRendering(t *testing.T) {
 					t.Errorf("expected output to contain %q, but it didn't.\nOutput: %s", expected, output)
 				}
 			}
+			for _, unexpected := range tt.unexpected {
+				if strings.Contains(output, unexpected) {
+					t.Errorf("expected output NOT to contain %q, but it did.\nOutput: %s", unexpected, output)
+				}
+			}
 		})
 	}
 }
@@ -310,9 +376,10 @@ func TestDeploymentRendering(t *testing.T) {
 func TestHousekeeperDeployment(t *testing.T) {
 	ctx := t.Context()
 	tests := []struct {
-		name     string
-		values   string
-		expected []string
+		name       string
+		values     string
+		expected   []string
+		unexpected []string
 	}{
 		{
 			name:   "default housekeeper deployment",
@@ -332,23 +399,48 @@ func TestHousekeeperDeployment(t *testing.T) {
 			expected: []string{
 				"resources:",
 				"limits:",
-				"cpu: 500m",
-				"memory: 512Mi",
-				"ephemeral-storage: 1Gi",
+				"memory: 256Mi",
+				"ephemeral-storage: 512Mi",
 				"requests:",
-				"cpu: 100m",
-				"memory: 128Mi",
-				"ephemeral-storage: 256Mi",
+				"cpu: 50m",
+				"memory: 64Mi",
+				"ephemeral-storage: 128Mi",
 			},
 		},
 		{
 			name:   "housekeeper with custom resources",
-			values: "--set resources.limits.cpu=200m --set resources.limits.memory=256Mi",
+			values: "--set housekeeper.resources.limits.cpu=200m --set housekeeper.resources.limits.memory=300Mi",
 			expected: []string{
 				"resources:",
 				"limits:",
 				"cpu: 200m",
-				"memory: 256Mi",
+				"memory: 300Mi",
+			},
+		},
+		{
+			name:   "housekeeper does not use the API server resources",
+			values: "--set resources.limits.cpu=900m",
+			unexpected: []string{
+				"cpu: 900m",
+			},
+		},
+		{
+			name:   "housekeeper probes, status port and update strategy",
+			values: "",
+			expected: []string{
+				"type: Recreate",
+				"checksum/config:",
+				"containerPort: 8888",
+				"name: http-status",
+				"path: /probe/liveness",
+				"path: /probe/readiness",
+				"runAsUser: 65532",
+				"readOnlyRootFilesystem: true",
+			},
+			// The housekeeper serves only the status endpoints.
+			unexpected: []string{
+				"containerPort: 8080",
+				"containerPort: 9091",
 			},
 		},
 		{
@@ -356,19 +448,21 @@ func TestHousekeeperDeployment(t *testing.T) {
 			values: "",
 			expected: []string{
 				"volumeMounts:",
-				"name: session-manager-config-volume",
+				"name: config",
 				"mountPath: /etc/session-manager",
 				"volumes:",
-				"projected:",
 				"configMap:",
-				"name: session-manager-config",
+				"mountPath: /tmp",
+			},
+			unexpected: []string{
+				"projected:",
 			},
 		},
 		{
 			name:   "housekeeper with custom image",
 			values: "--set image.tag=v2.0.0",
 			expected: []string{
-				`image: "ghcr.io/openkcm/images/session-manager:v2.0.0"`,
+				`image: "ghcr.io/openkcm/session-manager/images/session-manager:v2.0.0"`,
 			},
 		},
 		{
@@ -376,7 +470,7 @@ func TestHousekeeperDeployment(t *testing.T) {
 			values: "--set pod.annotations.custom=value",
 			expected: []string{
 				"annotations:",
-				"custom: value",
+				`custom: "value"`,
 			},
 		},
 		{
@@ -469,10 +563,21 @@ func TestHousekeeperDeployment(t *testing.T) {
 			},
 		},
 		{
-			name:   "housekeeper with empty env",
-			values: "",
+			name:   "housekeeper with extra environment variables",
+			values: "--set extraEnvs[0].name=PGSSLMODE --set extraEnvs[0].value=verify-full --set extraEnvsFrom[0].secretRef.name=db-env",
 			expected: []string{
-				"env: []",
+				"name: PGSSLMODE",
+				"value: verify-full",
+				"envFrom:",
+				"name: db-env",
+			},
+		},
+		{
+			name:   "housekeeper with affinity",
+			values: "--set housekeeper.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key=pool",
+			expected: []string{
+				"affinity:",
+				"key: pool",
 			},
 		},
 	}
@@ -500,6 +605,11 @@ func TestHousekeeperDeployment(t *testing.T) {
 			for _, expected := range tt.expected {
 				if !strings.Contains(output, expected) {
 					t.Errorf("expected output to contain %q, but it didn't.\nOutput: %s", expected, output)
+				}
+			}
+			for _, unexpected := range tt.unexpected {
+				if strings.Contains(output, unexpected) {
+					t.Errorf("expected output NOT to contain %q, but it did.\nOutput: %s", unexpected, output)
 				}
 			}
 		})

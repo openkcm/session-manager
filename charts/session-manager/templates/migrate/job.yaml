@@ -1,22 +1,34 @@
+{{- if .Values.migrate.enabled }}
+---
+# Database migration. Runs as a Helm hook before every install and upgrade, so the API
+# server never starts on an outdated schema.
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "session-manager.fullname" . }}-migrate
+  name: {{ include "session-manager.fullname" . | trunc 55 | trimSuffix "-" }}-migrate
+  namespace: {{ include "session-manager.namespace" . }}
   labels:
     {{- include "session-manager.labels" . | nindent 4 }}
-    app.kuberentes.io/component: migrate
+    app.kubernetes.io/component: migrate
   annotations:
     helm.sh/hook: pre-install,pre-upgrade
-    helm.sh/weight: "0"
+    helm.sh/hook-weight: "0"
     helm.sh/hook-delete-policy: before-hook-creation
 spec:
-  ttlSecondsAfterFinished: 300
+  backoffLimit: {{ .Values.migrate.backoffLimit }}
+  {{- with .Values.migrate.activeDeadlineSeconds }}
+  activeDeadlineSeconds: {{ . }}
+  {{- end }}
+  {{- if not (kindIs "invalid" .Values.migrate.ttlSecondsAfterFinished) }}
+  ttlSecondsAfterFinished: {{ .Values.migrate.ttlSecondsAfterFinished }}
+  {{- end }}
   template:
     metadata:
-      {{- with .Values.pod.annotations }}
       annotations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+        checksum/config: {{ include "session-manager.config" . | sha256sum }}
+        {{- with (merge (deepCopy (.Values.migrate.podAnnotations | default dict)) (.Values.pod.annotations | default dict)) }}
+        {{- include "session-manager.annotations" . | trim | nindent 8 }}
+        {{- end }}
       labels:
         {{- include "session-manager.labels" . | nindent 8 }}
         {{- with .Values.pod.labels }}
@@ -25,61 +37,56 @@ spec:
         app.kubernetes.io/component: migrate
     spec:
       restartPolicy: OnFailure
-      automountServiceAccountToken: false
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- /*
+      The chart's ServiceAccount is created after the hooks have run, so the job can only use
+      a ServiceAccount that exists before the installation.
+      */}}
+      {{- if and (not .Values.serviceAccount.create) .Values.serviceAccount.name }}
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      {{- end }}
+      automountServiceAccountToken: false
+      enableServiceLinks: {{ .Values.pod.enableServiceLinks }}
       {{- with .Values.pod.securityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      initContainers:
       {{- with .Values.extraInitContainers }}
+      initContainers:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-      {{- with .Values.extraContainers }}
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-        - name: {{ include "session-manager.name" . }}
+        - name: {{ include "session-manager.name" . }}-migrate
+          image: "{{ template "session-manager.image" (tuple .Values.image) }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with include "session-manager.command" . | trim }}
+          {{- . | nindent 10 }}
+          {{- end }}
+          args: ["migrate"]
           {{- with .Values.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          image: "{{ template "session-manager.image" (tuple .Values.image $.Chart.AppVersion) }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- with .Values.image.command }}
-          command: {{ . }}
-          {{- end }}
-          args: [ "migrate" ]
-          env: []
+          {{- include "session-manager.env" . | nindent 10 }}
+          {{- with .Values.migrate.resources }}
           resources:
-          {{- if .Values.migrate.resources }}
-            {{- toYaml .Values.migrate.resources | nindent 12 }}
-          {{- else }}
-            limits:
-              cpu: 200m
-              memory: 128Mi
-              ephemeral-storage: 512Mi
-            requests:
-              cpu: 100m
-              memory: 64Mi
-              ephemeral-storage: 128Mi
-          {{- end }}
-          volumeMounts:
-            - name: {{ include "session-manager.fullname" . }}-config-volume
-              mountPath: /etc/{{ include "session-manager.name" . }}
-              readOnly: true
-          {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
           {{- end }}
-      volumes:
-        - name: {{ include "session-manager.fullname" . }}-config-volume
-          projected:
-            sources:
-              - configMap:
-                  name: {{ include "session-manager.fullname" . }}-config
-      {{- with .Values.extraVolumes }}
+          {{- include "session-manager.volumeMounts" . | nindent 10 }}
+        {{- /* Not extraContainers: a sidecar that keeps running would keep the job from completing. */}}
+        {{- with .Values.migrate.extraContainers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- include "session-manager.volumes" (dict "ctx" . "configMap" (include "session-manager.migrateConfigMapName" .)) | nindent 6 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

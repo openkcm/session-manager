@@ -1,0 +1,21 @@
+{{- if .Values.migrate.enabled }}
+---
+# Copy of the configuration for the migration job. The job runs as a Helm hook before the
+# release's own resources are created, so its configuration is a hook as well. It is
+# deleted when the migration succeeds and kept for troubleshooting when it fails.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "session-manager.migrateConfigMapName" . }}
+  namespace: {{ include "session-manager.namespace" . }}
+  labels:
+    {{- include "session-manager.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrate
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-1"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+data:
+  config.yaml: |-
+    {{- include "session-manager.config" . | nindent 4 }}
+{{- end }}

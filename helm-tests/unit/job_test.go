@@ -12,9 +12,10 @@ import (
 func TestMigrateJobRendering(t *testing.T) {
 	ctx := t.Context()
 	tests := []struct {
-		name     string
-		values   string
-		expected []string
+		name       string
+		values     string
+		expected   []string
+		unexpected []string
 	}{
 		{
 			name:   "default migrate job",
@@ -22,19 +23,69 @@ func TestMigrateJobRendering(t *testing.T) {
 			expected: []string{
 				"kind: Job",
 				"name: session-manager-migrate",
-				"app.kuberentes.io/component: migrate",
+				"app.kubernetes.io/component: migrate",
 				"helm.sh/hook: pre-install,pre-upgrade",
-				"helm.sh/weight: \"0\"",
+				"helm.sh/hook-weight: \"0\"",
 				"helm.sh/hook-delete-policy: before-hook-creation",
 				"ttlSecondsAfterFinished: 300",
+				"backoffLimit: 6",
 				"restartPolicy: OnFailure",
+				"ephemeral-storage: 128Mi",
+				"ephemeral-storage: 512Mi",
+				"automountServiceAccountToken: false",
+				"runAsUser: 65532",
+				"readOnlyRootFilesystem: true",
+			},
+			// The chart's ServiceAccount does not exist yet when the hook runs.
+			unexpected: []string{
+				"app.kuberentes.io",
+				"serviceAccountName:",
+				"activeDeadlineSeconds:",
+			},
+		},
+		{
+			name:   "with a ServiceAccount that exists before the installation",
+			values: "--set serviceAccount.create=false --set serviceAccount.name=existing-sa",
+			expected: []string{
+				"serviceAccountName: existing-sa",
+			},
+		},
+		{
+			name:   "with job settings",
+			values: "--set migrate.backoffLimit=2 --set migrate.activeDeadlineSeconds=600 --set migrate.ttlSecondsAfterFinished=0",
+			expected: []string{
+				"backoffLimit: 2",
+				"activeDeadlineSeconds: 600",
+				"ttlSecondsAfterFinished: 0",
+			},
+		},
+		{
+			name:   "without ttlSecondsAfterFinished",
+			values: "--set migrate.ttlSecondsAfterFinished=null",
+			unexpected: []string{
+				"ttlSecondsAfterFinished",
+			},
+		},
+		{
+			name:   "with migrate.podAnnotations",
+			values: "--set migrate.podAnnotations.sidecar\\.istio\\.io/inject=false --set pod.annotations.team=kms",
+			expected: []string{
+				`sidecar.istio.io/inject: "false"`,
+				`team: "kms"`,
+			},
+		},
+		{
+			name:   "with migrate.resources",
+			values: "--set migrate.resources.limits.memory=300Mi",
+			expected: []string{
+				"memory: 300Mi",
 			},
 		},
 		{
 			name:   "with custom image tag",
 			values: "--set image.tag=v2.0.0",
 			expected: []string{
-				`image: "ghcr.io/openkcm/images/session-manager:v2.0.0"`,
+				`image: "ghcr.io/openkcm/session-manager/images/session-manager:v2.0.0"`,
 			},
 		},
 		{
@@ -53,10 +104,11 @@ func TestMigrateJobRendering(t *testing.T) {
 			},
 		},
 		{
-			name:   "with empty env",
-			values: "",
+			name:   "with extra environment variables",
+			values: "--set extraEnvs[0].name=PGSSLMODE --set extraEnvs[0].value=verify-full",
 			expected: []string{
-				"env: []",
+				"name: PGSSLMODE",
+				"value: verify-full",
 			},
 		},
 		{
@@ -64,7 +116,7 @@ func TestMigrateJobRendering(t *testing.T) {
 			values: "--set pod.annotations.custom=annotation",
 			expected: []string{
 				"annotations:",
-				"custom: annotation",
+				`custom: "annotation"`,
 			},
 		},
 		{
@@ -103,13 +155,16 @@ func TestMigrateJobRendering(t *testing.T) {
 			values: "",
 			expected: []string{
 				"volumeMounts:",
-				"name: session-manager-config-volume",
+				"name: config",
 				"mountPath: /etc/session-manager",
 				"readOnly: true",
 				"volumes:",
-				"projected:",
 				"configMap:",
+				// The job uses the hook copy of the configuration.
 				"name: session-manager-config",
+			},
+			unexpected: []string{
+				"projected:",
 			},
 		},
 		{
@@ -139,8 +194,16 @@ func TestMigrateJobRendering(t *testing.T) {
 			},
 		},
 		{
-			name:   "with extraContainers",
+			name:   "without the extraContainers of the deployments",
 			values: "--set extraContainers[0].name=backup --set extraContainers[0].image=backup:1.0",
+			// A sidecar that keeps running would keep the job from completing.
+			unexpected: []string{
+				"name: backup",
+			},
+		},
+		{
+			name:   "with migrate.extraContainers",
+			values: "--set migrate.extraContainers[0].name=backup --set migrate.extraContainers[0].image=backup:1.0",
 			expected: []string{
 				"name: backup",
 				"image: backup:1.0",
@@ -202,6 +265,46 @@ func TestMigrateJobRendering(t *testing.T) {
 					t.Errorf("expected output to contain %q, but it didn't.\nOutput: %s", expected, output)
 				}
 			}
+			for _, unexpected := range tt.unexpected {
+				if strings.Contains(output, unexpected) {
+					t.Errorf("expected output NOT to contain %q, but it did.\nOutput: %s", unexpected, output)
+				}
+			}
 		})
+	}
+}
+
+func TestMigrateConfigMapRendering(t *testing.T) {
+	ctx := t.Context()
+	args := []string{"template", appName, path, "-s", "templates/migrate/configmap.yaml",
+		"--set", "image.tag=latest",
+	}
+
+	cmd := exec.CommandContext(ctx, "helm", args...)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+
+	err := cmd.Run()
+	if err != nil {
+		t.Fatalf("helm template failed: %v\nOutput: %s", err, out.String())
+	}
+
+	output := out.String()
+	// The job runs before the release's resources exist, so its configuration is a hook
+	// that runs first and is deleted when the migration succeeds.
+	for _, expected := range []string{
+		"kind: ConfigMap",
+		"name: session-manager-config",
+		"app.kubernetes.io/component: migrate",
+		"helm.sh/hook: pre-install,pre-upgrade",
+		"helm.sh/hook-weight: \"-1\"",
+		"helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded",
+		"config.yaml:",
+		"dbModule: database.module.pgxpool",
+	} {
+		if !strings.Contains(output, expected) {
+			t.Errorf("expected output to contain %q, but it didn't.\nOutput: %s", expected, output)
+		}
 	}
 }
