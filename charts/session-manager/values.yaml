@@ -171,13 +171,17 @@ service:
       targetPort: grpc
       appProtocol: grpc
 
-# -- Resources of the API server container.
+# -- Resources of the API server container. The ephemeral-storage limit covers the
+# container's logs and the `/tmp` volume (`tmpVolume.sizeLimit`); a pod that exceeds it is
+# evicted.
 resources:
   requests:
     cpu: 100m
     memory: 128Mi
+    ephemeral-storage: 256Mi
   limits:
     memory: 512Mi
+    ephemeral-storage: 1Gi
 
 # -- Startup probe of the API server. Empty: none.
 startupProbe: {}
@@ -297,13 +301,16 @@ housekeeper:
   # housekeepers never refresh the same tokens.
   strategy:
     type: Recreate
-  # -- Resources of the housekeeper container.
+  # -- Resources of the housekeeper container, including ephemeral storage for its logs
+  # and `/tmp`.
   resources:
     requests:
       cpu: 50m
       memory: 64Mi
+      ephemeral-storage: 128Mi
     limits:
       memory: 256Mi
+      ephemeral-storage: 512Mi
   # -- Liveness probe. Needs `config.status.enabled: true`.
   livenessProbe:
     httpGet:
@@ -346,13 +353,16 @@ migrate:
   # `sidecar.istio.io/inject: "false"`, if a service mesh sidecar would keep the job from
   # completing.
   podAnnotations: {}
-  # -- Resources of the migration container.
+  # -- Resources of the migration container, including ephemeral storage for its logs and
+  # `/tmp`.
   resources:
     requests:
       cpu: 100m
       memory: 64Mi
+      ephemeral-storage: 128Mi
     limits:
       memory: 256Mi
+      ephemeral-storage: 512Mi
   # -- Additional containers of the job's pod. They must exit on their own, or the job
   # never completes.
   extraContainers: []

@@ -30,6 +30,8 @@ func TestMigrateJobRendering(t *testing.T) {
 				"ttlSecondsAfterFinished: 300",
 				"backoffLimit: 6",
 				"restartPolicy: OnFailure",
+				"ephemeral-storage: 128Mi",
+				"ephemeral-storage: 512Mi",
 				"automountServiceAccountToken: false",
 				"runAsUser: 65532",
 				"readOnlyRootFilesystem: true",

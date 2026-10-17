@@ -36,6 +36,8 @@ func TestDeploymentRendering(t *testing.T) {
 				"allowPrivilegeEscalation: false",
 				"mountPath: /tmp",
 				`args: ["api-server"]`,
+				"ephemeral-storage: 256Mi",
+				"ephemeral-storage: 1Gi",
 			},
 			unexpected: []string{
 				"command:",
@@ -398,9 +400,11 @@ func TestHousekeeperDeployment(t *testing.T) {
 				"resources:",
 				"limits:",
 				"memory: 256Mi",
+				"ephemeral-storage: 512Mi",
 				"requests:",
 				"cpu: 50m",
 				"memory: 64Mi",
+				"ephemeral-storage: 128Mi",
 			},
 		},
 		{
