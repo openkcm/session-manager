@@ -1,189 +1,138 @@
-# Override the "name" value, which is used to annotate some of
-# the resources that are created by this Chart (using "app.kubernetes.io/name").
-# +docs:property
+# Default values for the OpenKCM Session Manager chart.
+#
+# The chart runs three workloads from the same image and the same configuration:
+#   - API server (Deployment): the /sm/* endpoints for browser sign-in, and the gRPC API
+#     that ExtAuthZ and CMK call.
+#   - Housekeeper (Deployment, one replica): deletes idle sessions and refreshes access
+#     tokens before they expire.
+#   - Migration (Job, Helm hook): creates and updates the database schema before every
+#     install and upgrade.
+#
+# Values marked **Required** must be set for a working installation. Settings of Session
+# Manager itself are under `config`. They are described in the configuration reference:
+# https://openkcm.io/components/cmk/security/session-manager-config
+
+# -- Override the chart name in resource names and in the `app.kubernetes.io/name` label.
+# The configuration is always mounted at `/etc/session-manager`.
 nameOverride: ""
 
-# Override the "fullname" value. This value is used as part of
-# most of the names of the resources created by this Helm chart.
-# +docs:property
+# -- Override the full name of the resources. Default: `<release>-session-manager`, or the
+# release name if it already contains `session-manager`.
 fullnameOverride: ""
 
-# This namespace allows you to define where the services are installed into.
-# If not set then they use the namespace of the release.
-# This is helpful when installing a chart dependency (sub chart).
+# -- Namespace of all resources. Empty: the release namespace. Useful when this chart is a
+# dependency of another chart.
 namespace: ""
 
-# This will set the replicaset count more information can be found here: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
-replicaCount: 1
+# -- Labels added to all resources.
+commonLabels: {}
 
-# This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
 image:
-  # The container registry to pull the image from.
-  # For example:
-  #   registry: ghcr.io/openkcm
-  #   repository: images/crypto-layer
-  # +docs:property
+  # -- Registry of the image.
   registry: ghcr.io/openkcm
-
-  # The container image
-  # +docs:property
-  repository: images/session-manager
-
-  # the container command
-  # +docs:property
-  # command: [ "/bin/session-manager" ]
-
-  # Override the image tag to deploy by setting this variable.
-  # +docs:property
+  # -- Repository of the image in the registry.
+  repository: session-manager/images/session-manager
+  # -- **Required** unless `digest` is set. Session Manager version to deploy, for example
+  # `v0.20.1`. The chart's appVersion is not used as a fallback.
   tag: ""
-
-  # Setting a digest will override any tag.
-  # +docs:property
-  # digest: sha256:0e072dddd1f7f8fc8909a2ca6f65e76c5f0d2fcfb8be47935ae3457e8bbceb20
-
-  # Kubernetes imagePullPolicy.
+  # -- Image digest, for example `sha256:…`. Takes precedence over `tag`.
+  digest: ""
+  # -- Image pull policy.
   pullPolicy: IfNotPresent
+  # -- Override the entrypoint, as a string or a list. Empty: the image's entrypoint
+  # (`/session-manager` in the published image). The chart passes the subcommand
+  # (`api-server`, `housekeeper` or `migrate`) as argument.
+  command: []
 
-# This is for the secretes for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
-imagePullSecrets:
-  - name: "registry-access"
+# -- Secrets for pulling the image from a private registry, for example
+# `[{ name: registry-access }]`.
+imagePullSecrets: []
 
-# This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
 serviceAccount:
-  # Specifies whether a service account should be created
+  # -- Create a ServiceAccount for the API server and the housekeeper. The migration job
+  # runs before the release's resources exist; it uses the namespace's `default`
+  # ServiceAccount, or `name` if `create` is false.
   create: true
-  # Annotations to add to the service account
+  # -- Set `automountServiceAccountToken` on the ServiceAccount. Session Manager does not
+  # call the Kubernetes API; the pods never mount the token.
+  automount: false
+  # -- Annotations for the ServiceAccount, for example for workload identity.
   annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
+  # -- Name of the ServiceAccount. Empty with `create: true`: the chart's full name. Empty
+  # with `create: false`: `default`.
   name: ""
 
+# =============================================================================
+# API server
+# =============================================================================
+
+# -- Number of API server replicas, when `autoscaling` is disabled. Use two or more in
+# production: every browser sign-in and every session check of ExtAuthZ calls the API
+# server. Sessions are stored in Valkey, so replicas need no affinity.
+replicaCount: 1
+
+# -- Old ReplicaSets kept for rollbacks (API server and housekeeper).
+revisionHistoryLimit: 10
+
+# -- Update strategy of the API server Deployment. Empty: Kubernetes' default rolling update.
+strategy: {}
+
 pod:
-  # This is for setting Kubernetes Annotations to a Pod.
-  # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
+  # -- Annotations for all pods, for example for a service mesh. The chart always adds
+  # `checksum/config`, which restarts the pods when the configuration changes.
   annotations: {}
 
-  # This is for setting Kubernetes Labels to a Pod.
-  # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+  # -- Additional labels for all pods.
   labels: {}
 
-  securityContext: {}
-  # fsGroup: 2000
+  # -- Pod security context of all pods. The defaults run Session Manager as user and group
+  # 65532, the non-root user of the published image, with the runtime's default seccomp
+  # profile. `runAsUser` is set because Kubernetes enforces `runAsNonRoot` only for images
+  # with a numeric user.
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+
+  # -- Inject environment variables for the Services of the namespace. Session Manager does
+  # not need them.
+  enableServiceLinks: false
+
+  # -- PriorityClass of the API server and housekeeper pods. Sign-in depends on the API
+  # server; consider a high priority class.
+  priorityClassName: ""
+
+  # -- Seconds a pod has to stop after SIGTERM. Null: the Kubernetes default (30).
+  terminationGracePeriodSeconds: null
 
   disruptionBudget:
-    # Enable or disable the PodDisruptionBudget resource.
-    #
-    # This prevents downtime during voluntary disruptions such as during a Node upgrade.
-    # For example, the PodDisruptionBudget will block `kubectl drain`
-    # Pod is currently running.
+    # -- Create a PodDisruptionBudget for the API server. Use it with two or more replicas.
     enabled: false
+    # Set at most one of the following. If neither is set, `maxUnavailable: 1` is used.
+    # minAvailable: 1
+    # maxUnavailable: 1
 
-securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+# -- Container security context of all Session Manager containers. The root filesystem is
+# read-only; `/tmp` is a writable `emptyDir` (see `tmpVolume`).
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
 
-# This is for setting up a service more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/
-service:
-  # Labels to add to the service
-  labels: {}
-  # Annotations to add to the service
-  annotations: {}
-  # This sets the service type more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
-  type: ClusterIP
-  # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
-  ports:
-    - port: 8080
-      protocol: TCP
-      targetPort: http
-      name: http
-    - port: 8888
-      protocol: TCP
-      targetPort: http-status
-      name: http-status
-    - port: 9091
-      protocol: TCP
-      targetPort: grpc
-      name: grpc
+tmpVolume:
+  # -- Mount a writable `emptyDir` at `/tmp` in all Session Manager containers.
+  enabled: true
+  # -- Size limit of the `/tmp` volume.
+  sizeLimit: 64Mi
 
-resources:
-  limits:
-    cpu: 500m
-    memory: 512Mi
-    ephemeral-storage: 1Gi
-  requests:
-    cpu: 100m
-    memory: 128Mi
-    ephemeral-storage: 256Mi
-
-# Resource limits for the migration job.
-# If not specified, defaults from the job template are used:
-#   limits: {cpu: 200m, memory: 128Mi, ephemeral-storage: 512Mi}
-#   requests: {cpu: 100m, memory: 64Mi, ephemeral-storage: 128Mi}
-# +docs:property
-migrate: {}
-  # resources:
-  #   limits:
-  #     cpu: 200m
-  #     memory: 128Mi
-  #     ephemeral-storage: 512Mi
-  #   requests:
-  #     cpu: 100m
-  #     memory: 64Mi
-  #     ephemeral-storage: 128Mi
-
-# This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
-livenessProbe:
-  httpGet:
-    path: /probe/liveness
-    port: http-status
-    scheme: HTTP
-  failureThreshold: 1
-  periodSeconds: 10
-readinessProbe:
-  httpGet:
-    path: /probe/readiness
-    port: http-status
-    scheme: HTTP
-  failureThreshold: 1
-  periodSeconds: 10
-
-# This section is for setting up autoscaling more information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 1
-  targetCPUUtilizationPercentage: 80
-  targetMemoryUtilizationPercentage: 80
-
-# Additional init containers on the output Deployment definition.
-extraInitContainers: []
-
-# Additional containers on the output Deployment definition.
-extraContainers: []
-
-# Additional volumes on the output Deployment definition.
-extraVolumes: []
-
-# Additional volumeMounts on the output Deployment definition.
-extraVolumeMounts: []
-
-# Additional ens on the output Deployment definition.
-extraEnvs: []
-# Additional envsFrom on the output Deployment definition.
-extraEnvsFrom: []
-
-nodeSelector: {}
-
-tolerations: []
-
-# This is for setting up pod topology spread constraints by hostname more information can be found here:
-# https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/
-topologySpreadConstraints: []
-
+# -- Container ports of the API server. Each must match the listen address in `config`:
+# `http` = `config.http.address`, `grpc` = `config.grpc.address`, `http-status` =
+# `config.status.address`. The housekeeper exposes only `http-status`. The probes, the
+# Service and the NetworkPolicy refer to the ports by name.
 ports:
   - name: http-status
     containerPort: 8888
@@ -195,208 +144,501 @@ ports:
     containerPort: 9091
     protocol: TCP
 
+service:
+  # -- Service type. Keep `ClusterIP`: Envoy Gateway publishes the `/sm/*` endpoints, and
+  # the gRPC API must only be reachable by ExtAuthZ and CMK.
+  type: ClusterIP
+  # -- Additional labels for the Service.
+  labels: {}
+  # -- Annotations for the Service.
+  annotations: {}
+  # -- Service ports. `http` (8080) is the target of Envoy Gateway's route for `/sm/*`;
+  # `grpc` (9091) is the address that ExtAuthZ (`sessionManager.address`) and CMK use;
+  # `http-status` (8888) serves metrics if enabled. Remove `http-status` if nothing
+  # scrapes it through the Service.
+  ports:
+    - name: http
+      port: 8080
+      protocol: TCP
+      targetPort: http
+    - name: http-status
+      port: 8888
+      protocol: TCP
+      targetPort: http-status
+    - name: grpc
+      port: 9091
+      protocol: TCP
+      targetPort: grpc
+      appProtocol: grpc
+
+# -- Resources of the API server container.
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+# -- Startup probe of the API server. Empty: none.
+startupProbe: {}
+
+# -- Liveness probe of the API server. Needs `config.status.enabled: true`.
+livenessProbe:
+  httpGet:
+    path: /probe/liveness
+    port: http-status
+    scheme: HTTP
+  periodSeconds: 10
+  timeoutSeconds: 2
+  failureThreshold: 3
+
+# -- Readiness probe of the API server. Needs `config.status.enabled: true`. The readiness
+# endpoint does not check the database or Valkey: the API server stops at startup if it
+# cannot reach them.
+readinessProbe:
+  httpGet:
+    path: /probe/readiness
+    port: http-status
+    scheme: HTTP
+  periodSeconds: 10
+  timeoutSeconds: 2
+  failureThreshold: 3
+
+# -- Lifecycle hooks of the API server container. Session Manager stops at once on SIGTERM;
+# a short `preStop` pause lets load balancers remove the pod before it stops, for example
+# `{ preStop: { sleep: { seconds: 5 } } }` (Kubernetes 1.30 or later).
+lifecycle: {}
+
+autoscaling:
+  # -- Scale the API server with a HorizontalPodAutoscaler. When enabled, `replicaCount` is
+  # not used.
+  enabled: false
+  # -- Minimum number of replicas.
+  minReplicas: 2
+  # -- Maximum number of replicas.
+  maxReplicas: 5
+  # -- Target average CPU utilization, in percent of the CPU request. Null: not used.
+  targetCPUUtilizationPercentage: 80
+  # -- Target average memory utilization, in percent of the memory request. Null: not used.
+  # At least one target must be set.
+  targetMemoryUtilizationPercentage: 80
+  # -- Scaling behavior (`autoscaling/v2` `behavior`). Empty: the Kubernetes defaults.
+  behavior: {}
+
+# -- Node labels for the pods of all workloads.
+nodeSelector: {}
+
+# -- Tolerations for the pods of all workloads.
+tolerations: []
+
+# -- Affinity of the API server pods. The housekeeper uses `housekeeper.affinity`.
 affinity: {}
 
-config:
-  isImmutable: false
+# -- Topology spread constraints of the API server pods, for example to spread the replicas
+# across zones.
+topologySpreadConstraints: []
 
-  # Environment where the application is running
+# =============================================================================
+# Shared by all workloads
+# =============================================================================
+
+# -- Additional init containers of all pods, including the migration job.
+extraInitContainers: []
+
+# -- Additional containers of the API server and housekeeper pods. Not added to the
+# migration job (see `migrate.extraContainers`).
+extraContainers: []
+
+# -- Additional volumes of all pods, for example the Secrets with the database password,
+# the Valkey password and certificates, the client secret and the CSRF secret. Refer to the
+# mounted files from `config` with `source: file`.
+extraVolumes: []
+# - name: credentials
+#   projected:
+#     sources:
+#       - secret:
+#           name: session-manager-database
+#           items: [{ key: password, path: database/password }]
+#       - secret:
+#           name: session-manager-valkey
+#           items: [{ key: password, path: valkey/password }]
+#       - secret:
+#           name: session-manager-oidc-client
+#           items: [{ key: client-secret, path: client-auth/client-secret }]
+#       - secret:
+#           name: csrf-secret                  # the same Secret as ExtAuthZ's
+#           items: [{ key: csrf_secret, path: csrf-secret/csrf_secret }]
+
+# -- Additional volume mounts of all Session Manager containers.
+extraVolumeMounts: []
+# - name: credentials
+#   mountPath: /etc/credentials
+#   readOnly: true
+
+# -- Additional environment variables of all Session Manager containers. The PostgreSQL
+# client reads the standard `PG*` variables, for example `PGSSLMODE=verify-full` and
+# `PGSSLROOTCERT`. Never set `DEBUGFEATURES` in production: it logs complete HTTP
+# requests and responses, including tokens.
+extraEnvs: []
+
+# -- Additional `envFrom` sources of all Session Manager containers.
+extraEnvsFrom: []
+
+# =============================================================================
+# Housekeeper
+# =============================================================================
+
+housekeeper:
+  # -- Run the housekeeper. Without it, idle sessions are not deleted before
+  # `sessionDuration` and access tokens are not refreshed. Run exactly one per
+  # installation.
+  enabled: true
+  # -- Update strategy. `Recreate` stops the old pod before the new one starts, so two
+  # housekeepers never refresh the same tokens.
+  strategy:
+    type: Recreate
+  # -- Resources of the housekeeper container.
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+  # -- Liveness probe. Needs `config.status.enabled: true`.
+  livenessProbe:
+    httpGet:
+      path: /probe/liveness
+      port: http-status
+      scheme: HTTP
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+  # -- Readiness probe. Needs `config.status.enabled: true`.
+  readinessProbe:
+    httpGet:
+      path: /probe/readiness
+      port: http-status
+      scheme: HTTP
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+  # -- Affinity of the housekeeper pod.
+  affinity: {}
+
+# =============================================================================
+# Database migration
+# =============================================================================
+
+migrate:
+  # -- Run the migration job as a Helm `pre-install` and `pre-upgrade` hook. If disabled,
+  # run `session-manager migrate` yourself before every upgrade: the API server does not
+  # start on an outdated schema.
+  enabled: true
+  # -- Retries before the job, and with it the install or upgrade, fails.
+  backoffLimit: 6
+  # -- Maximum run time of the job in seconds. Null: no limit; Helm's `--timeout` still
+  # applies.
+  activeDeadlineSeconds: null
+  # -- Seconds after which a finished job is deleted. Null: the job is kept until the
+  # next install or upgrade replaces it.
+  ttlSecondsAfterFinished: 300
+  # -- Annotations for the job's pod, added to `pod.annotations`. For example
+  # `sidecar.istio.io/inject: "false"`, if a service mesh sidecar would keep the job from
+  # completing.
+  podAnnotations: {}
+  # -- Resources of the migration container.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+  # -- Additional containers of the job's pod. They must exit on their own, or the job
+  # never completes.
+  extraContainers: []
+
+# =============================================================================
+# Network policy
+# =============================================================================
+
+networkPolicy:
+  # -- **Recommended.** Create a NetworkPolicy that allows ingress to the pods only from
+  # the peers below. The gRPC API has no authentication of its own and can change tenant
+  # trust records.
+  enabled: false
+  http:
+    # -- Peers allowed on the `http` port (`/sm/*`): Envoy Gateway. Empty: none.
+    from: []
+    # - namespaceSelector:
+    #     matchLabels: { kubernetes.io/metadata.name: envoy-gateway-system }
+  grpc:
+    # -- Peers allowed on the `grpc` port: ExtAuthZ and CMK. Empty: none.
+    from: []
+    # - namespaceSelector:
+    #     matchLabels: { kubernetes.io/metadata.name: envoy-gateway-system }
+    #   podSelector:
+    #     matchLabels: { app.kubernetes.io/name: extauthz }
+    # - podSelector:
+    #     matchLabels: { app.kubernetes.io/name: cmk }
+  status:
+    # -- Peers allowed on the `http-status` port, for example a metrics collector. Empty:
+    # none. Probes from the kubelet are not affected on most network plugins.
+    from: []
+  # -- Additional ingress rules, in NetworkPolicy syntax.
+  extraIngress: []
+
+# =============================================================================
+# Configuration
+# =============================================================================
+
+configMap:
+  # -- Make the configuration ConfigMap immutable. Its name then contains a hash of the
+  # content, so every change creates a new ConfigMap.
+  immutable: false
+  # -- Annotations for the configuration ConfigMap.
+  annotations: {}
+
+# Session Manager configuration, written to `config.yaml` and mounted at
+# `/etc/session-manager` in all workloads. Every key below is passed through, except
+# `environment` and `labels`, which become `application.environment` and
+# `application.labels`, and the chart setting `isImmutable` (deprecated; use
+# `configMap.immutable`). The application name is `session-manager`; override it with
+# `application.name`.
+#
+# Session Manager ignores unknown keys without a warning: check spelling and nesting.
+# Settings marked "value reference" take `{ source: embedded, value: … }`,
+# `{ source: env, env: NAME }` or `{ source: file, file: { path: …, format: binary } }`.
+# Use `source: file` with a Secret mounted through `extraVolumes` for every secret:
+# embedded values are stored in plain text in the ConfigMap.
+config:
+  # -- Environment name (`application.environment`), attached to logs, traces, metrics and
+  # audit events.
   environment: production
-  # Labels associated to metrics, traces and logs
+
+  # -- Additional attributes (`application.labels`) attached to logs, traces and metrics.
   labels: {}
 
-  audit:
-    endpoint: http://localhost:4043/logs
-    additionalProperties: |
-      appID: "session-manager"
-
-  http:
-    address: :8080
-
-  grpc:
-    address: :9091
-    flags:
-      reflection: true
-      health: true
-
-  # Expose the status port
-  status:
-    enabled: true
-    address: ":8888"
-    profiling: false
-
-  # This does set the logger configuration
-  # +docs:property
   logger:
-    level: info # one of: debug, info, warn, error
-    # Format of the logs
-    format: json # one of: json, text
+    # -- Log level: `debug`, `info`, `warn` or `error`.
+    level: info
+    # -- Log format: `json` or `text`.
+    format: json
     formatter:
       time:
-        type: pattern # one of: pattern, unix
-        # Used only when the property type: pattern
-        # Should follow golang time pattern
-        # Default value time.RFC3339.
+        # -- Timestamp format: `pattern` (Go time layout) or `unix`.
+        type: pattern
+        # -- Go time layout, for `type: pattern`.
         pattern: "Mon Jan 02 15:04:05 -0700 2006"
-        # Used only when the property type: unix
-        # Time units are "1ns", "1us" (or "1µs"), "1ms", "1s"
-        # Default value 1s.
+        # -- Precision, for `type: unix`: `1ns`, `1us`, `1ms` or `1s`.
         precision: 1s
       fields:
-        # Field names (this way the field name can be changed) to be used on log records; These are their defaults.
-        error: "error"
-        message: "msg"
-        level: "level"
-        time: "time"
-        # Fields names used by OTEL to track the Trace and Span ID
+        # -- Names of the standard fields of a log record.
+        error: error
+        message: msg
+        level: level
+        time: time
         otel:
-          traceID: "trace.id" # Default is TraceID
-          spanID: "span.id" # Default is SpanID
+          # -- Names of the trace and span ID fields.
+          traceID: trace.id
+          spanID: span.id
         masking:
-          # All fields under PII, the formatters will mask the value and keeping first 4 original characters
+          # -- Fields whose values are masked, keeping the first four characters.
           pii:
             - email
             - ip-address
-          # All fields under other, the formatters will mask the value, using given mask.
+          # -- Fields whose values are replaced with the given mask.
           other:
             jwt-token: "*****"
-  telemetry:
-    logs:
-      enabled: false
-      protocol: http # one of: http, grpc; Default is http
-      host:
-        source: embedded
-        value: localhost:4317
-      url: /api/v2/otlp/v1/logs
-      secretRef:
-        type: api-token # one of: insecure, mtls, api-token
-        apiToken:
-          source: embedded
-          value: "unknown"
-    traces:
-      enabled: false
-      protocol: http # one of: http, grpc; Default is http
-      host:
-        source: embedded
-        value: localhost:4317
-      url: /api/v2/otlp/v1/traces
-      # OpenTelemetry traces secret; See examples from logs.
-      secretRef:
-        type: api-token # insecure, mtls, api-token
-        apiToken:
-          source: embedded
-          value: "unknown"
-    metrics:
-      enabled: false
-      protocol: http # one of: http, grpc; Default is http
-      host:
-        source: embedded
-        value: localhost:4317
-      url: /api/v2/otlp/v1/metrics
-      # OpenTelemetry traces secret; See examples from logs.
-      secretRef:
-        type: api-token # insecure, mtls, api-token
-        apiToken:
-          source: embedded
-          value: "unknown"
-      # Metrics exposed through /metrics endpoint for prometheus
-      prometheus:
-        enabled: false
 
+  status:
+    # -- Serve the status endpoints (`/probe/liveness`, `/probe/readiness`, `/version`, and
+    # `/metrics` if Prometheus metrics are enabled). Needed by the probes.
+    enabled: true
+    # -- Listen address of the status server. Must match the `http-status` container port.
+    address: :8888
+    # -- Serve Go profiling endpoints on the status port, without authentication. Keep
+    # false in production.
+    profiling: false
+
+  http:
+    # -- Listen address of the `/sm/*` endpoints. Must match the `http` container port. TLS
+    # is terminated by Envoy Gateway. Also: `shutdownTimeout` (default `5s`).
+    address: :8080
+
+  grpc:
+    # -- Listen address of the gRPC API. Must match the `grpc` container port and the
+    # address that ExtAuthZ and CMK use.
+    address: :9091
+    flags:
+      # -- Serve the gRPC health service.
+      health: true
+      # -- Serve gRPC server reflection. Keep false in production.
+      reflection: false
+    # Further settings and their defaults: shutdownTimeout (5s), maxRecvMsgSize
+    # (125829120), efPolMinTime (180s), efPolPermitWithoutStream (false),
+    # attributes.maxConnectionIdle (1800s), attributes.maxConnectionAge (1800s),
+    # attributes.maxConnectionAgeGrace (300s), attributes.time (120m),
+    # attributes.timeout (20s).
+
+  # PostgreSQL with the tenant trust records. There are no settings for TLS; use the
+  # `PGSSLMODE` and `PGSSLROOTCERT` environment variables (`extraEnvs`).
   database:
+    # -- Database module.
     module: database.module.pgxpool
+    # -- **Required.** Host name; value reference.
+    host:
+      source: embedded
+      value: ""
+    # -- Port.
+    port: "5432"
+    # -- Database name.
     name: session_manager
-    port: 5432
-    host:
-      source: embedded
-      value: host.ns.svc.cluster.local
-    user:
-      source: embedded
-      value: postgres
-    password:
-      source: embedded
-      value: secret
-
-  trust:
-    module: trust.module.oidc
-    dbModule: database.module.pgxpool
-
-  credentials:
-    module: credentials.module.oauth2
-
-  valkey:
-    module: sessionstore.module.valkey
-    host:
-      source: embedded
-      value: host.ns.svc.cluster.local # Comma-separated list of hosts. Multiple hosts may be added if valkey is running in a cluster mode.
+    # -- **Required.** User; value reference.
     user:
       source: embedded
       value: ""
+    # -- **Required.** Password; value reference. Use `source: file`.
     password:
       source: embedded
-      value: secret
+      value: ""
+
+  # Valkey with the pending logins and the sessions, including the users' access and
+  # refresh tokens. Protect it accordingly.
+  valkey:
+    # -- Session store module.
+    module: sessionstore.module.valkey
+    # -- **Required.** One or more `host:port`, separated by commas; value reference. The
+    # port is required.
+    host:
+      source: embedded
+      value: ""
+    # -- User; value reference. Empty: the default user.
+    user:
+      source: embedded
+      value: ""
+    # -- Password; value reference. Use `source: file`.
+    password:
+      source: embedded
+      value: ""
+    # -- Prefix of all keys. A trailing `:` is removed.
     prefix: session-manager
+    # -- Transport security. Only `type: mtls` enables TLS, with `mtls.cert`,
+    # `mtls.certKey` and `mtls.serverCa` as value references; any other type connects
+    # without TLS. Use `mtls` unless a service mesh encrypts the traffic.
     secretRef:
-      type: insecure # Supported values: "mtls", "insecure", "client_secret_post"
-      # mtls:
-      #   cert:
-      #     source: embedded
-      #     value: value
-      #   certKey:
-      #     source: embedded
-      #     value: value
-      #   serverCa:
-      #     source: embedded
-      #     value: value
-    # masterSet: ""               # If set, valkey connects to the sentinel cluster.
-    # topologyRefreshInterval: 5s # A few seconds is a reasonable value; 5s works well.
-    #                             # There is no benefit to a very small interval:
-    #                             # it only adds load on the sentinels, and recovery
-    #                             # just needs to catch a missed event, not react instantly.
+      type: insecure
+    # Sentinel: `masterSet` (the master set name; setting it switches to Sentinel) and
+    # `topologyRefreshInterval` (for example `5s`; 0 disables the refresh).
 
   sessionManager:
+    # -- **Required.** Absolute public URL of the callback endpoint, for example
+    # `https://api.example.com/sm/callback`. Sent to the identity providers as
+    # `redirect_uri` and must be registered at each of them. The endpoint itself is always
+    # served at `/sm/callback`.
+    callbackURL: ""
+    # -- **Required.** Allowed beginnings of the URLs that the UI passes for redirects after
+    # sign-in, errors and logout, for example `https://ui.example.com/`. Compared character
+    # by character; always end entries with `/`. Empty: every sign-in and logout fails with
+    # `400`.
+    allowedRedirectBaseURLs: []
+    # -- Maximum lifetime of a session, and of a pending sign-in.
     sessionDuration: 12h
+    # -- A session ends after this time without requests.
     idleSessionTimeout: 90m
-    callbackURL: http://localhost:8080/sm/callback
-    clientAuth:
-      type: client_secret
-      clientSecret:
-        source: embedded
-        value: secret
-      # Deprecated: ClientID is no longer used in the application code, but is still required in the config
-      # to backfill existing database entries during migration.
-      # It will be removed in a future release once the migration has been applied in all environments.
-      clientID: "client-id"
-    sessionCookieTemplate:
-      name: "__Host-Http-SESSION"
-      path: "/"
-      secure: true
-      sameSite: None
-      httpOnly: true
-    csrfCookieTemplate:
-      name: "CSRF"
-      path: "/"
-      secure: true
-      sameSite: Strict
-      domain: localhost
-    loginCSRFCookieTemplate:
-      path: "/"
-      secure: true
-      sameSite: Lax
-      httpOnly: true
+    # -- Accept identity providers served over plain `http`. For local development only.
+    allowHttpScheme: false
+    # -- **Required.** CSRF secret; value reference. At least 32 bytes, or the API server
+    # does not start. **Must contain exactly the same bytes as ExtAuthZ's `csrfSecret`**;
+    # otherwise every API call from the CMK UI fails with `401`. Use `source: file` with the
+    # Secret shared with ExtAuthZ.
     csrfSecret:
       source: embedded
-      value: my-csrf-secret-at-least-thirty-two-bits-size
-
-  migrate:
-    module: trust.migration.module.oidc
-    dbModule: database.module.pgxpool
+      value: ""
+    # How Session Manager authenticates to the identity providers when it exchanges the
+    # authorization code and refreshes tokens. The same credentials are used for all
+    # tenants; the client ID of each tenant comes from its trust record.
+    clientAuth:
+      # -- `client_secret`, `client_secret_post`, `mtls` or `insecure` (development only).
+      type: client_secret
+      # -- **Required at the first installation.** Client ID registered at the identity
+      # provider. The database migration copies it into existing trust records, and fails
+      # if it is empty.
+      clientID: ""
+      # -- Client secret, for `client_secret` and `client_secret_post`; value reference.
+      # Use `source: file`.
+      clientSecret:
+        source: embedded
+        value: ""
+      # For `type: mtls`:
+      # mTLS:
+      #   cert:     { source: file, file: { path: /etc/credentials/client-auth/tls.crt, format: binary } }
+      #   certKey:  { source: file, file: { path: /etc/credentials/client-auth/tls.key, format: binary } }
+      #   serverCa: { source: file, file: { path: /etc/credentials/client-auth/ca.crt, format: binary } }
+    # Cookie templates. Fields: name, path, domain, maxAge (seconds; 0 = until the browser
+    # closes), secure, httpOnly, sameSite (exactly `Lax`, `Strict` or `None`; any other
+    # spelling omits the attribute).
+    sessionCookieTemplate:
+      # -- Session cookie name; `-<tenant ID>` is appended. ExtAuthZ requires this name.
+      name: __Host-Http-SESSION
+      # -- Cookie path.
+      path: /
+      # -- Send only over HTTPS.
+      secure: true
+      # -- Hide from JavaScript.
+      httpOnly: true
+      # -- `None` when UI and API are on different sites; `Lax` if they share a registrable
+      # domain.
+      sameSite: None
+    csrfCookieTemplate:
+      # -- CSRF cookie name; `-<tenant ID>` is appended. The CMK UI requires this name.
+      name: CSRF
+      # -- Cookie path.
+      path: /
+      # -- Cookie domain: the parent domain of the UI and API hosts, for example
+      # `example.com`, so that the UI can read the cookie. Empty: the API host only.
+      domain: ""
+      # -- Send only over HTTPS.
+      secure: true
+      # -- SameSite attribute.
+      sameSite: Strict
+    loginCSRFCookieTemplate:
+      # -- Cookie path. The name defaults to `__Host-LoginCSRF`.
+      path: /
+      # -- Send only over HTTPS.
+      secure: true
+      # -- Hide from JavaScript.
+      httpOnly: true
+      # -- Must be `Lax`: the cookie must be sent when the identity provider redirects the
+      # browser back to `/sm/callback`.
+      sameSite: Lax
 
   housekeeper:
+    # -- How often housekeeping runs. It also runs once at startup.
     triggerInterval: 10m
+    # -- Sessions processed in parallel.
     concurrencyLimit: 10
+    # -- Refresh access tokens that expire within this time. Keep it at least as long as
+    # `triggerInterval`.
     tokenRefreshTriggerInterval: 15m
 
+  # Modules. The defaults fit a standard installation.
+  trust:
+    # -- Module for the tenant trust records.
+    module: trust.module.oidc
+    # -- Database module used for the trust records.
+    dbModule: database.module.pgxpool
+  credentials:
+    # -- Module for the client authentication configured in `sessionManager.clientAuth`.
+    module: credentials.module.oauth2
+  migrate:
+    # -- Module for the database migrations.
+    module: trust.migration.module.oidc
+    # -- Database module used by the migrations.
+    dbModule: database.module.pgxpool
+
+  # -- Long-running components, keyed by a name you choose. The gRPC server hosts the
+  # services that ExtAuthZ (`session`) and CMK (`oidcmapping`) call. `appsOrder` optionally
+  # sets the start order.
   apps:
     grpc:
       module: app.module.grpcserver
@@ -404,3 +646,25 @@ config:
         - module: service.module.grpc.session
         - module: service.module.grpc.trustmapping
         - module: service.module.grpc.oidcmapping
+
+  # Audit events (OTLP/HTTP logs) for successful and failed sign-ins. Omitted by default:
+  # sign-ins work, but the events are not delivered and each attempt logs an error.
+  # audit:
+  #   endpoint: http://otel-collector:4318/v1/logs
+  #   httpClient:
+  #     timeout: 10s
+  #     # mtls:
+  #     #   cert:    { source: file, file: { path: /etc/credentials/audit/tls.crt, format: binary } }
+  #     #   certKey: { source: file, file: { path: /etc/credentials/audit/tls.key, format: binary } }
+  #   additionalProperties: |
+  #     appID: session-manager
+
+  # OpenTelemetry export of logs, traces and metrics. Same structure as in the other
+  # OpenKCM services; see the configuration reference. Omitted by default.
+  # telemetry:
+  #   metrics:
+  #     enabled: true
+  #     protocol: grpc
+  #     host: { source: env, env: OTEL_HOST }
+  #     secretRef: { type: insecure }
+  #     prometheus: { enabled: true }

@@ -9,13 +9,14 @@ helm-tests/
 ├── integration/        # Integration tests
 │   ├── helm-install_test.go
 │   └── main_test.go
-└── unit/              # Unit tests (125 test cases)
+└── unit/              # Unit tests (139 test cases)
     ├── chart_test.go
     ├── configmap_test.go
     ├── deployment_test.go
     ├── hpa_test.go
     ├── job_test.go
     ├── main_test.go
+    ├── networkpolicy_test.go
     ├── pdb_test.go
     ├── service_test.go
     ├── serviceaccount_test.go
@@ -30,16 +31,18 @@ Unit tests validate individual Helm templates and their rendering with various v
 - Validate that expected Kubernetes resources are rendered
 - Check for correct labels, annotations, and configurations
 - Test various deployment scenarios (replicas, images, custom values)
-- **125 test cases covering 100% of templates**
+- **139 test cases covering 100% of templates**
 
 **Coverage:**
 - Deployments (session-manager and housekeeper)
 - Services
-- ConfigMaps (all 11 configuration sections)
-- ServiceAccounts (including Role and RoleBinding)
+- ConfigMaps (the configuration, and its hook copy for the migration job)
+- ServiceAccounts
 - HorizontalPodAutoscaler (HPA)
 - Jobs (migration with hooks)
 - PodDisruptionBudget (PDB)
+- NetworkPolicy
+- Validation errors (image, autoscaling, PodDisruptionBudget)
 - Labels and annotations
 - Chart validation
 

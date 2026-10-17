@@ -26,11 +26,12 @@ func TestPDBRendering(t *testing.T) {
 			shouldExist: false,
 		},
 		{
-			name:   "PDB enabled with default minAvailable",
+			name:   "PDB enabled with default maxUnavailable",
 			values: "--set pod.disruptionBudget.enabled=true",
 			expected: []string{
 				"kind: PodDisruptionBudget",
-				"minAvailable: 1",
+				"maxUnavailable: 1",
+				"app.kubernetes.io/component: session-manager",
 			},
 			shouldExist: true,
 		},

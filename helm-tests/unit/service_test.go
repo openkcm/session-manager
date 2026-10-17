@@ -56,6 +56,7 @@ func TestServiceRendering(t *testing.T) {
 				"name: grpc",
 				"port: 9091",
 				"targetPort: grpc",
+				"appProtocol: grpc",
 			},
 		},
 		{

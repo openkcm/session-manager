@@ -12,9 +12,10 @@ import (
 func TestServiceAccountRendering(t *testing.T) {
 	ctx := t.Context()
 	tests := []struct {
-		name     string
-		values   string
-		expected []string
+		name       string
+		values     string
+		expected   []string
+		unexpected []string
 	}{
 		{
 			name:   "default service account",
@@ -41,27 +42,22 @@ func TestServiceAccountRendering(t *testing.T) {
 			},
 		},
 		{
-			name:   "with Role created",
+			// Session Manager does not call the Kubernetes API.
+			name:   "without Role and RoleBinding",
 			values: "",
 			expected: []string{
-				"kind: Role",
-				"name: session-manager",
 				"namespace: default",
-				"rules: []",
+			},
+			unexpected: []string{
+				"kind: Role",
+				"rbac.authorization.k8s.io",
 			},
 		},
 		{
-			name:   "with RoleBinding created",
-			values: "",
+			name:   "with automount",
+			values: "--set serviceAccount.automount=true",
 			expected: []string{
-				"kind: RoleBinding",
-				"name: session-manager",
-				"namespace: default",
-				"subjects:",
-				"kind: ServiceAccount",
-				"roleRef:",
-				"kind: Role",
-				"apiGroup: rbac.authorization.k8s.io",
+				"automountServiceAccountToken: true",
 			},
 		},
 		{
@@ -99,6 +95,11 @@ func TestServiceAccountRendering(t *testing.T) {
 			for _, expected := range tt.expected {
 				if !strings.Contains(output, expected) {
 					t.Errorf("expected output to contain %q, but it didn't.\nOutput: %s", expected, output)
+				}
+			}
+			for _, unexpected := range tt.unexpected {
+				if strings.Contains(output, unexpected) {
+					t.Errorf("expected output NOT to contain %q, but it did.\nOutput: %s", unexpected, output)
 				}
 			}
 		})

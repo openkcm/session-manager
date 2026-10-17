@@ -1,8 +1,13 @@
 {{- if .Values.autoscaling.enabled }}
+{{- if not (or .Values.autoscaling.targetCPUUtilizationPercentage .Values.autoscaling.targetMemoryUtilizationPercentage) }}
+{{- fail "autoscaling.enabled requires autoscaling.targetCPUUtilizationPercentage or autoscaling.targetMemoryUtilizationPercentage" }}
+{{- end }}
+---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: {{ include "session-manager.fullname" . }}
+  namespace: {{ include "session-manager.namespace" . }}
   labels:
     {{- include "session-manager.labels" . | nindent 4 }}
     app.kubernetes.io/component: session-manager
@@ -14,16 +19,24 @@ spec:
   minReplicas: {{ .Values.autoscaling.minReplicas }}
   maxReplicas: {{ .Values.autoscaling.maxReplicas }}
   metrics:
+    {{- with .Values.autoscaling.targetCPUUtilizationPercentage }}
     - type: Resource
       resource:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}  # Target 70% CPU usage per pod
+          averageUtilization: {{ . }}
+    {{- end }}
+    {{- with .Values.autoscaling.targetMemoryUtilizationPercentage }}
     - type: Resource
       resource:
         name: memory
         target:
           type: Utilization
-          averageUtilization: {{ .Values.autoscaling.targetMemoryUtilizationPercentage }}  # Target 80% Memory usage per pod
+          averageUtilization: {{ . }}
+    {{- end }}
+  {{- with .Values.autoscaling.behavior }}
+  behavior:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 {{- end }}

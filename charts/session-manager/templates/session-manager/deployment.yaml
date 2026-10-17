@@ -1,13 +1,21 @@
+---
+# API server: the /sm/* endpoints for browser sign-in and the gRPC API for ExtAuthZ and CMK.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "session-manager.fullname" . }}
+  namespace: {{ include "session-manager.namespace" . }}
   labels:
     {{- include "session-manager.labels" . | nindent 4 }}
     app.kubernetes.io/component: session-manager
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  {{- with .Values.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
   {{- end }}
   selector:
     matchLabels:
@@ -16,9 +24,10 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        # Restart the pods when the configuration changes.
+        checksum/config: {{ include "session-manager.config" . | sha256sum }}
         {{- with .Values.pod.annotations }}
-        {{- toYaml . | nindent 8 }}
+        {{- include "session-manager.annotations" . | trim | nindent 8 }}
         {{- end }}
       labels:
         {{- include "session-manager.labels" . | nindent 8 }}
@@ -27,59 +36,31 @@ spec:
         {{- end }}
         app.kubernetes.io/component: session-manager
     spec:
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      serviceAccountName: {{ include "session-manager.serviceAccountName" . }}
-      automountServiceAccountToken: false
-      {{- with .Values.pod.securityContext }}
-      securityContext:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      initContainers:
+      {{- include "session-manager.podSettings" . | trim | nindent 6 }}
       {{- with .Values.extraInitContainers }}
+      initContainers:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-      {{- with .Values.extraContainers }}
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
         - name: {{ include "session-manager.name" . }}
+          image: "{{ template "session-manager.image" (tuple .Values.image) }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with include "session-manager.command" . | trim }}
+          {{- . | nindent 10 }}
+          {{- end }}
+          args: ["api-server"]
           {{- with .Values.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          image: "{{ template "session-manager.image" (tuple .Values.image) }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- with .Values.image.command }}
-          command: {{ . }}
-          {{- end }}
-          args: [ "api-server" ]
           {{- with .Values.ports }}
           ports:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          env:
-            - name: MY_POD_IP
-              valueFrom:
-                fieldRef:
-                  apiVersion: v1
-                  fieldPath: status.podIP
-            - name: K8S_NODE_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: spec.nodeName
-            - name: K8S_NODE_IP
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.hostIP
-            {{- with .Values.extraEnvs }}
-              {{- toYaml . | nindent 12 }}
-            {{- end }}
-          {{- with .Values.extraEnvsFrom }}
-          envFrom:
-          {{- . | toYaml | nindent 12 }}
+          {{- include "session-manager.env" . | nindent 10 }}
+          {{- with .Values.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
           {{- end }}
           {{- with .Values.livenessProbe }}
           livenessProbe:
@@ -89,35 +70,19 @@ spec:
           readinessProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          resources:
-          {{- if .Values.resources }}
-            {{- toYaml .Values.resources | nindent 12 }}
-          {{- else }}
-            limits:
-              cpu: 500m
-              memory: 512Mi
-              ephemeral-storage: 1Gi
-            requests:
-              cpu: 100m
-              memory: 128Mi
-              ephemeral-storage: 256Mi
-          {{- end }}
-          volumeMounts:
-            - name: {{ include "session-manager.fullname" . }}-config-volume
-              mountPath: /etc/{{ include "session-manager.name" . }}
-              readOnly: true
-          {{- with .Values.extraVolumeMounts }}
+          {{- with .Values.lifecycle }}
+          lifecycle:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-      volumes:
-        - name: {{ include "session-manager.fullname" . }}-config-volume
-          projected:
-            sources:
-              - configMap:
-                  name: {{ include "session-manager.fullname" . }}-config
-      {{- with .Values.extraVolumes }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "session-manager.volumeMounts" . | nindent 10 }}
+        {{- with .Values.extraContainers }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
+      {{- include "session-manager.volumes" (dict "ctx" . "configMap" (include "session-manager.configMapName" .)) | nindent 6 }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
