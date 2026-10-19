@@ -260,21 +260,55 @@ extraContainers: []
 # the Valkey password and certificates, the client secret and the CSRF secret. Refer to the
 # mounted files from `config` with `source: file`.
 extraVolumes: []
+# Files that `config` refers to. The API server, the housekeeper and the migration job all
+# mount the same `extraVolumes` at the same `extraVolumeMounts`, so a file has the same path
+# in each of them; each workload reads only the files of the sections it uses ("Read by" in
+# `config`). The format and an example of the content of each file are documented at the
+# setting that refers to it. Put credentials into Secrets, mount them read-only, and create
+# them before `helm install`: the migration job runs first and does not start without them.
+# The pods run as user and group 65532 with `fsGroup: 65532`, so the files are readable with
+# `defaultMode: 0440`. Session Manager reads the files at startup only: restart the pods
+# after a Secret changes (see README.md).
+#
+# Example: the Secrets for the examples in `config`. `--from-literal` adds no newline;
+# `--from-file` keeps the file as it is. A Secret of type `kubernetes.io/tls`, for example
+# from cert-manager, works too: it has the keys `tls.crt`, `tls.key` and, if the issuer adds
+# it, `ca.crt`.
+#   kubectl -n services create secret generic session-manager-database \
+#     --from-literal=password='<password>' --from-file=ca.crt=postgresql-ca.crt
+#   kubectl -n services create secret generic session-manager-valkey \
+#     --from-literal=password='<password>' --from-file=ca.crt=valkey-ca.crt \
+#     --from-file=tls.crt=valkey-client.crt --from-file=tls.key=valkey-client.key
+#   kubectl -n services create secret generic session-manager-oidc-client \
+#     --from-literal=client-secret='<client secret>'
+#   kubectl -n services create secret generic csrf-secret \
+#     --from-literal=csrf_secret="$(openssl rand -hex 32)"
+# Mount them below /etc/credentials, the directory of the examples in `config` (with the
+# example of `extraVolumeMounts`):
 # - name: credentials
 #   projected:
+#     defaultMode: 0440
 #     sources:
 #       - secret:
 #           name: session-manager-database
-#           items: [{ key: password, path: database/password }]
+#           items:
+#             - { key: password, path: database/password }
+#             - { key: ca.crt, path: database/ca.crt }     # for PGSSLROOTCERT
 #       - secret:
 #           name: session-manager-valkey
-#           items: [{ key: password, path: valkey/password }]
+#           items:
+#             - { key: password, path: valkey/password }
+#             - { key: tls.crt, path: valkey/tls.crt }
+#             - { key: tls.key, path: valkey/tls.key }
+#             - { key: ca.crt, path: valkey/ca.crt }
 #       - secret:
 #           name: session-manager-oidc-client
 #           items: [{ key: client-secret, path: client-auth/client-secret }]
 #       - secret:
 #           name: csrf-secret                  # the same Secret as ExtAuthZ's
 #           items: [{ key: csrf_secret, path: csrf-secret/csrf_secret }]
+# Mount further Secrets the same way, for example for the files of `audit` and `telemetry`
+# below /etc/credentials/audit and /etc/credentials/otel.
 
 # -- Additional volume mounts of all Session Manager containers.
 extraVolumeMounts: []
@@ -284,8 +318,9 @@ extraVolumeMounts: []
 
 # -- Additional environment variables of all Session Manager containers. The PostgreSQL
 # client reads the standard `PG*` variables, for example `PGSSLMODE=verify-full` and
-# `PGSSLROOTCERT` to require TLS (see `config.database`). Never set `DEBUGFEATURES` in
-# production: it logs complete HTTP requests and responses, including tokens.
+# `PGSSLROOTCERT` to require TLS (see `config.database` for these variables and their
+# files). Never set `DEBUGFEATURES` in production: it logs complete HTTP requests and
+# responses, including tokens.
 extraEnvs: []
 
 # -- Additional `envFrom` sources of all Session Manager containers.
@@ -446,6 +481,21 @@ configMap:
 #   { source: file, file: { path: /etc/credentials/db.json, format: json,
 #                           jsonPath: "$.password" } }
 #                                         # one string field of a JSON file
+# Files of value references. Mount them with `extraVolumes` and `extraVolumeMounts` (see
+# the example there).
+#   format: binary  The value as plain text, with nothing around it: no key, no quotes and
+#                   no trailing newline, which would be part of the value. Examples are at
+#                   the settings, for instance `database.password`.
+#   format: json    A JSON document. `jsonPath` selects one value, which must be a JSON
+#                   string: `$.<key>`, or `$.<key>.<key>` for a key of a nested object.
+#                   Write keys as they are, also with `-` (`$.client-secret`); the bracket
+#                   form `$['<key>']` is not supported. Without `jsonPath`, the whole file
+#                   is the value.
+#                   Example content of /etc/credentials/db.json (jsonPath "$.password"):
+#                     {
+#                       "user": "session_manager",
+#                       "password": "<password>"
+#                     }
 #
 # mTLS settings (`valkey.secretRef.mtls`, `sessionManager.clientAuth.mTLS`,
 # `audit.httpClient.mtls`, `telemetry.*.secretRef.mtls`): TLS 1.2 or later with a client
@@ -460,6 +510,34 @@ configMap:
 #     serverName: …                  # expected server name, if it differs from the address
 #     sessionTicketsDisabled: true   # do not resume TLS sessions
 #     allowTLSRenegotiationOnce: true  # accept one TLS renegotiation by the server
+# The files of mTLS settings are PEM files, referred to with `format: binary`; a trailing
+# newline does not matter in them. A Secret of type `kubernetes.io/tls` holds them as
+# `tls.crt`, `tls.key` and `ca.crt`.
+#   cert      The client certificate, followed by the certificates of the intermediate CAs
+#             that issued it, if any; each in a `-----BEGIN CERTIFICATE-----` block.
+#   certKey   The private key of the client certificate, unencrypted, in one block: PKCS #8
+#             (`-----BEGIN PRIVATE KEY-----`), PKCS #1 (`-----BEGIN RSA PRIVATE KEY-----`)
+#             or SEC 1 (`-----BEGIN EC PRIVATE KEY-----`). Startup fails if it does not
+#             match the certificate.
+#   serverCa, rootCAs
+#             One or more CA certificates, each in a `-----BEGIN CERTIFICATE-----` block.
+#             Other blocks are ignored. A file without a certificate is accepted at
+#             startup, but then no server certificate is trusted.
+# Example content of /etc/credentials/valkey/tls.crt (`cert`), with one intermediate CA:
+#   -----BEGIN CERTIFICATE-----
+#   …
+#   -----END CERTIFICATE-----
+#   -----BEGIN CERTIFICATE-----
+#   …
+#   -----END CERTIFICATE-----
+# Example content of /etc/credentials/valkey/tls.key (`certKey`):
+#   -----BEGIN PRIVATE KEY-----
+#   …
+#   -----END PRIVATE KEY-----
+# Example content of /etc/credentials/valkey/ca.crt (`serverCa`):
+#   -----BEGIN CERTIFICATE-----
+#   …
+#   -----END CERTIFICATE-----
 config:
   # ---------------------------------------------------------------------------
   # application: environment, labels and name of Session Manager in its logs, traces and
@@ -634,7 +712,27 @@ config:
   # default `PGSSLMODE` is not set, so the client uses `prefer`: it tries TLS without
   # checking the server certificate and falls back to an unencrypted connection. To require
   # TLS with a verified certificate, set `PGSSLMODE=verify-full` and `PGSSLROOTCERT` (the
-  # path of the CA certificate, or `system`).
+  # path of the CA certificate, or `system`). `verify-full` also checks that the server
+  # certificate is issued for `host`.
+  # Files of the PostgreSQL client, named by environment variables in the top-level
+  # `extraEnvs` and mounted as described at `extraVolumes`:
+  #   PGSSLROOTCERT  The CA certificates that may sign the server certificate: one or more
+  #                  PEM `-----BEGIN CERTIFICATE-----` blocks. Startup fails if the file has
+  #                  none. `system` instead of a path: the CA certificates of the image,
+  #                  with `verify-full`.
+  #   PGSSLCERT      A client certificate, if PostgreSQL requires one: PEM, the certificate
+  #                  followed by the certificates of its intermediate CAs. Set it together
+  #                  with PGSSLKEY.
+  #   PGSSLKEY       The private key of the client certificate, unencrypted, as the first
+  #                  PEM block of the file: PKCS #8, PKCS #1 or SEC 1.
+  # The files look like the examples of the mTLS settings above. For example, in
+  # `extraEnvs`, with the CA certificate of the example at `extraVolumes`:
+  #   - { name: PGSSLMODE, value: verify-full }
+  #   - { name: PGSSLROOTCERT, value: /etc/credentials/database/ca.crt }
+  # and with a client certificate, from the keys `tls.crt` and `tls.key` of the same Secret
+  # mounted as database/tls.crt and database/tls.key:
+  #   - { name: PGSSLCERT, value: /etc/credentials/database/tls.crt }
+  #   - { name: PGSSLKEY, value: /etc/credentials/database/tls.key }
   database:
     # -- Database module. `database.module.pgxpool` (PostgreSQL) is the only one.
     module: database.module.pgxpool
@@ -662,6 +760,8 @@ config:
     # password:
     #   source: file
     #   file: { path: /etc/credentials/database/password, format: binary }
+    # Example content of /etc/credentials/database/password, without a trailing newline:
+    #   <password>
 
   # ---------------------------------------------------------------------------
   # valkey: Valkey with the pending sign-ins and the sessions. Read by: API server, housekeeper.
@@ -690,6 +790,13 @@ config:
     password:
       source: embedded
       value: ""
+    # Example, from the Secret `session-manager-valkey` of the example at `extraVolumes`:
+    # password:
+    #   source: file
+    #   file: { path: /etc/credentials/valkey/password, format: binary }
+    # Example content of /etc/credentials/valkey/password, without a trailing newline (a
+    # file for `user` holds the user name the same way):
+    #   <password>
     # -- Prefix of all keys (`<prefix>:<type>:<id>`). A trailing `:` is removed. Give every
     # installation that shares a Valkey its own prefix.
     prefix: session-manager
@@ -708,6 +815,8 @@ config:
     #     serverCa: { source: file, file: { path: /etc/credentials/valkey/ca.crt, format: binary } }
     #     attributes:
     #       serverName: valkey.storage.svc.cluster.local
+    # The files and their content are described at "mTLS settings" above; the Secret
+    # `session-manager-valkey` of the example at `extraVolumes` provides them.
     #
     # Valkey Sentinel: `masterSet` is the name of the master set; `host` then lists the
     # Sentinels, and `user`, `password` and `secretRef` apply to them too.
@@ -745,13 +854,24 @@ config:
     # -- Accept identity providers (issuer and signing keys) served over plain `http`. For
     # local development only. The gRPC `session` service has its own setting (see `apps`).
     allowHttpScheme: false
-    # -- **Required.** CSRF secret; value reference. At least 32 bytes, or the API server
+    # -- **Required. & IMPORTANT** CSRF secret; value reference. At least 32 bytes, or the API server
     # does not start. **Must contain exactly the same bytes as ExtAuthZ's `csrfSecret`**;
     # otherwise every API call from the CMK UI fails with `401`. Use `source: file` with the
     # Secret shared with ExtAuthZ.
     csrfSecret:
       source: embedded
       value: ""
+    # Read by the API server only. The secret is the whole file, byte for byte, including a
+    # trailing newline: any bytes, at least 32. Use a random value without a newline, for
+    # example the 64 hexadecimal characters of `openssl rand -hex 32`, and give ExtAuthZ the
+    # same Secret (`csrf-secret` in the example at `extraVolumes`); if ExtAuthZ runs in
+    # another namespace, create a Secret with the same value there.
+    # Example:
+    # csrfSecret:
+    #   source: file
+    #   file: { path: /etc/credentials/csrf-secret/csrf_secret, format: binary }
+    # Example content of /etc/credentials/csrf-secret/csrf_secret:
+    #   <64 hexadecimal characters, from openssl rand -hex 32>
     # How Session Manager authenticates to the identity providers when it exchanges the
     # authorization code, refreshes tokens and introspects them. The same credentials are
     # used for all tenants; the client ID of each tenant comes from its trust record.
@@ -776,6 +896,10 @@ config:
       # clientSecret:
       #   source: file
       #   file: { path: /etc/credentials/client-auth.json, format: json, jsonPath: "$.secret" }
+      # Example content of /etc/credentials/client-auth.json:
+      #   { "secret": "<client secret>" }
+      # A file with nothing but the secret, such as client-auth/client-secret of the example
+      # at `extraVolumes`, is read with `format: binary` and has no trailing newline.
       #
       # Example, `mtls`. Write `mTLS` here (`mtls` in other sections); see "mTLS settings"
       # above. `allowTLSRenegotiationOnce` directly under `clientAuth` is deprecated: use
@@ -793,6 +917,8 @@ config:
       #     file: { path: /etc/credentials/client-auth/ca.crt, format: binary }
       #   attributes:
       #     allowTLSRenegotiationOnce: true
+      # The files and their content are described at "mTLS settings" above; mount them like
+      # the Valkey files of the example at `extraVolumes`, below /etc/credentials/client-auth.
       #
       # Example, for local development only:
       # type: insecure
@@ -1008,6 +1134,14 @@ config:
   #       password:
   #         source: file
   #         file: { path: /etc/credentials/audit/password, format: binary }
+  # The files of `apiToken`, `username` and `password` hold the plain value without a
+  # trailing newline; startup fails if one is empty. The files of `mtls` are described at
+  # "mTLS settings" above. Mount a Secret with them below /etc/credentials/audit, as in the
+  # example at `extraVolumes`.
+  # Example content of /etc/credentials/audit/token:
+  #   <API token>
+  # Example content of /etc/credentials/audit/password:
+  #   <password>
 
   # ---------------------------------------------------------------------------
   # telemetry: OpenTelemetry export of traces, metrics and logs. Read by: API server,
@@ -1084,3 +1218,10 @@ config:
   #         password:
   #           source: file
   #           file: { path: /etc/credentials/otel/password, format: binary }
+  # The files of `apiToken`, `username` and `password` hold the plain value without a
+  # trailing newline; the files of `mtls` are described at "mTLS settings" above. Mount a
+  # Secret with them below /etc/credentials/otel, as in the example at `extraVolumes`.
+  # Example content of /etc/credentials/otel/token:
+  #   <API token>
+  # Example content of /etc/credentials/otel/password:
+  #   <password>

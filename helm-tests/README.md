@@ -9,8 +9,9 @@ helm-tests/
 ├── integration/        # Integration tests
 │   ├── helm-install_test.go
 │   └── main_test.go
-└── unit/              # Unit tests (175 test cases)
+└── unit/              # Unit tests (218 test cases)
     ├── chart_test.go
+    ├── configfiles_test.go
     ├── configload_test.go
     ├── configmap_test.go
     ├── deployment_test.go
@@ -22,7 +23,8 @@ helm-tests/
     ├── service_test.go
     ├── serviceaccount_test.go
     ├── testdata/
-    │   └── values-all-config.yaml
+    │   ├── values-all-config.yaml
+    │   └── values-config-alternatives.yaml
     └── README.md
 ```
 
@@ -35,7 +37,9 @@ Unit tests validate individual Helm templates and their rendering with various v
 - Check for correct labels, annotations, and configurations
 - Test various deployment scenarios (replicas, images, custom values)
 - Load the rendered `config.yaml` with Session Manager's own configuration loader and modules, and fail on keys that Session Manager does not read
-- **175 test cases covering every resource template**
+- Check the documented formats of the files that the configuration refers to, with
+  certificates and keys generated at test time
+- **218 test cases covering every resource template**
 
 **Coverage:**
 - Deployments (session-manager and housekeeper)

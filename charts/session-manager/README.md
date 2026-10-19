@@ -45,16 +45,32 @@ shows the complete setup with Envoy Gateway, ExtAuthZ and CMK.
 
 Keep every secret out of the values. Create Secrets, mount them with
 `extraVolumes` and `extraVolumeMounts`, and refer to the files from `config` with
-`source: file`:
+`source: file`. The API server, the housekeeper and the migration job mount the
+same volumes at the same paths. Create the Secrets before `helm install`: the
+migration job runs first and does not start without them.
+[values.yaml](values.yaml) documents the format of every file, with an example of
+its content, at the setting that refers to it, and shows how to create and mount
+the Secrets at `extraVolumes`.
 
-| Secret content | Used by `config` key |
-| --- | --- |
-| Database password (and CA certificate, if `PGSSLROOTCERT` is used) | `database.password` |
-| Valkey password, client certificate, key and CA certificate | `valkey.password`, `valkey.secretRef.mtls` |
-| OpenID Connect client secret, or client certificate and key | `sessionManager.clientAuth.clientSecret`, `sessionManager.clientAuth.mTLS` |
-| CSRF secret, **shared with ExtAuthZ**, at least 32 bytes | `sessionManager.csrfSecret` |
+| Secret content | Format | Used by |
+| --- | --- | --- |
+| Database password | Plain text | `config.database.password` |
+| PostgreSQL CA certificate; client certificate and key | PEM | `PGSSL*` in `extraEnvs` |
+| Valkey password | Plain text | `config.valkey.password` |
+| Valkey client certificate, key and CA certificate | PEM | `config.valkey.secretRef.mtls` |
+| OIDC client secret | Plain text or JSON | `config.sessionManager.clientAuth.clientSecret` |
+| OIDC client certificate, key and CA certificate | PEM | `config.sessionManager.clientAuth.mTLS` |
+| CSRF secret, **the same as ExtAuthZ's** | Plain text | `config.sessionManager.csrfSecret` |
+| Audit API token, password, certificates and key | Plain text, PEM | `config.audit.httpClient` |
+| OpenTelemetry API token, password, certificates and key | Plain text, PEM | `config.telemetry` |
 
-Write the files without a trailing newline: the files are read byte for byte.
+Plain-text files are read byte for byte: write them without a trailing newline
+(`kubectl create secret generic --from-literal` adds none). The CSRF secret has
+at least 32 bytes, for example the output of `openssl rand -hex 32`. A JSON file
+holds the value as a string at the `jsonPath` of the value reference. PEM files
+hold the client certificate followed by its intermediate CA certificates, one
+unencrypted private key (PKCS #8, PKCS #1 or SEC 1), or CA certificates; a Secret
+of type `kubernetes.io/tls` holds them as `tls.crt`, `tls.key` and `ca.crt`.
 
 ## Install
 
@@ -241,6 +257,9 @@ would keep it from completing. If a service mesh injects a sidecar, set
 | API server exits with `CSRF secret must be at least 32 bytes` | `config.sessionManager.csrfSecret` is missing or too short |
 | API server exits with `creating valkey client` | Valkey not reachable, or `config.valkey.host` without port |
 | Pods exit with `environment variable not set` | A value reference with `source: env` whose variable is not in `extraEnvs` |
+| Pods exit with `no such file or directory` | A file of `config` or `PGSSL*` is not mounted |
+| Pods exit with `failed to find any PEM data` | A certificate or key file has the wrong content |
+| Pods exit with `private key does not match public key` | `certKey` is not the key of `cert` |
 | Sign-in fails with `400` | `allowedRedirectBaseURLs` is missing or does not match the UI's URL |
 | Users can sign in, but API calls fail with `401` and ExtAuthZ logs `CSRF token is not valid` | Session Manager and ExtAuthZ use different CSRF secrets |
 

@@ -24,6 +24,22 @@ This directory contains unit tests for the session-manager Helm chart.
 - **TestConfigChecksum**: `checksum/config` changes with the configuration, and only then
 - **TestImmutableConfigMapName**: The name of an immutable ConfigMap changes with the configuration, and only then
 
+### configfiles_test.go
+The files that the configuration refers to, in the formats that `values.yaml` documents.
+Certificates and keys are generated at test time; no key material is stored.
+- **TestDocumentedFileContents**: Reads every example file content of `values.yaml`
+  ("Example content of <path>:") through the documented value references to it, with the
+  value reference loader of common-sdk, including the JSON files with `jsonPath`
+- **TestValueFileFormats**: `format: binary` and `format: json` files, as described under
+  "Files of value references"
+- **TestDocumentedMTLSFiles**: Loads every documented mTLS setting with PEM files (the
+  client certificate with its intermediate CA; PKCS #8, PKCS #1 and SEC 1 keys) and
+  completes a TLS handshake with a server that requires the client certificate
+- **TestClientAuthMTLSFiles**: Provisions the credentials module with `clientAuth` of type
+  `mtls` and fetches the OpenID configuration of an identity provider over mTLS
+- **TestPostgresTLSFiles**: Parses the PostgreSQL settings with `PGSSLMODE`,
+  `PGSSLROOTCERT`, `PGSSLCERT` and `PGSSLKEY` and completes a TLS handshake
+
 ### configmap_test.go
 - **TestConfigMapRendering**: Tests ConfigMap template rendering
 

@@ -3,6 +3,12 @@
 # TestRenderedConfigLoadsStrictly checks them too. The values are rendered on top of the
 # chart's defaults.
 config:
+  database:
+    # The JSON file of "Value references" in values.yaml.
+    password:
+      source: file
+      file: { path: /etc/credentials/db.json, format: json, jsonPath: "$.password" }
+
   valkey:
     # Several addresses, without masterSet: the nodes of a Valkey cluster.
     host: { value: "valkey-0.valkey:6379,valkey-1.valkey:6379,valkey-2.valkey:6379" }
