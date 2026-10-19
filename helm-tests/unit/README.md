@@ -12,6 +12,16 @@ This directory contains unit tests for the session-manager Helm chart.
 - **TestChartValidation**: Validates chart syntax and structure
 - **TestLabelsAndAnnotations**: Verifies standard Kubernetes labels are applied
 
+### configload_test.go
+- **TestRenderedConfigLoadsStrictly**: Loads the rendered `config.yaml` (default values,
+  `values-dev.yaml`, and every documented setting in `testdata/values-all-config.yaml`)
+  with Session Manager's configuration loader and modules, and fails on keys that Session
+  Manager does not read
+- **TestStrictConfigCheckFindsUnknownKeys**: Checks that the strict check reports misspelled keys
+- **TestConfigMapsHaveSameConfig**: The ConfigMap and the migration job's hook copy contain the same `config.yaml`
+- **TestConfigChecksum**: `checksum/config` changes with the configuration, and only then
+- **TestImmutableConfigMapName**: The name of an immutable ConfigMap changes with the configuration, and only then
+
 ### configmap_test.go
 - **TestConfigMapRendering**: Tests ConfigMap template rendering
 
@@ -28,6 +38,11 @@ This directory contains unit tests for the session-manager Helm chart.
 
 ### job_test.go
 - **TestMigrateJobRendering**: Tests database migration job rendering
+- **TestMigrateConfigMapRendering**: Tests the migration job's hook copy of the configuration
+- **TestMigrationHookDeletePolicy**: The migration hooks are deleted only before they are created again
+
+### networkpolicy_test.go
+- **TestNetworkPolicyRendering**: Tests NetworkPolicy rendering when enabled
 
 ### pdb_test.go
 - **TestPDBRendering**: Tests PodDisruptionBudget rendering (skips if template doesn't exist)
@@ -48,7 +63,7 @@ This directory contains unit tests for the session-manager Helm chart.
 ### Prerequisites
 
 - Go installed (see go.mod for version)
-- Helm 3.x installed and available in PATH
+- Helm 3 or later installed and available in PATH
 - Tests use the `helmtests` build tag
 
 Run all tests:

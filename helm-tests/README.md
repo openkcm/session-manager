@@ -9,8 +9,9 @@ helm-tests/
 ├── integration/        # Integration tests
 │   ├── helm-install_test.go
 │   └── main_test.go
-└── unit/              # Unit tests (139 test cases)
+└── unit/              # Unit tests (175 test cases)
     ├── chart_test.go
+    ├── configload_test.go
     ├── configmap_test.go
     ├── deployment_test.go
     ├── hpa_test.go
@@ -20,6 +21,8 @@ helm-tests/
     ├── pdb_test.go
     ├── service_test.go
     ├── serviceaccount_test.go
+    ├── testdata/
+    │   └── values-all-config.yaml
     └── README.md
 ```
 
@@ -31,18 +34,22 @@ Unit tests validate individual Helm templates and their rendering with various v
 - Validate that expected Kubernetes resources are rendered
 - Check for correct labels, annotations, and configurations
 - Test various deployment scenarios (replicas, images, custom values)
-- **139 test cases covering 100% of templates**
+- Load the rendered `config.yaml` with Session Manager's own configuration loader and modules, and fail on keys that Session Manager does not read
+- **175 test cases covering every resource template**
 
 **Coverage:**
 - Deployments (session-manager and housekeeper)
 - Services
-- ConfigMaps (the configuration, and its hook copy for the migration job)
+- ConfigMaps (the configuration, and its hook copy for the migration job): identical
+  `config.yaml`, strict loading for the default values, `values-dev.yaml` and every
+  documented setting (`unit/testdata/values-all-config.yaml`), `checksum/config` and the
+  name of an immutable ConfigMap
 - ServiceAccounts
 - HorizontalPodAutoscaler (HPA)
-- Jobs (migration with hooks)
+- Jobs (migration with hooks, and their delete policy)
 - PodDisruptionBudget (PDB)
 - NetworkPolicy
-- Validation errors (image, autoscaling, PodDisruptionBudget)
+- Validation errors (autoscaling, PodDisruptionBudget)
 - Labels and annotations
 - Chart validation
 
@@ -107,7 +114,7 @@ go test -cover -tags=helmtests ./helm-tests/...
 ## Prerequisites
 
 - Go 1.26 or later
-- Helm 3.x installed and available in PATH
+- Helm 3 or later installed and available in PATH
 - Access to the session-manager chart at `../charts/session-manager`
 
 ## Adding New Tests
@@ -161,13 +168,14 @@ func TestNewResource(t *testing.T) {
 Helm tests are **automatically run** on every push via GitHub Actions.
 
 The workflows are defined in:
-- **`.github/workflows/helm-tests.yaml`** - Runs helm unit tests using race detection
+- **`.github/workflows/helm-tests.yaml`** - Runs the helm unit and integration tests using race detection
 - **`.github/workflows/ci.yaml`** - Runs main code quality checks
 
 The helm-tests workflow:
-- **Job: `helm-test`** - Runs unit tests only (integration tests require a k3d cluster)
+- **Job: `helm-test`** - Runs the unit tests, then builds the image (`Dockerfile.dev`),
+  creates a k3d cluster, imports the image and runs the integration tests
 - **Triggers:** On push (any branch)
-- **Requirements:** Go version from go.mod, Helm CLI
+- **Requirements:** Go version from go.mod, Helm CLI, Docker
 
 ### Running Locally
 

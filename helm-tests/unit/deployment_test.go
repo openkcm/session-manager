@@ -32,6 +32,8 @@ func TestDeploymentRendering(t *testing.T) {
 				"enableServiceLinks: false",
 				"runAsNonRoot: true",
 				"runAsUser: 65532",
+				"runAsGroup: 65532",
+				"fsGroup: 65532",
 				"readOnlyRootFilesystem: true",
 				"allowPrivilegeEscalation: false",
 				"mountPath: /tmp",
@@ -137,14 +139,18 @@ func TestDeploymentRendering(t *testing.T) {
 			},
 		},
 		{
+			// The API server is ready when its gRPC port listens: the status server's
+			// readiness endpoint reports ready before the API server listens.
 			name:   "with liveness and readiness probes",
 			values: "",
 			expected: []string{
 				"livenessProbe:",
-				"readinessProbe:",
 				"path: /probe/liveness",
-				"path: /probe/readiness",
 				"port: http-status",
+				"tcpSocket:\n              port: grpc\n",
+			},
+			unexpected: []string{
+				"path: /probe/readiness",
 			},
 		},
 		{
@@ -439,22 +445,27 @@ func TestHousekeeperDeployment(t *testing.T) {
 			},
 		},
 		{
+			// A rolling update without surge stops the old pod before the new one starts.
+			// Recreate would fail upgrades from chart versions before 0.11.0 with
+			// server-side apply: the Deployment keeps its rollingUpdate settings.
 			name:   "housekeeper probes, status port and update strategy",
 			values: "",
 			expected: []string{
-				"type: Recreate",
+				"strategy:\n    rollingUpdate:\n      maxSurge: 0\n      maxUnavailable: 1\n    type: RollingUpdate\n",
 				"checksum/config:",
 				"containerPort: 8888",
 				"name: http-status",
 				"path: /probe/liveness",
 				"path: /probe/readiness",
 				"runAsUser: 65532",
+				"fsGroup: 65532",
 				"readOnlyRootFilesystem: true",
 			},
 			// The housekeeper serves only the status endpoints.
 			unexpected: []string{
 				"containerPort: 8080",
 				"containerPort: 9091",
+				"Recreate",
 			},
 		},
 		{

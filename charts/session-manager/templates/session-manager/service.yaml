@@ -12,7 +12,7 @@ metadata:
     app.kubernetes.io/component: session-manager
   {{- with .Values.service.annotations }}
   annotations:
-    {{- toYaml . | nindent 4 }}
+    {{- include "session-manager.annotations" . | trim | nindent 4 }}
   {{- end }}
 spec:
   type: {{ .Values.service.type }}

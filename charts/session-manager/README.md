@@ -20,7 +20,7 @@ shows the complete setup with Envoy Gateway, ExtAuthZ and CMK.
 | Deployment `<release>-session-manager-housekeeper` | One replica that deletes idle sessions and refreshes access tokens before they expire |
 | Job `<release>-session-manager-migrate` | Creates and updates the database schema. Runs as a Helm hook before every install and upgrade |
 | ConfigMap `<release>-session-manager` | The configuration, rendered from `config` and mounted at `/etc/session-manager` |
-| ConfigMap `<release>-session-manager-config` | Hook copy of the configuration for the migration job. Deleted when the migration succeeds |
+| ConfigMap `<release>-session-manager-config` | Hook copy of the configuration for the migration job. Kept until the next install or upgrade replaces it, also after `helm uninstall` |
 | Service | `http`, `grpc` and `http-status` inside the cluster |
 | ServiceAccount | Identity of the pods. Session Manager does not call the Kubernetes API, so no token is mounted |
 | NetworkPolicy | Optional (`networkPolicy.enabled`): who may reach the pods |
@@ -151,12 +151,14 @@ The release notes list the settings that are missing or not production-ready.
 
 | Setting | Default |
 | --- | --- |
-| Pods | Non-root (user and group 65532), `RuntimeDefault` seccomp profile, no ServiceAccount token, no Service environment variables |
+| Pods | Non-root (user, group and `fsGroup` 65532), `RuntimeDefault` seccomp profile, no ServiceAccount token, no Service environment variables |
 | Containers | No privilege escalation, all capabilities dropped, read-only root filesystem, writable `/tmp` |
 | Secrets | No default values. Embedded values are reported in the release notes |
 | gRPC reflection | Off |
 | Profiling endpoints | Off |
-| Identity providers over `http` | Refused (`allowHttpScheme: false`) |
+| Identity providers over `http` | Refused (`config.sessionManager.allowHttpScheme`, and `allowHttpScheme` of the gRPC `session` service in `config.apps`, are false) |
+| Valkey connection | **Without TLS** (`config.valkey.secretRef.type: insecure`). Use `mtls` unless a service mesh encrypts the traffic |
+| PostgreSQL connection | `PGSSLMODE` not set: TLS if the server offers it, without a certificate check, else unencrypted. Set `PGSSLMODE=verify-full` and `PGSSLROOTCERT` in `extraEnvs` |
 
 The gRPC API does not use TLS and does not authenticate its callers, and it can
 change tenant trust records. Allow only ExtAuthZ and CMK to call it: enable
@@ -183,15 +185,12 @@ Secrets you manage yourself need a restart:
 kubectl rollout restart deployment/<release>-session-manager deployment/<release>-session-manager-housekeeper
 ```
 
-[templates/configmap.yaml](templates/configmap.yaml) writes `config.yaml` with one
-section per setting, and [templates/migrate/configmap.yaml](templates/migrate/configmap.yaml)
-the same for the migration job: `config.environment` and `config.labels` become
-`application.environment` and `application.labels`, `config.application.name` overrides the
-application name (default `session-manager`), and `audit`, `status`, `logger`, `telemetry`,
-`http`, `grpc`, `database`, `trust`, `credentials`, `valkey`, `sessionManager`, `migrate`,
-`housekeeper`, `apps` and `appsOrder` are written as they are. Other keys under `config` are
-not written, and Session Manager ignores unknown keys inside a section without a warning,
-so check spelling and nesting carefully.
+Everything under `config` is written to `config.yaml` (helper `session-manager.config` in
+[templates/_helpers.tpl](templates/_helpers.tpl)), for the API server, the housekeeper and
+the migration job alike. `config.environment` and `config.labels` become
+`application.environment` and `application.labels`, and `config.application` overrides
+single application fields (the name defaults to `session-manager`). Session Manager ignores
+unknown keys without a warning, so check spelling and nesting carefully.
 
 ## Database migrations
 
@@ -200,7 +199,7 @@ upgrade, with a hook copy of the configuration. The API server checks the schema
 version at startup and does not start on an outdated schema. If the job fails,
 the install or upgrade fails and the running pods are not changed. The job is
 kept for `migrate.ttlSecondsAfterFinished` seconds (default 300), and its
-ConfigMap until the next attempt:
+ConfigMap until the next install or upgrade replaces it:
 
 ```sh
 kubectl logs job/<release>-session-manager-migrate
@@ -216,19 +215,19 @@ would keep it from completing. If a service mesh injects a sidecar, set
 | --- | --- |
 | Default image repository is now `session-manager/images/session-manager` (was `images/session-manager`) | If you set `image.repository` yourself, nothing changes |
 | No `imagePullSecrets` by default (was `registry-access`) | Set `imagePullSecrets` if you pull from a private registry |
-| The ConfigMap is a regular release resource named `<release>-session-manager` (was the hook `<release>-session-manager-config`) | None. The old object is replaced by the migration job's hook copy, which is deleted when the migration succeeds. With `migrate.enabled: false`, delete the old ConfigMap yourself |
+| The ConfigMap is a regular release resource named `<release>-session-manager` (was the hook `<release>-session-manager-config`) | None. The migration job's hook copy replaces the old object under the same name and is kept, with the configuration of the latest install or upgrade, so pods rolled back to 0.10.x with `helm rollback` still find it. With `migrate.enabled: false`, the old ConfigMap stays unchanged; delete it once you no longer need a rollback |
 | The configuration is always mounted at `/etc/session-manager` | `nameOverride` no longer breaks the installation |
 | No default secrets: `csrfSecret`, `clientAuth.clientSecret`, `clientAuth.clientID`, the database and Valkey credentials and hosts are empty | Set them, preferably with `source: file` |
 | `callbackURL` and `csrfCookieTemplate.domain` default to empty (were `localhost` values); `audit` is not set (was `http://localhost:4043/logs`) | Set them for your installation |
 | `config.grpc.flags.reflection` defaults to `false` | Set it to `true` if you rely on reflection |
 | Role and RoleBinding (without rules, in namespace `default`) are no longer created | None; Helm deletes them |
-| New security defaults (user 65532, read-only root filesystem), probe thresholds and resource requests | Override `pod.securityContext`, `securityContext`, the probes and `resources` if needed |
-| The housekeeper has its own `housekeeper.resources`, probes and `Recreate` update strategy, and gets `extraEnvs` and `extraEnvsFrom` | Move resource overrides for the housekeeper to `housekeeper.resources` |
+| New security defaults (user, group and `fsGroup` 65532, read-only root filesystem), probe thresholds, a TCP readiness probe of the API server on the `grpc` port, and resource requests | Override `pod.securityContext`, `securityContext`, the probes and `resources` if needed |
+| The housekeeper has its own `housekeeper.resources`, probes and update strategy (a rolling update with `maxSurge: 0`, so the old pod stops before the new one starts), and gets `extraEnvs` and `extraEnvsFrom` | Move resource overrides for the housekeeper to `housekeeper.resources`. Do not set `housekeeper.strategy.type: Recreate`: with server-side apply (Helm 4) the upgrade fails |
 | The migration job gets `extraEnvs`, `extraEnvsFrom`, `nodeSelector` and `tolerations`, but no longer `extraContainers` | Use `migrate.extraContainers` for containers that exit on their own |
 | PodDisruptionBudget without `minAvailable` or `maxUnavailable` uses `maxUnavailable: 1` (was `minAvailable: 1`) | Set `minAvailable` explicitly if you want the old behaviour |
 | `autoscaling.minReplicas` and `maxReplicas` default to 2 and 5 (were 1 and 1) | Set them explicitly if you enable autoscaling |
 | `config.isImmutable` is replaced by `configMap.immutable` | The old key still works |
-| The values for local development are no longer part of the chart: they are in the session-manager repository (`dev/values-dev.yaml`) | Copy settings from `values.yaml` if you used them as a template |
+| The values for local development are no longer part of the published chart: `charts/session-manager/values-dev.yaml` in the session-manager repository is excluded from the package and used by the Makefile | Copy settings from `values.yaml` if you used them as a template |
 
 ## Troubleshooting
 
@@ -253,6 +252,11 @@ helm uninstall session-manager -n services
 ```
 
 The Secrets you created yourself, the database and the Valkey data are not
-removed. Helm does not remove hook resources either: a ConfigMap left by a failed
-migration (`<release>-session-manager-config`) stays until you delete it, and the
-migration job until `migrate.ttlSecondsAfterFinished` expires.
+removed. Helm does not remove hook resources either: delete the migration job's
+ConfigMap yourself, and the migration job if `migrate.ttlSecondsAfterFinished`
+has not removed it yet:
+
+```sh
+kubectl -n services delete configmap session-manager-config --ignore-not-found
+kubectl -n services delete job session-manager-migrate --ignore-not-found
+```

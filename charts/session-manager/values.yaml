@@ -33,8 +33,7 @@ image:
   # -- Repository of the image in the registry.
   repository: session-manager/images/session-manager
   # -- Session Manager version to deploy, for example `v0.20.1`. Empty: the chart's
-  # appVersion, the version this chart release is made for and that its OCM component
-  # references.
+  # appVersion, the Session Manager release this chart release deploys by default.
   tag: ""
   # -- Image digest, for example `sha256:…`. Takes precedence over `tag`.
   digest: ""
@@ -89,11 +88,13 @@ pod:
   # -- Pod security context of all pods. The defaults run Session Manager as user and group
   # 65532, the non-root user of the published image, with the runtime's default seccomp
   # profile. `runAsUser` is set because Kubernetes enforces `runAsNonRoot` only for images
-  # with a numeric user.
+  # with a numeric user. `fsGroup` gives group 65532 access to mounted volumes, so Secrets
+  # mounted with a restrictive `defaultMode` (for example `0400`) stay readable.
   securityContext:
     runAsNonRoot: true
     runAsUser: 65532
     runAsGroup: 65532
+    fsGroup: 65532
     seccompProfile:
       type: RuntimeDefault
 
@@ -197,14 +198,14 @@ livenessProbe:
   timeoutSeconds: 2
   failureThreshold: 3
 
-# -- Readiness probe of the API server. Needs `config.status.enabled: true`. The readiness
-# endpoint does not check the database or Valkey: the API server stops at startup if it
-# cannot reach them.
+# -- Readiness probe of the API server: a TCP check of the `grpc` port. The API server opens
+# it after it has connected to PostgreSQL and Valkey and checked the database schema, and
+# opens the `http` port right after; it stops if any of this fails. The status endpoint
+# `/probe/readiness` is not used: it reports ready as soon as the status server runs,
+# before the API server listens.
 readinessProbe:
-  httpGet:
-    path: /probe/readiness
-    port: http-status
-    scheme: HTTP
+  tcpSocket:
+    port: grpc
   periodSeconds: 10
   timeoutSeconds: 2
   failureThreshold: 3
@@ -282,8 +283,8 @@ extraVolumeMounts: []
 
 # -- Additional environment variables of all Session Manager containers. The PostgreSQL
 # client reads the standard `PG*` variables, for example `PGSSLMODE=verify-full` and
-# `PGSSLROOTCERT`. Never set `DEBUGFEATURES` in production: it logs complete HTTP
-# requests and responses, including tokens.
+# `PGSSLROOTCERT` to require TLS (see `config.database`). Never set `DEBUGFEATURES` in
+# production: it logs complete HTTP requests and responses, including tokens.
 extraEnvs: []
 
 # -- Additional `envFrom` sources of all Session Manager containers.
@@ -298,10 +299,16 @@ housekeeper:
   # `sessionDuration` and access tokens are not refreshed. Run exactly one per
   # installation.
   enabled: true
-  # -- Update strategy. `Recreate` stops the old pod before the new one starts, so two
-  # housekeepers never refresh the same tokens.
+  # -- Update strategy. A rolling update without surge stops the old pod before the new one
+  # starts, so two housekeepers never refresh the same tokens. Do not use `Recreate`: with
+  # server-side apply (Helm 4), a Deployment created by chart versions before 0.11.0 keeps
+  # its `rollingUpdate` settings, which Kubernetes rejects with `Recreate`, so the upgrade
+  # fails.
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   # -- Resources of the housekeeper container, including ephemeral storage for its logs
   # and `/tmp`.
   resources:
@@ -409,22 +416,23 @@ configMap:
   # -- Annotations for the configuration ConfigMap.
   annotations: {}
 
-# Session Manager configuration, mounted at `/etc/session-manager` in all workloads.
-# templates/configmap.yaml (and templates/migrate/configmap.yaml for the migration job)
-# writes it to `config.yaml`, one section per key: `environment` and `labels` become
-# `application.environment` and `application.labels`; the application name is
-# `session-manager`, override it with `application.name`; audit, status, logger,
-# telemetry, http, grpc, database, trust, credentials, valkey, sessionManager, migrate,
-# housekeeper, apps and appsOrder are written as they are. Other keys under `config` are
-# not written. `isImmutable` is a deprecated chart setting; use `configMap.immutable`.
+# Session Manager configuration, written to `config.yaml` and mounted at
+# `/etc/session-manager` in all workloads (helper session-manager.config in
+# templates/_helpers.tpl, used by templates/configmap.yaml and, for the migration job,
+# templates/migrate/configmap.yaml). Every key below is passed through, except
+# `environment` and `labels`, which become `application.environment` and
+# `application.labels`, and the chart setting `isImmutable` (deprecated; use
+# `configMap.immutable`). The application name is `session-manager`; override it with
+# `application.name`.
 #
-# Session Manager ignores unknown keys inside a section without a warning: check spelling
-# and nesting.
+# Session Manager ignores unknown keys without a warning: check spelling and nesting.
 # Settings marked "value reference" take `{ source: embedded, value: … }`,
 # `{ source: env, env: NAME }` or `{ source: file, file: { path: …, format: binary } }`.
 # Use `source: file` with a Secret mounted through `extraVolumes` for every secret:
 # embedded values are stored in plain text in the ConfigMap.
 config:
+  isImmutable: false
+
   # -- Environment name (`application.environment`), attached to logs, traces, metrics and
   # audit events.
   environment: production
@@ -453,8 +461,8 @@ config:
         time: time
         otel:
           # -- Names of the trace and span ID fields.
-          traceID: trace.id
-          spanID: span.id
+          traceId: trace.id
+          spanId: span.id
         masking:
           # -- Fields whose values are masked, keeping the first four characters.
           pii:
@@ -476,7 +484,9 @@ config:
 
   http:
     # -- Listen address of the `/sm/*` endpoints. Must match the `http` container port. TLS
-    # is terminated by Envoy Gateway. Also: `shutdownTimeout` (default `5s`).
+    # is terminated by Envoy Gateway. Also: `shutdownTimeout` (default `5s`); it applies
+    # only on SIGINT. Session Manager does not handle SIGTERM, which Kubernetes sends to
+    # stop a pod, and stops at once.
     address: :8080
 
   grpc:
@@ -488,14 +498,18 @@ config:
       health: true
       # -- Serve gRPC server reflection. Keep false in production.
       reflection: false
-    # Further settings and their defaults: shutdownTimeout (5s), maxRecvMsgSize
-    # (125829120), efPolMinTime (180s), efPolPermitWithoutStream (false),
-    # attributes.maxConnectionIdle (1800s), attributes.maxConnectionAge (1800s),
-    # attributes.maxConnectionAgeGrace (300s), attributes.time (120m),
-    # attributes.timeout (20s).
+    # Further settings and their defaults: shutdownTimeout (5s; applies only on SIGINT,
+    # like http.shutdownTimeout), maxSendMsgSize (2147483647), maxRecvMsgSize (125829120),
+    # efPolMinTime (180s), efPolPermitWithoutStream (false), attributes.maxConnectionIdle
+    # (1800s), attributes.maxConnectionAge (1800s), attributes.maxConnectionAgeGrace
+    # (300s), attributes.time (120m), attributes.timeout (20s).
 
-  # PostgreSQL with the tenant trust records. There are no settings for TLS; use the
-  # `PGSSLMODE` and `PGSSLROOTCERT` environment variables (`extraEnvs`).
+  # PostgreSQL with the tenant trust records. There are no settings for TLS; the client
+  # reads the `PGSSLMODE` and `PGSSLROOTCERT` environment variables (`extraEnvs`). By
+  # default `PGSSLMODE` is not set, so the client uses `prefer`: it tries TLS without
+  # checking the server certificate and falls back to an unencrypted connection. To require
+  # TLS with a verified certificate, set `PGSSLMODE=verify-full` and `PGSSLROOTCERT` (the
+  # path of the CA certificate, or `system`).
   database:
     # -- Database module.
     module: database.module.pgxpool
@@ -538,7 +552,8 @@ config:
     prefix: session-manager
     # -- Transport security. Only `type: mtls` enables TLS, with `mtls.cert`,
     # `mtls.certKey` and `mtls.serverCa` as value references; any other type connects
-    # without TLS. Use `mtls` unless a service mesh encrypts the traffic.
+    # without TLS. The default, `insecure`, sends the users' access and refresh tokens to
+    # Valkey unencrypted. Use `mtls` unless a service mesh encrypts the traffic.
     secretRef:
       type: insecure
     # Sentinel: `masterSet` (the master set name; setting it switches to Sentinel) and
@@ -560,6 +575,7 @@ config:
     # -- A session ends after this time without requests.
     idleSessionTimeout: 90m
     # -- Accept identity providers served over plain `http`. For local development only.
+    # The gRPC `session` service has its own setting (see `apps`).
     allowHttpScheme: false
     # -- **Required.** CSRF secret; value reference. At least 32 bytes, or the API server
     # does not start. **Must contain exactly the same bytes as ExtAuthZ's `csrfSecret`**;
@@ -652,7 +668,8 @@ config:
 
   # -- Long-running components, keyed by a name you choose. The gRPC server hosts the
   # services that ExtAuthZ (`session`) and CMK (`oidcmapping`) call. `appsOrder` optionally
-  # sets the start order.
+  # sets the start order. The `session` service accepts token introspection endpoints over
+  # plain `http` with `allowHttpScheme: true` in its entry; for local development only.
   apps:
     grpc:
       module: app.module.grpcserver

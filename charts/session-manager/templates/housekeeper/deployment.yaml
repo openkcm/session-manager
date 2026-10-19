@@ -25,7 +25,7 @@ spec:
     metadata:
       annotations:
         # Restart the pod when the configuration changes.
-        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/config: {{ include "session-manager.config" . | sha256sum }}
         {{- with .Values.pod.annotations }}
         {{- include "session-manager.annotations" . | trim | nindent 8 }}
         {{- end }}

@@ -26,7 +26,7 @@ func TestConfigMapRendering(t *testing.T) {
 				"namespace: default",
 				"application:",
 				"name: session-manager",
-				`environment: "production"`,
+				"environment: production",
 				"reflection: false",
 			},
 			// The ConfigMap is a regular release resource, not a Helm hook. Secrets have no
@@ -36,6 +36,18 @@ func TestConfigMapRendering(t *testing.T) {
 				"immutable:",
 				"session-manager-config",
 				"my-csrf-secret",
+				// No audit section, so no comment about it either.
+				"Audit events",
+			},
+		},
+		{
+			// Annotation values are always rendered as strings.
+			name:   "configmap annotations",
+			values: "--set configMap.annotations.example\\.com/revision=3 --set configMap.annotations.example\\.com/reviewed=true",
+			expected: []string{
+				"annotations:",
+				`example.com/revision: "3"`,
+				`example.com/reviewed: "true"`,
 			},
 		},
 		{
@@ -69,13 +81,13 @@ func TestConfigMapRendering(t *testing.T) {
 			},
 		},
 		{
-			// templates/configmap.yaml lists the Session Manager settings; other keys are
-			// not written.
-			name:   "keys that are not Session Manager settings are not written",
+			// Every key under config is passed through; Session Manager ignores keys it does
+			// not know.
+			name:   "all configuration sections are passed through",
 			values: "--set config.featureFlags.enabled=true --set config.unknown=x",
-			unexpected: []string{
-				"featureFlags",
-				"unknown",
+			expected: []string{
+				"featureFlags:",
+				"unknown: x",
 			},
 		},
 		{
@@ -83,7 +95,7 @@ func TestConfigMapRendering(t *testing.T) {
 			values: "--set config.environment=staging --set config.application.name=sm-eu10",
 			expected: []string{
 				"application:",
-				`environment: "staging"`,
+				"environment: staging",
 				"name: sm-eu10",
 			},
 			// The flat chart keys are not written at the top level.
@@ -96,7 +108,7 @@ func TestConfigMapRendering(t *testing.T) {
 			name:   "custom environment",
 			values: "--set config.environment=development",
 			expected: []string{
-				`environment: "development"`,
+				"environment: development",
 			},
 		},
 		{

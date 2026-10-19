@@ -30,9 +30,17 @@ Check the pods:
 {{- if $sm.allowHttpScheme }}
 {{- $warnings = append $warnings "config.sessionManager.allowHttpScheme is true: identity providers over plain http are accepted. For local development only." }}
 {{- end }}
+{{- range $appName, $app := $cfg.apps }}
+{{- range $i, $service := (($app | default dict).services | default list) }}
+{{- if ($service | default dict).allowHttpScheme }}
+{{- $warnings = append $warnings (printf "config.apps.%s.services[%d].allowHttpScheme is true: token introspection endpoints over plain http are accepted. For local development only." $appName $i) }}
+{{- end }}
+{{- end }}
+{{- end }}
 {{- /* Value references: required ones that are empty, and secrets stored in the ConfigMap. */}}
 {{- $refs := list
   (list "config.database.host" (($cfg.database | default dict).host) true false)
+  (list "config.database.user" (($cfg.database | default dict).user) true false)
   (list "config.database.password" (($cfg.database | default dict).password) false true)
   (list "config.valkey.host" (($cfg.valkey | default dict).host) true false)
   (list "config.valkey.password" (($cfg.valkey | default dict).password) false true)

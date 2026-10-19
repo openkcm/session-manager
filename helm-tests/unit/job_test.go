@@ -34,6 +34,7 @@ func TestMigrateJobRendering(t *testing.T) {
 				"ephemeral-storage: 512Mi",
 				"automountServiceAccountToken: false",
 				"runAsUser: 65532",
+				"fsGroup: 65532",
 				"readOnlyRootFilesystem: true",
 			},
 			// The chart's ServiceAccount does not exist yet when the hook runs.
@@ -292,19 +293,57 @@ func TestMigrateConfigMapRendering(t *testing.T) {
 
 	output := out.String()
 	// The job runs before the release's resources exist, so its configuration is a hook
-	// that runs first and is deleted when the migration succeeds.
+	// that is created first. It is kept until the next install or upgrade replaces it
+	// (TestMigrationHookDeletePolicy).
 	for _, expected := range []string{
 		"kind: ConfigMap",
 		"name: session-manager-config",
 		"app.kubernetes.io/component: migrate",
 		"helm.sh/hook: pre-install,pre-upgrade",
 		"helm.sh/hook-weight: \"-1\"",
-		"helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded",
+		"helm.sh/hook-delete-policy: before-hook-creation\n",
 		"config.yaml:",
 		"dbModule: database.module.pgxpool",
 	} {
 		if !strings.Contains(output, expected) {
 			t.Errorf("expected output to contain %q, but it didn't.\nOutput: %s", expected, output)
 		}
+	}
+}
+
+// TestMigrationHookDeletePolicy makes sure that Helm deletes the migration hooks only before
+// it creates them again. The hook ConfigMap stays after a successful migration, so that pods
+// rolled back to chart version 0.10.x, which mount a ConfigMap of the same name, start; and
+// after a failed one, for troubleshooting. With hook-succeeded, Helm would delete it after
+// every migration: when the job fails, Helm deletes the hooks that succeeded before it.
+func TestMigrationHookDeletePolicy(t *testing.T) {
+	manifests := renderManifests(t)
+	_, hookConfigMap := configMaps(t, manifests)
+	job, ok := manifests["Job/session-manager-migrate"]
+	if !ok {
+		t.Fatal("the migration job is not rendered")
+	}
+
+	for _, tt := range []struct {
+		resource string
+		m        manifest
+		weight   string
+	}{
+		{resource: "ConfigMap/" + hookConfigMap.Metadata.Name, m: hookConfigMap, weight: "-1"},
+		{resource: "Job/" + job.Metadata.Name, m: job, weight: "0"},
+	} {
+		annotations := tt.m.Metadata.Annotations
+		for key, want := range map[string]string{
+			"helm.sh/hook":               "pre-install,pre-upgrade",
+			"helm.sh/hook-weight":        tt.weight,
+			"helm.sh/hook-delete-policy": "before-hook-creation",
+		} {
+			if got := annotations[key]; got != want {
+				t.Errorf("%s: %s is %q, want %q", tt.resource, key, got, want)
+			}
+		}
+	}
+	if name := hookConfigMap.Metadata.Name; name != appName+"-config" {
+		t.Errorf("the hook ConfigMap is %s, want %s-config, the name that chart versions before 0.11.0 mount", name, appName)
 	}
 }

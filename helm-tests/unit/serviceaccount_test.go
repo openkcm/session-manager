@@ -38,7 +38,15 @@ func TestServiceAccountRendering(t *testing.T) {
 			values: "--set serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn=arn:aws:iam::123456789:role/my-role",
 			expected: []string{
 				"annotations:",
-				"eks.amazonaws.com/role-arn: arn:aws:iam::123456789:role/my-role",
+				`eks.amazonaws.com/role-arn: "arn:aws:iam::123456789:role/my-role"`,
+			},
+		},
+		{
+			// Annotation values are always rendered as strings.
+			name:   "with numeric service account annotation",
+			values: "--set serviceAccount.annotations.example\\.com/revision=2",
+			expected: []string{
+				`example.com/revision: "2"`,
 			},
 		},
 		{

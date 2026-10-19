@@ -1,0 +1,103 @@
+# Every optional configuration setting that values.yaml and README.md document, with the
+# required ones, so that TestRenderedConfigLoadsStrictly checks their names and nesting
+# against Session Manager. Add new documented settings here.
+config:
+  application:
+    name: session-manager-eu10
+  environment: staging
+  labels:
+    region: eu10
+
+  logger:
+    formatter:
+      time:
+        type: unix
+        precision: 1ms
+
+  http:
+    shutdownTimeout: 5s
+
+  grpc:
+    shutdownTimeout: 5s
+    maxSendMsgSize: 2147483647
+    maxRecvMsgSize: 125829120
+    efPolMinTime: 180s
+    efPolPermitWithoutStream: false
+    attributes:
+      maxConnectionIdle: 1800s
+      maxConnectionAge: 1800s
+      maxConnectionAgeGrace: 300s
+      time: 120m
+      timeout: 20s
+
+  database:
+    host: { source: embedded, value: postgresql.services.svc.cluster.local }
+    user: { source: env, env: DATABASE_USER }
+    password: { source: file, file: { path: /etc/credentials/database/password, format: binary } }
+
+  valkey:
+    host: { value: valkey-primary.storage.svc.cluster.local:6379 }
+    user: { value: session-manager }
+    password: { source: file, file: { path: /etc/credentials/valkey/password, format: binary } }
+    masterSet: mymaster
+    topologyRefreshInterval: 5s
+    secretRef:
+      type: mtls
+      mtls:
+        cert:     { source: file, file: { path: /etc/credentials/valkey/tls.crt, format: binary } }
+        certKey:  { source: file, file: { path: /etc/credentials/valkey/tls.key, format: binary } }
+        serverCa: { source: file, file: { path: /etc/credentials/valkey/ca.crt, format: binary } }
+
+  sessionManager:
+    callbackURL: https://api.example.com/sm/callback
+    allowedRedirectBaseURLs:
+      - https://ui.example.com/
+    csrfSecret: { source: file, file: { path: /etc/credentials/csrf-secret/csrf_secret, format: binary } }
+    clientAuth:
+      type: mtls
+      clientID: cmk-session-manager
+      mTLS:
+        cert:     { source: file, file: { path: /etc/credentials/client-auth/tls.crt, format: binary } }
+        certKey:  { source: file, file: { path: /etc/credentials/client-auth/tls.key, format: binary } }
+        serverCa: { source: file, file: { path: /etc/credentials/client-auth/ca.crt, format: binary } }
+    sessionCookieTemplate:
+      domain: ""
+      maxAge: 0
+    csrfCookieTemplate:
+      domain: example.com
+      httpOnly: false
+      maxAge: 0
+    loginCSRFCookieTemplate:
+      name: __Host-LoginCSRF
+      maxAge: 0
+
+  audit:
+    endpoint: http://otel-collector:4318/v1/logs
+    httpClient:
+      timeout: 10s
+      mtls:
+        cert:    { source: file, file: { path: /etc/credentials/audit/tls.crt, format: binary } }
+        certKey: { source: file, file: { path: /etc/credentials/audit/tls.key, format: binary } }
+    additionalProperties: |
+      appID: session-manager
+
+  telemetry:
+    metrics:
+      enabled: true
+      protocol: grpc
+      host: { source: env, env: OTEL_HOST }
+      secretRef: { type: insecure }
+      prometheus: { enabled: true }
+
+  apps:
+    grpc:
+      services:
+        - module: service.module.grpc.session
+          allowHttpScheme: false
+        - module: service.module.grpc.trustmapping
+        - module: service.module.grpc.oidcmapping
+  appsOrder:
+    - grpc
+
+  # A chart setting (replaced by configMap.immutable); not written to config.yaml.
+  isImmutable: false

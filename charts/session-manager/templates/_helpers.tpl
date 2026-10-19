@@ -225,17 +225,31 @@ true
 {{- end }}
 
 {{/*
+The Session Manager configuration as rendered into config.yaml, for the API server, the
+housekeeper and the migration job.
+- application: built from config.environment and config.labels (the chart's flat values),
+  with the chart name as application name; config.application overrides single fields.
+- Everything else under config is passed through. Chart-only keys are removed.
+*/}}
+{{- define "session-manager.config" -}}
+{{- $application := dict "name" (include "session-manager.name" .) }}
+{{- with .Values.config.environment }}{{- $_ := set $application "environment" . }}{{- end }}
+{{- with .Values.config.labels }}{{- $_ := set $application "labels" . }}{{- end }}
+{{- with .Values.config.application }}{{- $application = mergeOverwrite $application (deepCopy .) }}{{- end }}
+{{- $rest := omit .Values.config "environment" "labels" "isImmutable" "application" }}
+{{- toYaml (merge (dict "application" $application) $rest) }}
+{{- end }}
+
+{{/*
 Name of the configuration ConfigMap of the API server and the housekeeper. An immutable
-ConfigMap gets a hash in its name, so that a changed configuration creates a new ConfigMap
-instead of failing the upgrade. config.yaml (templates/configmap.yaml) is made of the values
-under config and the chart version, so the hash covers these.
+ConfigMap gets a hash of the configuration in its name, so that a changed configuration
+creates a new ConfigMap instead of failing the upgrade.
 The name differs from "<fullname>-config", which chart versions before 0.11.0 created as a
 Helm hook: Helm cannot adopt that object, so reusing the name would fail the upgrade.
 */}}
 {{- define "session-manager.configMapName" -}}
 {{- if include "session-manager.configImmutable" . -}}
-{{- $hash := printf "%s\n%s" .Chart.Version (toYaml .Values.config) | sha256sum | trunc 10 }}
-{{- printf "%s-%s" (include "session-manager.fullname" . | trunc 52 | trimSuffix "-") $hash }}
+{{- printf "%s-%s" (include "session-manager.fullname" . | trunc 52 | trimSuffix "-") (include "session-manager.config" . | sha256sum | trunc 10) }}
 {{- else -}}
 {{- include "session-manager.fullname" . }}
 {{- end -}}
