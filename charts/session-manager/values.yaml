@@ -9,7 +9,8 @@
 #     install and upgrade.
 #
 # Values marked **Required** must be set for a working installation. Settings of Session
-# Manager itself are under `config`. They are described in the configuration reference:
+# Manager itself are under `config`, documented there with every key and an example of
+# every alternative, and in the configuration reference:
 # https://openkcm.io/components/cmk/security/session-manager-config
 
 # -- Override the chart name in resource names and in the `app.kubernetes.io/name` label.
@@ -422,43 +423,89 @@ configMap:
 # templates/migrate/configmap.yaml). Every key below is passed through, except
 # `environment` and `labels`, which become `application.environment` and
 # `application.labels`, and the chart setting `isImmutable` (deprecated; use
-# `configMap.immutable`). The application name is `session-manager`; override it with
-# `application.name`.
+# `configMap.immutable`). Session Manager reads the configuration and every file it
+# refers to at startup. The migration job uses `logger`, `database`, `migrate` and
+# `sessionManager.clientAuth.clientID`; it runs no status server and sends no telemetry.
 #
-# Session Manager ignores unknown keys without a warning: check spelling and nesting.
-# Settings marked "value reference" take `{ source: embedded, value: … }`,
-# `{ source: env, env: NAME }` or `{ source: file, file: { path: …, format: binary } }`.
-# Use `source: file` with a Secret mounted through `extraVolumes` for every secret:
-# embedded values are stored in plain text in the ConfigMap.
+# Session Manager ignores unknown keys without a warning: write every key exactly as shown,
+# with the same nesting. Durations are Go duration strings: `500ms`, `10s`, `5m`, `1h30m`.
+# `featureGates` and `featureFlags`, which other OpenKCM services read, have no effect.
+#
+# Value references. Settings marked "value reference" take one of these forms. `source`
+# defaults to `embedded`, so `{ value: "…" }` is enough for an embedded value.
+#   { source: embedded, value: "…" }      # the value itself. Stored in plain text in the
+#                                         # ConfigMap: do not use it for secrets
+#   { source: env, env: VARIABLE_NAME }   # an environment variable of the container
+#                                         # (extraEnvs, extraEnvsFrom). Startup fails if it
+#                                         # is not set or empty
+#   { source: file, file: { path: /etc/credentials/db/password, format: binary } }
+#                                         # the whole file as it is: a trailing newline is part
+#                                         # of the value. Mount Secrets with extraVolumes and
+#                                         # extraVolumeMounts. format: yaml reads the whole file
+#                                         # too
+#   { source: file, file: { path: /etc/credentials/db.json, format: json,
+#                           jsonPath: "$.password" } }
+#                                         # one string field of a JSON file
+#
+# mTLS settings (`valkey.secretRef.mtls`, `sessionManager.clientAuth.mTLS`,
+# `audit.httpClient.mtls`, `telemetry.*.secretRef.mtls`): TLS 1.2 or later with a client
+# certificate.
+#   cert: <value reference>          # client certificate (PEM)
+#   certKey: <value reference>       # its private key (PEM)
+#   serverCa: <value reference>      # optional: CA that signed the server certificate
+#   rootCAs: [<value reference>]     # optional: more trusted CAs. With serverCa or rootCAs,
+#                                    # only these CAs are trusted; without, the CA
+#                                    # certificates of the image
+#   attributes:                      # optional
+#     serverName: …                  # expected server name, if it differs from the address
+#     sessionTicketsDisabled: true   # do not resume TLS sessions
+#     allowTLSRenegotiationOnce: true  # accept one TLS renegotiation by the server
 config:
-  # -- Environment name (`application.environment`), attached to logs, traces, metrics and
-  # audit events.
+  # -- Environment name (`application.environment`), attached to logs, traces and metrics.
   environment: production
 
-  # -- Additional attributes (`application.labels`) attached to logs, traces and metrics.
+  # -- Additional attributes (`application.labels`) attached to logs, traces and metrics,
+  # for example `{ region: eu10 }`.
   labels: {}
 
+  # `application` overrides single fields of the application section, which the chart
+  # builds from `environment` and `labels`: `name` (the service name in logs, traces and
+  # metrics; default `session-manager`, or `nameOverride`), `environment` and `labels`.
+  # Example:
+  # application:
+  #   name: session-manager-eu10
+
   logger:
-    # -- Log level: `debug`, `info`, `warn` or `error`.
+    # -- Log level: `trace`, `debug`, `info`, `warn` or `error`, in any case. Any other
+    # value: `info`.
     level: info
     # -- Log format: `json` or `text`.
     format: json
+    # `source: true` adds the source file and line of each log call (default `false`).
+    # Example:
+    # source: true
     formatter:
       time:
-        # -- Timestamp format: `pattern` (Go time layout) or `unix`.
+        # -- Timestamp format: `pattern` (a Go time layout, in UTC) or `unix` (a number:
+        # the time since 1970 in units of `precision`).
         type: pattern
         # -- Go time layout, for `type: pattern`.
         pattern: "Mon Jan 02 15:04:05 -0700 2006"
-        # -- Precision, for `type: unix`: `1ns`, `1us`, `1ms` or `1s`.
+        # -- Unit of the timestamp, for `type: unix`: exactly `1ns`, `1us`, `1ms` or `1s`.
         precision: 1s
+        # Example:
+        # type: unix
+        # precision: 1ms
       fields:
-        # -- Names of the standard fields of a log record.
+        # -- Attribute whose errors are written with their `message`, `type` and
+        # `stacktrace`. Session Manager logs errors as `error`.
         error: error
+        # -- Names of the message, level and timestamp fields of a log record.
         message: msg
         level: level
         time: time
         otel:
-          # -- Names of the trace and span ID fields.
+          # -- Names of the trace and span ID fields, added to records of traced requests.
           traceId: trace.id
           spanId: span.id
         masking:
@@ -466,41 +513,68 @@ config:
           pii:
             - email
             - ip-address
-          # -- Fields whose values are replaced with the given mask.
+          # -- Fields whose values are replaced with the given text.
           other:
             jwt-token: "*****"
 
+  # Status server of the API server and the housekeeper. `timeout` has no effect.
   status:
-    # -- Serve the status endpoints (`/probe/liveness`, `/probe/readiness`, `/version`, and
-    # `/metrics` if Prometheus metrics are enabled). Needed by the probes.
+    # -- Serve the status endpoints: `/probe/liveness`, `/probe/readiness`, `/version`
+    # (build information), and `/metrics` if Prometheus metrics are enabled (see
+    # `telemetry`). Needed by the probes.
     enabled: true
     # -- Listen address of the status server. Must match the `http-status` container port.
     address: :8888
-    # -- Serve Go profiling endpoints on the status port, without authentication. Keep
-    # false in production.
+    # -- Serve Go profiling endpoints (`/debug/pprof/…`) on the status port, without
+    # authentication. Keep false in production; enable it only for troubleshooting.
     profiling: false
 
   http:
     # -- Listen address of the `/sm/*` endpoints. Must match the `http` container port. TLS
-    # is terminated by Envoy Gateway. Also: `shutdownTimeout` (default `5s`); it applies
-    # only on SIGINT. Session Manager does not handle SIGTERM, which Kubernetes sends to
-    # stop a pod, and stops at once.
+    # is terminated by Envoy Gateway. `unix:///<path>` listens on a Unix socket instead.
     address: :8080
+    # `shutdownTimeout` (default `5s`): how long open requests may finish when Session
+    # Manager stops. It applies only on SIGINT: Session Manager does not handle SIGTERM,
+    # which Kubernetes sends to stop a pod, and stops at once.
+    # Example:
+    # shutdownTimeout: 5s
 
   grpc:
-    # -- Listen address of the gRPC API. Must match the `grpc` container port and the
-    # address that ExtAuthZ and CMK use.
+    # -- Listen address of the gRPC API (the gRPC server app in `apps`). Must match the
+    # `grpc` container port and the address that ExtAuthZ and CMK use. The gRPC API has no
+    # TLS and no authentication: restrict access with `networkPolicy`.
     address: :9091
     flags:
-      # -- Serve the gRPC health service.
+      # -- Serve the gRPC health service (`grpc.health.v1.Health`).
       health: true
-      # -- Serve gRPC server reflection. Keep false in production.
+      # -- Serve gRPC server reflection, for tools such as grpcurl. Keep false in production.
       reflection: false
-    # Further settings and their defaults: shutdownTimeout (5s; applies only on SIGINT,
-    # like http.shutdownTimeout), maxSendMsgSize (2147483647), maxRecvMsgSize (125829120),
-    # efPolMinTime (180s), efPolPermitWithoutStream (false), attributes.maxConnectionIdle
-    # (1800s), attributes.maxConnectionAge (1800s), attributes.maxConnectionAgeGrace
-    # (300s), attributes.time (120m), attributes.timeout (20s).
+    # Further settings, shown below with their defaults:
+    #   shutdownTimeout           how long open calls may finish when Session Manager stops;
+    #                             applies only on SIGINT, like `http.shutdownTimeout`
+    #   maxRecvMsgSize            largest message the server accepts, in bytes
+    #   efPolMinTime              minimum time between keepalive pings of a client; the
+    #                             server closes the connection of a client that pings more
+    #                             often
+    #   efPolPermitWithoutStream  accept keepalive pings while no call is active
+    #   attributes:
+    #     maxConnectionIdle       close a connection after this time without calls
+    #     maxConnectionAge        close a connection after this time (±10%)
+    #     maxConnectionAgeGrace   time that open calls get after maxConnectionAge
+    #     time                    ping a client after this time without activity (minimum 1s)
+    #     timeout                 close the connection if the ping is not answered in time
+    # `enabled` and `maxSendMsgSize` have no effect.
+    # Example:
+    # shutdownTimeout: 5s
+    # maxRecvMsgSize: 125829120
+    # efPolMinTime: 180s
+    # efPolPermitWithoutStream: false
+    # attributes:
+    #   maxConnectionIdle: 1800s
+    #   maxConnectionAge: 1800s
+    #   maxConnectionAgeGrace: 300s
+    #   time: 120m
+    #   timeout: 20s
 
   # PostgreSQL with the tenant trust records. There are no settings for TLS; the client
   # reads the `PGSSLMODE` and `PGSSLROOTCERT` environment variables (`extraEnvs`). By
@@ -509,13 +583,13 @@ config:
   # TLS with a verified certificate, set `PGSSLMODE=verify-full` and `PGSSLROOTCERT` (the
   # path of the CA certificate, or `system`).
   database:
-    # -- Database module.
+    # -- Database module. `database.module.pgxpool` (PostgreSQL) is the only one.
     module: database.module.pgxpool
     # -- **Required.** Host name; value reference.
     host:
       source: embedded
       value: ""
-    # -- Port.
+    # -- Port, as a string.
     port: "5432"
     # -- Database name.
     name: session_manager
@@ -527,14 +601,23 @@ config:
     password:
       source: embedded
       value: ""
+    # Host, port, name, user and password go into a PostgreSQL connection string without
+    # quoting: they must not contain spaces, backslashes or single quotes.
+    # Example, with the three forms of value references:
+    # host: { source: embedded, value: postgresql.services.svc.cluster.local }
+    # user: { source: env, env: DATABASE_USER }
+    # password:
+    #   source: file
+    #   file: { path: /etc/credentials/database/password, format: binary }
 
-  # Valkey with the pending logins and the sessions, including the users' access and
-  # refresh tokens. Protect it accordingly.
+  # Valkey with the pending sign-ins and the sessions, including the users' access and
+  # refresh tokens. Protect it accordingly. Used by the API server and the housekeeper.
   valkey:
-    # -- Session store module.
+    # -- Session store module. `sessionstore.module.valkey` is the only one.
     module: sessionstore.module.valkey
-    # -- **Required.** One or more `host:port`, separated by commas; value reference. The
-    # port is required.
+    # -- **Required.** `host:port`, value reference; the port is required. One address: a
+    # standalone Valkey or a node of a Valkey cluster. Several addresses, separated by
+    # commas: nodes of a Valkey cluster, or the Sentinels (see `masterSet`).
     host:
       source: embedded
       value: ""
@@ -546,16 +629,32 @@ config:
     password:
       source: embedded
       value: ""
-    # -- Prefix of all keys. A trailing `:` is removed.
+    # -- Prefix of all keys (`<prefix>:<type>:<id>`). A trailing `:` is removed. Give every
+    # installation that shares a Valkey its own prefix.
     prefix: session-manager
-    # -- Transport security. Only `type: mtls` enables TLS, with `mtls.cert`,
-    # `mtls.certKey` and `mtls.serverCa` as value references; any other type connects
-    # without TLS. The default, `insecure`, sends the users' access and refresh tokens to
-    # Valkey unencrypted. Use `mtls` unless a service mesh encrypts the traffic.
+    # -- Transport security: `type: insecure` (no TLS) or `type: mtls` with an `mtls` block
+    # (see "mTLS settings" above). The default, `insecure`, sends the users' access and
+    # refresh tokens to Valkey unencrypted. Use `mtls` unless a service mesh encrypts the
+    # traffic.
     secretRef:
       type: insecure
-    # Sentinel: `masterSet` (the master set name; setting it switches to Sentinel) and
-    # `topologyRefreshInterval` (for example `5s`; 0 disables the refresh).
+    # Example:
+    # secretRef:
+    #   type: mtls
+    #   mtls:
+    #     cert: { source: file, file: { path: /etc/credentials/valkey/tls.crt, format: binary } }
+    #     certKey: { source: file, file: { path: /etc/credentials/valkey/tls.key, format: binary } }
+    #     serverCa: { source: file, file: { path: /etc/credentials/valkey/ca.crt, format: binary } }
+    #     attributes:
+    #       serverName: valkey.storage.svc.cluster.local
+    #
+    # Valkey Sentinel: `masterSet` is the name of the master set; `host` then lists the
+    # Sentinels, and `user`, `password` and `secretRef` apply to them too.
+    # `topologyRefreshInterval` (default `0`: off) also asks the Sentinels for the current
+    # master at this interval, in addition to their failover notifications.
+    # Example:
+    # masterSet: mymaster
+    # topologyRefreshInterval: 5s
 
   sessionManager:
     # -- **Required.** Absolute public URL of the callback endpoint, for example
@@ -572,8 +671,8 @@ config:
     sessionDuration: 12h
     # -- A session ends after this time without requests.
     idleSessionTimeout: 90m
-    # -- Accept identity providers served over plain `http`. For local development only.
-    # The gRPC `session` service has its own setting (see `apps`).
+    # -- Accept identity providers (issuer and signing keys) served over plain `http`. For
+    # local development only. The gRPC `session` service has its own setting (see `apps`).
     allowHttpScheme: false
     # -- **Required.** CSRF secret; value reference. At least 32 bytes, or the API server
     # does not start. **Must contain exactly the same bytes as ExtAuthZ's `csrfSecret`**;
@@ -583,10 +682,14 @@ config:
       source: embedded
       value: ""
     # How Session Manager authenticates to the identity providers when it exchanges the
-    # authorization code and refreshes tokens. The same credentials are used for all
-    # tenants; the client ID of each tenant comes from its trust record.
+    # authorization code, refreshes tokens and introspects them. The same credentials are
+    # used for all tenants; the client ID of each tenant comes from its trust record.
     clientAuth:
-      # -- `client_secret`, `client_secret_post`, `mtls` or `insecure` (development only).
+      # -- How to authenticate:
+      # `client_secret` or `client_secret_post` (they behave the same): with `clientSecret`.
+      # `mtls`: with the client certificate in `mTLS`, on every connection to the identity
+      #   providers; the client ID is sent without a secret.
+      # `insecure`: with the client ID only. For development only; logs a warning.
       type: client_secret
       # -- **Required at the first installation.** Client ID registered at the identity
       # provider. The database migration copies it into existing trust records, and fails
@@ -597,14 +700,38 @@ config:
       clientSecret:
         source: embedded
         value: ""
-      # For `type: mtls`:
+      # Example, `client_secret_post` with the secret in a JSON file:
+      # type: client_secret_post
+      # clientSecret:
+      #   source: file
+      #   file: { path: /etc/credentials/client-auth.json, format: json, jsonPath: "$.secret" }
+      #
+      # Example, `mtls`. Write `mTLS` here (`mtls` in other sections); see "mTLS settings"
+      # above. `allowTLSRenegotiationOnce` directly under `clientAuth` is deprecated: use
+      # `mTLS.attributes.allowTLSRenegotiationOnce`.
+      # type: mtls
       # mTLS:
-      #   cert:     { source: file, file: { path: /etc/credentials/client-auth/tls.crt, format: binary } }
-      #   certKey:  { source: file, file: { path: /etc/credentials/client-auth/tls.key, format: binary } }
-      #   serverCa: { source: file, file: { path: /etc/credentials/client-auth/ca.crt, format: binary } }
-    # Cookie templates. Fields: name, path, domain, maxAge (seconds; 0 = until the browser
-    # closes), secure, httpOnly, sameSite (exactly `Lax`, `Strict` or `None`; any other
-    # spelling omits the attribute).
+      #   cert:
+      #     source: file
+      #     file: { path: /etc/credentials/client-auth/tls.crt, format: binary }
+      #   certKey:
+      #     source: file
+      #     file: { path: /etc/credentials/client-auth/tls.key, format: binary }
+      #   serverCa:
+      #     source: file
+      #     file: { path: /etc/credentials/client-auth/ca.crt, format: binary }
+      #   attributes:
+      #     allowTLSRenegotiationOnce: true
+      #
+      # Example, for local development only:
+      # type: insecure
+    # Cookie templates. Fields: `name`; `path`; `domain` (empty: the API host only; must
+    # be empty for names that start with `__Host-`); `maxAge` (seconds; 0 = until the
+    # browser closes); `secure`; `httpOnly`; `sameSite` (exactly `Lax`, `Strict` or `None`;
+    # any other spelling omits the attribute). When Session Manager sets a cookie, it logs a
+    # warning, but continues, if the cookie is not `secure`, the session cookie is not
+    # `httpOnly` or its name does not start with `__Host-Http-`, or a CSRF cookie is
+    # `httpOnly` or not `Strict`. The warnings for the login CSRF cookie are expected.
     sessionCookieTemplate:
       # -- Session cookie name; `-<tenant ID>` is appended. ExtAuthZ requires this name.
       name: __Host-Http-SESSION
@@ -639,61 +766,185 @@ config:
       # -- Must be `Lax`: the cookie must be sent when the identity provider redirects the
       # browser back to `/sm/callback`.
       sameSite: Lax
+      # Example, another name for local development over plain `http`, where browsers
+      # refuse `__Host-` cookies:
+      # name: LoginCSRF
 
+  # Used by the housekeeper only.
   housekeeper:
     # -- How often housekeeping runs. It also runs once at startup.
     triggerInterval: 10m
-    # -- Sessions processed in parallel.
+    # -- Sessions processed in parallel; at least 1.
     concurrencyLimit: 10
     # -- Refresh access tokens that expire within this time. Keep it at least as long as
     # `triggerInterval`.
     tokenRefreshTriggerInterval: 15m
 
-  # Modules. The defaults fit a standard installation.
+  # Modules. Each section selects its implementation with `module`; the defaults are the
+  # only modules built into Session Manager.
   trust:
-    # -- Module for the tenant trust records.
+    # -- Module for the tenant trust records: `trust.module.oidc`.
     module: trust.module.oidc
-    # -- Database module used for the trust records.
+    # -- Database module used for the trust records: `database.module.pgxpool`, configured
+    # in `database`.
     dbModule: database.module.pgxpool
   credentials:
-    # -- Module for the client authentication configured in `sessionManager.clientAuth`.
+    # -- Module for the client authentication configured in `sessionManager.clientAuth`:
+    # `credentials.module.oauth2`.
     module: credentials.module.oauth2
   migrate:
-    # -- Module for the database migrations.
+    # -- Module for the database migrations: `trust.migration.module.oidc`. The API server
+    # also uses it to check the schema version at startup.
     module: trust.migration.module.oidc
-    # -- Database module used by the migrations.
+    # -- Database module used by the migrations: `database.module.pgxpool`.
     dbModule: database.module.pgxpool
 
-  # -- Long-running components, keyed by a name you choose. The gRPC server hosts the
-  # services that ExtAuthZ (`session`) and CMK (`oidcmapping`) call. `appsOrder` optionally
-  # sets the start order. The `session` service accepts token introspection endpoints over
-  # plain `http` with `allowHttpScheme: true` in its entry; for local development only.
+  # -- Long-running components of the API server, keyed by a name you choose. The only app
+  # module is `app.module.grpcserver`: the gRPC server configured in `grpc`, which hosts
+  # the services that ExtAuthZ (`session`) and CMK (`oidcmapping`) call. It can be used
+  # once and needs at least one service; each service can be listed once. Without it,
+  # ExtAuthZ and CMK cannot reach Session Manager, and the readiness probe of the API
+  # server fails.
   apps:
     grpc:
       module: app.module.grpcserver
       services:
+        # Sessions, for ExtAuthZ. Options, shown below with their defaults:
+        # `allowHttpScheme` accepts token introspection endpoints over plain `http`, for
+        # local development only; `trust`, `sessionStore` and `credentials` are the modules
+        # it uses, configured in `trust`, `valkey` and `credentials`.
         - module: service.module.grpc.session
+          # Example:
+          # allowHttpScheme: false
+          # trust: trust.module.oidc
+          # sessionStore: sessionstore.module.valkey
+          # credentials: credentials.module.oauth2
+        # Tenant trust records. Option: `trust`, the trust module (default below).
         - module: service.module.grpc.trustmapping
+          # Example:
+          # trust: trust.module.oidc
+        # Tenant trust records, with the older oidcmapping API. Option: `trust`, as above.
         - module: service.module.grpc.oidcmapping
+          # Example:
+          # trust: trust.module.oidc
+
+  # `appsOrder` sets the start order of the apps, by their names in `apps`. Apps not listed
+  # start after them. Apps stop in the reverse order. Startup fails if a name is not in
+  # `apps`.
+  # Example:
+  # appsOrder:
+  #   - grpc
 
   # Audit events (OTLP/HTTP logs) for successful and failed sign-ins. Omitted by default:
   # sign-ins work, but the events are not delivered and each attempt logs an error.
+  #   endpoint              URL of the OTLP/HTTP logs endpoint of the collector
+  #   httpClient:
+  #     timeout             request timeout (default `10s`)
+  #     apiToken            value reference: sent as `Authorization: Api-Token <token>`
+  #     basicAuth           HTTP basic authentication: `username` and `password`, value
+  #                         references. Takes precedence over `apiToken`
+  #     mtls                client certificate (see "mTLS settings" above); can be combined
+  #                         with `apiToken` or `basicAuth`
+  #     transportAttributes connection settings, all optional: tlsHandshakeTimeout,
+  #                         responseHeaderTimeout, expectContinueTimeout, idleConnTimeout
+  #                         (durations; 0 = no limit), maxIdleConns, maxConnsPerHost (0 = no
+  #                         limit), maxIdleConnsPerHost (0 = 2), disableKeepAlives,
+  #                         disableCompression
+  #   additionalProperties  YAML map of attributes added to every event, as a string
+  # Example:
   # audit:
-  #   endpoint: http://otel-collector:4318/v1/logs
+  #   endpoint: https://otel-collector.observability.svc:4318/v1/logs
   #   httpClient:
   #     timeout: 10s
-  #     # mtls:
-  #     #   cert:    { source: file, file: { path: /etc/credentials/audit/tls.crt, format: binary } }
-  #     #   certKey: { source: file, file: { path: /etc/credentials/audit/tls.key, format: binary } }
+  #     apiToken: { source: file, file: { path: /etc/credentials/audit/token, format: binary } }
+  #     mtls:
+  #       cert:    { source: file, file: { path: /etc/credentials/audit/tls.crt, format: binary } }
+  #       certKey: { source: file, file: { path: /etc/credentials/audit/tls.key, format: binary } }
+  #     transportAttributes:
+  #       tlsHandshakeTimeout: 10s
+  #       responseHeaderTimeout: 10s
+  #       expectContinueTimeout: 1s
+  #       idleConnTimeout: 90s
+  #       maxIdleConns: 100
+  #       maxIdleConnsPerHost: 10
+  #       maxConnsPerHost: 0
+  #       disableKeepAlives: false
+  #       disableCompression: false
   #   additionalProperties: |
   #     appID: session-manager
+  # Example, HTTP basic authentication:
+  # audit:
+  #   endpoint: https://otel-collector.observability.svc:4318/v1/logs
+  #   httpClient:
+  #     basicAuth:
+  #       username: { source: env, env: AUDIT_USER }
+  #       password:
+  #         source: file
+  #         file: { path: /etc/credentials/audit/password, format: binary }
 
-  # OpenTelemetry export of logs, traces and metrics. Same structure as in the other
-  # OpenKCM services; see the configuration reference. Omitted by default.
+  # OpenTelemetry export by the API server and the housekeeper. Omitted by default: nothing
+  # is exported. `traces`, `metrics` and `logs` each take:
+  #   enabled    export this signal (default `false`). Logs are exported in addition to
+  #              the container output
+  #   protocol   `grpc` (OTLP/gRPC) or `http` (OTLP/HTTP)
+  #   host       value reference: `host:port` of the collector, without scheme
+  #   url        for `protocol: http`: path of the endpoint, usually `/v1/traces`,
+  #              `/v1/metrics` or `/v1/logs`. There is no default: set it
+  #   secretRef  connection security:
+  #                { type: insecure }                           no TLS
+  #                { type: mtls, mtls: { … } }                  TLS with a client certificate
+  #                { type: api-token, apiToken: <value reference> }
+  #                                                             TLS, with the header
+  #                                                             `Authorization: Api-Token …`
+  #                { type: basic, basic: { username: <value reference>,
+  #                                        password: <value reference> } }
+  #                                                             TLS, with HTTP basic
+  #                                                             authentication; grpc only
+  # `metrics.prometheus.enabled: true` serves the metrics at `/metrics` on the status port
+  # instead of sending them; it needs `metrics.enabled: true` and `status.enabled: true`,
+  # and `protocol`, `host`, `url` and `secretRef` of `metrics` are not used.
+  # `dynatraceOneAgent: true` adds the enrichment metadata of the Dynatrace OneAgent to the
+  # resource attributes of the exported data.
+  # Example:
   # telemetry:
+  #   traces:
+  #     enabled: true
+  #     protocol: grpc
+  #     host: { source: env, env: OTEL_COLLECTOR_HOST }
+  #     secretRef: { type: insecure }
+  #   metrics:
+  #     enabled: true
+  #     prometheus: { enabled: true }
+  #   logs:
+  #     enabled: true
+  #     protocol: http
+  #     host: { value: otel-collector.observability.svc:4318 }
+  #     url: /v1/logs
+  #     secretRef:
+  #       type: mtls
+  #       mtls:
+  #         cert: { source: file, file: { path: /etc/credentials/otel/tls.crt, format: binary } }
+  #         certKey: { source: file, file: { path: /etc/credentials/otel/tls.key, format: binary } }
+  #         serverCa: { source: file, file: { path: /etc/credentials/otel/ca.crt, format: binary } }
+  # Example, other connection security and Dynatrace:
+  # telemetry:
+  #   dynatraceOneAgent: true
+  #   traces:
+  #     enabled: true
+  #     protocol: http
+  #     host: { value: otel-collector.observability.svc:4318 }
+  #     url: /v1/traces
+  #     secretRef:
+  #       type: api-token
+  #       apiToken: { source: file, file: { path: /etc/credentials/otel/token, format: binary } }
   #   metrics:
   #     enabled: true
   #     protocol: grpc
-  #     host: { source: env, env: OTEL_HOST }
-  #     secretRef: { type: insecure }
-  #     prometheus: { enabled: true }
+  #     host: { value: otel-collector.observability.svc:4317 }
+  #     secretRef:
+  #       type: basic
+  #       basic:
+  #         username: { source: env, env: OTEL_USER }
+  #         password:
+  #           source: file
+  #           file: { path: /etc/credentials/otel/password, format: binary }

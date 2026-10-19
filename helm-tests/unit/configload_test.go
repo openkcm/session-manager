@@ -26,11 +26,14 @@ type configInput struct {
 }
 
 // configInputs are the values the configuration tests render the chart with: the defaults,
-// the values for local development, and every documented optional setting.
+// the values for local development, every documented optional setting, and the documented
+// alternatives that cannot be combined with them.
 var configInputs = []configInput{
 	{name: "default values"},
 	{name: "development values", args: []string{"-f", path + "/values-dev.yaml"}},
 	{name: "all documented settings", args: []string{"-f", "testdata/values-all-config.yaml"}},
+	{name: "documented alternatives", args: []string{"-f", "testdata/values-config-alternatives.yaml"}},
+	{name: "insecure client authentication", args: []string{"--set", "config.sessionManager.clientAuth.type=insecure"}},
 }
 
 // TestRenderedConfigLoadsStrictly loads the rendered config.yaml as Session Manager does at

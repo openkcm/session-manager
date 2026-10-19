@@ -6,9 +6,10 @@ the OpenID Connect authorization code flow, keeps the sessions server-side in
 Valkey, and stores the tenant trust records in PostgreSQL. ExtAuthZ checks every
 browser request against Session Manager, and CMK maintains the trust records.
 
-Every value is documented in [values.yaml](values.yaml). Every setting of Session
-Manager itself, under `config`, is described in the
-[Session Manager configuration reference](https://openkcm.io/components/cmk/security/session-manager-config).
+Every value is documented in [values.yaml](values.yaml), including every setting of
+Session Manager itself under `config`, with an example of each alternative form. The
+[Session Manager configuration reference](https://openkcm.io/components/cmk/security/session-manager-config)
+describes these settings in more detail.
 The [configuration guide](https://openkcm.io/components/cmk/security/configuration)
 shows the complete setup with Envoy Gateway, ExtAuthZ and CMK.
 
@@ -189,8 +190,9 @@ Everything under `config` is written to `config.yaml` (helper `session-manager.c
 [templates/_helpers.tpl](templates/_helpers.tpl)), for the API server, the housekeeper and
 the migration job alike. `config.environment` and `config.labels` become
 `application.environment` and `application.labels`, and `config.application` overrides
-single application fields (the name defaults to `session-manager`). Session Manager ignores
-unknown keys without a warning, so check spelling and nesting carefully.
+single application fields (the name defaults to `session-manager`, or `nameOverride` if
+set). Session Manager ignores unknown keys without a warning, so check spelling and nesting
+carefully.
 
 ## Database migrations
 

@@ -14,9 +14,11 @@ This directory contains unit tests for the session-manager Helm chart.
 
 ### configload_test.go
 - **TestRenderedConfigLoadsStrictly**: Loads the rendered `config.yaml` (default values,
-  `values-dev.yaml`, and every documented setting in `testdata/values-all-config.yaml`)
-  with Session Manager's configuration loader and modules, and fails on keys that Session
-  Manager does not read
+  `values-dev.yaml`, every documented setting in `testdata/values-all-config.yaml`, the
+  documented alternatives that cannot be combined with them in
+  `testdata/values-config-alternatives.yaml`, and `clientAuth.type: insecure`) with Session
+  Manager's configuration loader and modules, and fails on keys that Session Manager does
+  not read and on values of the wrong type
 - **TestStrictConfigCheckFindsUnknownKeys**: Checks that the strict check reports misspelled keys
 - **TestConfigMapsHaveSameConfig**: The ConfigMap and the migration job's hook copy contain the same `config.yaml`
 - **TestConfigChecksum**: `checksum/config` changes with the configuration, and only then
