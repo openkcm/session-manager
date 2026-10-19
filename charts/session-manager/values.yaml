@@ -431,8 +431,6 @@ configMap:
 # Use `source: file` with a Secret mounted through `extraVolumes` for every secret:
 # embedded values are stored in plain text in the ConfigMap.
 config:
-  isImmutable: false
-
   # -- Environment name (`application.environment`), attached to logs, traces, metrics and
   # audit events.
   environment: production
