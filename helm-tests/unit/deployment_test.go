@@ -52,10 +52,24 @@ func TestDeploymentRendering(t *testing.T) {
 			},
 		},
 		{
+			name:   "image tag defaults to the chart's appVersion",
+			values: "--set image.tag=",
+			expected: []string{
+				`image: "ghcr.io/openkcm/session-manager/images/session-manager:` + appVersion(t) + `"`,
+			},
+		},
+		{
 			name:   "custom image tag",
 			values: "--set image.tag=v1.2.3",
 			expected: []string{
 				`image: "ghcr.io/openkcm/session-manager/images/session-manager:v1.2.3"`,
+			},
+		},
+		{
+			name:   "image digest before tag",
+			values: "--set image.tag=v1.2.3 --set image.digest=sha256:abc",
+			expected: []string{
+				`image: "ghcr.io/openkcm/session-manager/images/session-manager@sha256:abc"`,
 			},
 		},
 		{

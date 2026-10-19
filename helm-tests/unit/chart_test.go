@@ -160,12 +160,6 @@ func TestChartValidation(t *testing.T) {
 			shouldFail: false,
 		},
 		{
-			name:        "image tag or digest is required",
-			values:      "--set image.tag=",
-			shouldFail:  true,
-			errorString: "Either image.tag or image.digest must be set",
-		},
-		{
 			name:        "autoscaling needs a target",
 			values:      "--set autoscaling.enabled=true --set autoscaling.targetCPUUtilizationPercentage=null --set autoscaling.targetMemoryUtilizationPercentage=null",
 			shouldFail:  true,

@@ -26,7 +26,7 @@ func TestConfigMapRendering(t *testing.T) {
 				"namespace: default",
 				"application:",
 				"name: session-manager",
-				"environment: production",
+				`environment: "production"`,
 				"reflection: false",
 			},
 			// The ConfigMap is a regular release resource, not a Helm hook. Secrets have no
@@ -59,12 +59,23 @@ func TestConfigMapRendering(t *testing.T) {
 			},
 		},
 		{
-			name:   "all configuration sections are passed through",
-			values: "--set config.featureFlags.enabled=true --set config.appsOrder[0]=grpc --set config.sessionManager.allowedRedirectBaseURLs[0]=https://ui.example.com/",
+			name:   "optional configuration sections are written when set",
+			values: "--set config.audit.endpoint=http://collector:4318/v1/logs --set config.appsOrder[0]=grpc --set config.sessionManager.allowedRedirectBaseURLs[0]=https://ui.example.com/",
 			expected: []string{
-				"featureFlags:",
+				"audit:",
+				"endpoint: http://collector:4318/v1/logs",
 				"appsOrder:",
 				"- https://ui.example.com/",
+			},
+		},
+		{
+			// templates/configmap.yaml lists the Session Manager settings; other keys are
+			// not written.
+			name:   "keys that are not Session Manager settings are not written",
+			values: "--set config.featureFlags.enabled=true --set config.unknown=x",
+			unexpected: []string{
+				"featureFlags",
+				"unknown",
 			},
 		},
 		{
@@ -72,7 +83,7 @@ func TestConfigMapRendering(t *testing.T) {
 			values: "--set config.environment=staging --set config.application.name=sm-eu10",
 			expected: []string{
 				"application:",
-				"environment: staging",
+				`environment: "staging"`,
 				"name: sm-eu10",
 			},
 			// The flat chart keys are not written at the top level.
@@ -85,7 +96,7 @@ func TestConfigMapRendering(t *testing.T) {
 			name:   "custom environment",
 			values: "--set config.environment=development",
 			expected: []string{
-				"environment: development",
+				`environment: "development"`,
 			},
 		},
 		{
