@@ -25,7 +25,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: {{ include "session-manager.config" . | sha256sum }}
+        checksum/config: {{ include (print $.Template.BasePath "/migrate/configmap.yaml") . | sha256sum }}
         {{- with (merge (deepCopy (.Values.migrate.podAnnotations | default dict)) (.Values.pod.annotations | default dict)) }}
         {{- include "session-manager.annotations" . | trim | nindent 8 }}
         {{- end }}
@@ -60,7 +60,7 @@ spec:
       {{- end }}
       containers:
         - name: {{ include "session-manager.name" . }}-migrate
-          image: "{{ template "session-manager.image" (tuple .Values.image) }}"
+          image: "{{ template "session-manager.image" (tuple .Values.image .Chart.AppVersion) }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- with include "session-manager.command" . | trim }}
           {{- . | nindent 10 }}

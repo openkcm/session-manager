@@ -17,5 +17,99 @@ metadata:
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 data:
   config.yaml: |-
-    {{- include "session-manager.config" . | nindent 4 }}
+    # Based on github.com/openkcm/common-sdk/pkg/commoncfg
+    application:
+      name: {{ dig "application" "name" .Chart.Name .Values.config }}
+      {{- with .Values.config.environment }}
+      environment: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.config.labels }}
+      labels:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+    # Audit events of sign-ins (OTLP/HTTP logs)
+    {{- with .Values.config.audit }}
+    audit:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    {{- with .Values.config.status }}
+    status:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    {{- with .Values.config.logger }}
+    logger:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    {{- with .Values.config.telemetry }}
+    telemetry:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    # Based on github.com/openkcm/session-manager/internal/config
+    {{- with .Values.config.http }}
+    http:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    {{- with .Values.config.grpc }}
+    grpc:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    # PostgreSQL connection
+    {{- with .Values.config.database }}
+    database:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    # Module for the tenant trust records
+    {{- with .Values.config.trust }}
+    trust:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    # Module for the client authentication towards the identity providers
+    {{- with .Values.config.credentials }}
+    credentials:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    # Valkey session store
+    {{- with .Values.config.valkey }}
+    valkey:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    # Sign-in flow and sessions
+    {{- with .Values.config.sessionManager }}
+    sessionManager:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    # Module for the database migrations
+    {{- with .Values.config.migrate }}
+    migrate:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    # Housekeeper: token refresh and session cleanup
+    {{- with .Values.config.housekeeper }}
+    housekeeper:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    # Long-running components, such as the gRPC server
+    {{- with .Values.config.apps }}
+    apps:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    {{- with .Values.config.appsOrder }}
+    appsOrder:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
 {{- end }}

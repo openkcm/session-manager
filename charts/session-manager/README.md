@@ -59,8 +59,7 @@ Write the files without a trailing newline: the files are read byte for byte.
 
 ```yaml
 # session-manager-values.yaml
-image:
-  tag: v0.20.1
+# image.tag defaults to the chart's appVersion; set it only to deploy another version.
 
 replicaCount: 2
 
@@ -133,7 +132,7 @@ The release notes list the settings that are missing or not production-ready.
 
 | Value | Default | Description |
 | --- | --- | --- |
-| `image.tag` / `image.digest` | – | **Required.** The Session Manager version to deploy |
+| `image.tag` / `image.digest` | chart's `appVersion` | The Session Manager version to deploy. Leave both empty to deploy the version this chart release is made for |
 | `image.repository` | `session-manager/images/session-manager` | Under `ghcr.io/openkcm` |
 | `replicaCount` | `1` | Use two or more in production |
 | `networkPolicy.enabled` | `false` | **Recommended.** The gRPC API has no authentication of its own |
@@ -184,10 +183,15 @@ Secrets you manage yourself need a restart:
 kubectl rollout restart deployment/<release>-session-manager deployment/<release>-session-manager-housekeeper
 ```
 
-Everything under `config` is written to `config.yaml`; only `config.environment`
-and `config.labels` become `application.environment` and `application.labels`.
-Session Manager ignores unknown keys without a warning, so check spelling and
-nesting carefully.
+[templates/configmap.yaml](templates/configmap.yaml) writes `config.yaml` with one
+section per setting, and [templates/migrate/configmap.yaml](templates/migrate/configmap.yaml)
+the same for the migration job: `config.environment` and `config.labels` become
+`application.environment` and `application.labels`, `config.application.name` overrides the
+application name (default `session-manager`), and `audit`, `status`, `logger`, `telemetry`,
+`http`, `grpc`, `database`, `trust`, `credentials`, `valkey`, `sessionManager`, `migrate`,
+`housekeeper`, `apps` and `appsOrder` are written as they are. Other keys under `config` are
+not written, and Session Manager ignores unknown keys inside a section without a warning,
+so check spelling and nesting carefully.
 
 ## Database migrations
 
@@ -224,13 +228,12 @@ would keep it from completing. If a service mesh injects a sidecar, set
 | PodDisruptionBudget without `minAvailable` or `maxUnavailable` uses `maxUnavailable: 1` (was `minAvailable: 1`) | Set `minAvailable` explicitly if you want the old behaviour |
 | `autoscaling.minReplicas` and `maxReplicas` default to 2 and 5 (were 1 and 1) | Set them explicitly if you enable autoscaling |
 | `config.isImmutable` is replaced by `configMap.immutable` | The old key still works |
-| `values-dev.yaml` only contains the differences for local development | Copy settings from `values.yaml` if you used it as a template |
+| The values for local development are no longer part of the chart: they are in the session-manager repository (`dev/values-dev.yaml`) | Copy settings from `values.yaml` if you used them as a template |
 
 ## Troubleshooting
 
 | Symptom | Cause |
 | --- | --- |
-| `Either image.tag or image.digest must be set` | Set `image.tag` or `image.digest` |
 | Install or upgrade fails in the migration job: `client_id is not set in the config` | Set `config.sessionManager.clientAuth.clientID` |
 | Pods stay in `ContainerCreating` | A Secret or ConfigMap from `extraVolumes` is missing |
 | API server exits with `DB schema version mismatch` | The migration job did not run: `migrate.enabled` is false, or the job failed |

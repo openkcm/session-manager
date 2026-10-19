@@ -32,8 +32,9 @@ image:
   registry: ghcr.io/openkcm
   # -- Repository of the image in the registry.
   repository: session-manager/images/session-manager
-  # -- **Required** unless `digest` is set. Session Manager version to deploy, for example
-  # `v0.20.1`. The chart's appVersion is not used as a fallback.
+  # -- Session Manager version to deploy, for example `v0.20.1`. Empty: the chart's
+  # appVersion, the version this chart release is made for and that its OCM component
+  # references.
   tag: ""
   # -- Image digest, for example `sha256:…`. Takes precedence over `tag`.
   digest: ""
@@ -408,14 +409,17 @@ configMap:
   # -- Annotations for the configuration ConfigMap.
   annotations: {}
 
-# Session Manager configuration, written to `config.yaml` and mounted at
-# `/etc/session-manager` in all workloads. Every key below is passed through, except
-# `environment` and `labels`, which become `application.environment` and
-# `application.labels`, and the chart setting `isImmutable` (deprecated; use
-# `configMap.immutable`). The application name is `session-manager`; override it with
-# `application.name`.
+# Session Manager configuration, mounted at `/etc/session-manager` in all workloads.
+# templates/configmap.yaml (and templates/migrate/configmap.yaml for the migration job)
+# writes it to `config.yaml`, one section per key: `environment` and `labels` become
+# `application.environment` and `application.labels`; the application name is
+# `session-manager`, override it with `application.name`; audit, status, logger,
+# telemetry, http, grpc, database, trust, credentials, valkey, sessionManager, migrate,
+# housekeeper, apps and appsOrder are written as they are. Other keys under `config` are
+# not written. `isImmutable` is a deprecated chart setting; use `configMap.immutable`.
 #
-# Session Manager ignores unknown keys without a warning: check spelling and nesting.
+# Session Manager ignores unknown keys inside a section without a warning: check spelling
+# and nesting.
 # Settings marked "value reference" take `{ source: embedded, value: … }`,
 # `{ source: env, env: NAME }` or `{ source: file, file: { path: …, format: binary } }`.
 # Use `source: file` with a Secret mounted through `extraVolumes` for every secret:
