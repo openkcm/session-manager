@@ -157,7 +157,8 @@ func TestMigrateJobRendering(t *testing.T) {
 			expected: []string{
 				"volumeMounts:",
 				"name: config",
-				"mountPath: /etc/session-manager",
+				"mountPath: /etc/session-manager/config.yaml\n",
+				"subPath: config.yaml",
 				"readOnly: true",
 				"volumes:",
 				"configMap:",

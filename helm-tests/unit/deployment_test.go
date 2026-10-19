@@ -178,7 +178,8 @@ func TestDeploymentRendering(t *testing.T) {
 			expected: []string{
 				"volumeMounts:",
 				"name: config",
-				"mountPath: /etc/session-manager",
+				"mountPath: /etc/session-manager/config.yaml\n",
+				"subPath: config.yaml",
 				"readOnly: true",
 				"volumes:",
 				"configMap:",
@@ -194,7 +195,8 @@ func TestDeploymentRendering(t *testing.T) {
 			name:   "configuration path does not depend on nameOverride",
 			values: "--set nameOverride=custom-name",
 			expected: []string{
-				"mountPath: /etc/session-manager",
+				"mountPath: /etc/session-manager/config.yaml\n",
+				"subPath: config.yaml",
 				"app.kubernetes.io/name: custom-name",
 			},
 			unexpected: []string{
@@ -474,7 +476,8 @@ func TestHousekeeperDeployment(t *testing.T) {
 			expected: []string{
 				"volumeMounts:",
 				"name: config",
-				"mountPath: /etc/session-manager",
+				"mountPath: /etc/session-manager/config.yaml\n",
+				"subPath: config.yaml",
 				"volumes:",
 				"configMap:",
 				"mountPath: /tmp",

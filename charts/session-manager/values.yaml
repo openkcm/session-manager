@@ -14,7 +14,7 @@
 # https://openkcm.io/components/cmk/security/session-manager-config
 
 # -- Override the chart name in resource names and in the `app.kubernetes.io/name` label.
-# The configuration is always mounted at `/etc/session-manager`.
+# The configuration is always mounted as `/etc/session-manager/config.yaml`.
 nameOverride: ""
 
 # -- Override the full name of the resources. Default: `<release>-session-manager`, or the
@@ -417,8 +417,8 @@ configMap:
   # -- Annotations for the configuration ConfigMap.
   annotations: {}
 
-# Session Manager configuration, written to `config.yaml` and mounted at
-# `/etc/session-manager` in all workloads (helper session-manager.config in
+# Session Manager configuration, written to `config.yaml` and mounted as
+# `/etc/session-manager/config.yaml` in all workloads (helper session-manager.config in
 # templates/_helpers.tpl, used by templates/configmap.yaml and, for the migration job,
 # templates/migrate/configmap.yaml). Every key below is passed through, except
 # `environment` and `labels`, which become `application.environment` and

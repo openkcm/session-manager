@@ -1,5 +1,6 @@
 ---
-# Configuration of the API server and the housekeeper, mounted at /etc/session-manager.
+# Configuration of the API server and the housekeeper, mounted as
+# /etc/session-manager/config.yaml.
 apiVersion: v1
 kind: ConfigMap
 metadata:

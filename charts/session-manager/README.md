@@ -20,7 +20,7 @@ shows the complete setup with Envoy Gateway, ExtAuthZ and CMK.
 | Deployment `<release>-session-manager` | API server: the `/sm/*` sign-in endpoints (8080), the gRPC API for ExtAuthZ and CMK (9091), and the status endpoints (8888) |
 | Deployment `<release>-session-manager-housekeeper` | One replica that deletes idle sessions and refreshes access tokens before they expire |
 | Job `<release>-session-manager-migrate` | Creates and updates the database schema. Runs as a Helm hook before every install and upgrade |
-| ConfigMap `<release>-session-manager` | The configuration, rendered from `config` and mounted at `/etc/session-manager` |
+| ConfigMap `<release>-session-manager` | The configuration, rendered from `config` and mounted as `/etc/session-manager/config.yaml` |
 | ConfigMap `<release>-session-manager-config` | Hook copy of the configuration for the migration job. Kept until the next install or upgrade replaces it, also after `helm uninstall` |
 | Service | `http`, `grpc` and `http-status` inside the cluster |
 | ServiceAccount | Identity of the pods. Session Manager does not call the Kubernetes API, so no token is mounted |
@@ -218,7 +218,7 @@ would keep it from completing. If a service mesh injects a sidecar, set
 | Default image repository is now `session-manager/images/session-manager` (was `images/session-manager`) | If you set `image.repository` yourself, nothing changes |
 | No `imagePullSecrets` by default (was `registry-access`) | Set `imagePullSecrets` if you pull from a private registry |
 | The ConfigMap is a regular release resource named `<release>-session-manager` (was the hook `<release>-session-manager-config`) | None. The migration job's hook copy replaces the old object under the same name and is kept, with the configuration of the latest install or upgrade, so pods rolled back to 0.10.x with `helm rollback` still find it. With `migrate.enabled: false`, the old ConfigMap stays unchanged; delete it once you no longer need a rollback |
-| The configuration is always mounted at `/etc/session-manager` | `nameOverride` no longer breaks the installation |
+| The configuration is always mounted as `/etc/session-manager/config.yaml` | `nameOverride` no longer breaks the installation |
 | No default secrets: `csrfSecret`, `clientAuth.clientSecret`, `clientAuth.clientID`, the database and Valkey credentials and hosts are empty | Set them, preferably with `source: file` |
 | `callbackURL` and `csrfCookieTemplate.domain` default to empty (were `localhost` values); `audit` is not set (was `http://localhost:4043/logs`) | Set them for your installation |
 | `config.grpc.flags.reflection` defaults to `false` | Set it to `true` if you rely on reflection |

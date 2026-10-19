@@ -99,118 +99,12 @@ Call it with (tuple .Values.image .Chart.AppVersion).
 {{- end }}
 
 {{/*
-Container command: image.command as a string or a list. Empty: the image's entrypoint.
-*/}}
-{{- define "session-manager.command" -}}
-{{- with .Values.image.command }}
-command:
-  {{- if kindIs "string" . }}
-  - {{ . | quote }}
-  {{- else }}
-  {{- toYaml . | nindent 2 }}
-  {{- end }}
-{{- end }}
-{{- end }}
-
-{{/*
-Environment of all Session Manager containers: the pod's addresses for logs and telemetry,
-then extraEnvs and extraEnvsFrom.
-*/}}
-{{- define "session-manager.env" -}}
-env:
-  - name: MY_POD_IP
-    valueFrom:
-      fieldRef:
-        apiVersion: v1
-        fieldPath: status.podIP
-  - name: K8S_NODE_NAME
-    valueFrom:
-      fieldRef:
-        fieldPath: spec.nodeName
-  - name: K8S_NODE_IP
-    valueFrom:
-      fieldRef:
-        fieldPath: status.hostIP
-  {{- with .Values.extraEnvs }}
-  {{- toYaml . | nindent 2 }}
-  {{- end }}
-{{- with .Values.extraEnvsFrom }}
-envFrom:
-  {{- toYaml . | nindent 2 }}
-{{- end }}
-{{- end }}
-
-{{/*
-Volume mounts of all Session Manager containers. The binary reads its configuration from
-/etc/session-manager, whatever the chart or release name.
-*/}}
-{{- define "session-manager.volumeMounts" -}}
-volumeMounts:
-  - name: config
-    mountPath: /etc/session-manager
-    readOnly: true
-  {{- if .Values.tmpVolume.enabled }}
-  - name: tmp
-    mountPath: /tmp
-  {{- end }}
-  {{- with .Values.extraVolumeMounts }}
-  {{- toYaml . | nindent 2 }}
-  {{- end }}
-{{- end }}
-
-{{/*
-Volumes of all pods, given the name of the configuration ConfigMap.
-Usage: include "session-manager.volumes" (dict "ctx" . "configMap" "<name>")
-*/}}
-{{- define "session-manager.volumes" -}}
-{{- $ctx := .ctx -}}
-volumes:
-  - name: config
-    configMap:
-      name: {{ .configMap }}
-  {{- if $ctx.Values.tmpVolume.enabled }}
-  - name: tmp
-    emptyDir:
-      {{- with $ctx.Values.tmpVolume.sizeLimit }}
-      sizeLimit: {{ . }}
-      {{- end }}
-  {{- end }}
-  {{- with $ctx.Values.extraVolumes }}
-  {{- toYaml . | nindent 2 }}
-  {{- end }}
-{{- end }}
-
-{{/*
 Annotations with every value rendered as a string. Values given with --set can be numbers
 or booleans, which Kubernetes rejects in annotations.
 */}}
 {{- define "session-manager.annotations" -}}
 {{- range $key, $value := . }}
 {{ $key }}: {{ $value | toString | quote }}
-{{- end }}
-{{- end }}
-
-{{/*
-Pod-level settings shared by the API server and the housekeeper.
-*/}}
-{{- define "session-manager.podSettings" -}}
-{{- with .Values.imagePullSecrets }}
-imagePullSecrets:
-  {{- toYaml . | nindent 2 }}
-{{- end }}
-serviceAccountName: {{ include "session-manager.serviceAccountName" . }}
-# Session Manager does not call the Kubernetes API.
-automountServiceAccountToken: false
-enableServiceLinks: {{ .Values.pod.enableServiceLinks }}
-{{- with .Values.pod.priorityClassName }}
-priorityClassName: {{ . }}
-{{- end }}
-{{- with .Values.pod.terminationGracePeriodSeconds }}
-terminationGracePeriodSeconds: {{ . }}
-{{- end }}
-{{- with .Values.pod.securityContext }}
-securityContext:
-  {{- toYaml . | nindent 2 }}
 {{- end }}
 {{- end }}
 

@@ -36,7 +36,24 @@ spec:
         {{- end }}
         app.kubernetes.io/component: session-manager
     spec:
-      {{- include "session-manager.podSettings" . | trim | nindent 6 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "session-manager.serviceAccountName" . }}
+      # Session Manager does not call the Kubernetes API.
+      automountServiceAccountToken: false
+      enableServiceLinks: {{ .Values.pod.enableServiceLinks }}
+      {{- with .Values.pod.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- with .Values.pod.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ . }}
+      {{- end }}
+      {{- with .Values.pod.securityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- with .Values.extraInitContainers }}
       initContainers:
         {{- toYaml . | nindent 8 }}
@@ -45,8 +62,13 @@ spec:
         - name: {{ include "session-manager.name" . }}
           image: "{{ template "session-manager.image" (tuple .Values.image .Chart.AppVersion) }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- with include "session-manager.command" . | trim }}
-          {{- . | nindent 10 }}
+          {{- with .Values.image.command }}
+          command:
+            {{- if kindIs "string" . }}
+            - {{ . | quote }}
+            {{- else }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- end }}
           args: ["api-server"]
           {{- with .Values.securityContext }}
@@ -57,7 +79,28 @@ spec:
           ports:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- include "session-manager.env" . | nindent 10 }}
+          {{- /* The pod's addresses, for logs and telemetry. */}}
+          env:
+            - name: MY_POD_IP
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: status.podIP
+            - name: K8S_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: K8S_NODE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            {{- with .Values.extraEnvs }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.extraEnvsFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- with .Values.startupProbe }}
           startupProbe:
             {{- toYaml . | nindent 12 }}
@@ -78,11 +121,36 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- include "session-manager.volumeMounts" . | nindent 10 }}
+          {{- /* The binary reads /etc/session-manager/config.yaml, whatever the release name. */}}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/session-manager/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            {{- if .Values.tmpVolume.enabled }}
+            - name: tmp
+              mountPath: /tmp
+            {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
         {{- with .Values.extraContainers }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- include "session-manager.volumes" (dict "ctx" . "configMap" (include "session-manager.configMapName" .)) | nindent 6 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "session-manager.configMapName" . }}
+        {{- if .Values.tmpVolume.enabled }}
+        - name: tmp
+          emptyDir:
+            {{- with .Values.tmpVolume.sizeLimit }}
+            sizeLimit: {{ . }}
+            {{- end }}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
