@@ -461,6 +461,15 @@ configMap:
 #     sessionTicketsDisabled: true   # do not resume TLS sessions
 #     allowTLSRenegotiationOnce: true  # accept one TLS renegotiation by the server
 config:
+  # ---------------------------------------------------------------------------
+  # application: environment, labels and name of Session Manager in its logs, traces and
+  # metrics. Read by: API server, housekeeper, migration job.
+  # ---------------------------------------------------------------------------
+
+  # Names this Session Manager installation in everything its workloads emit, so that the logs,
+  # traces and metrics of several installations or regions can be told apart in a shared
+  # backend.
+
   # -- Environment name (`application.environment`), attached to logs, traces and metrics.
   environment: production
 
@@ -474,6 +483,14 @@ config:
   # Example:
   # application:
   #   name: session-manager-eu10
+
+  # ---------------------------------------------------------------------------
+  # logger: logs on standard output. Read by: API server, housekeeper, migration job.
+  # ---------------------------------------------------------------------------
+
+  # All three workloads log to standard output, where the log collection of the cluster picks
+  # them up. These settings control the level of detail, the format and field names, and the
+  # masking of personal data such as e-mail addresses before the logs leave the pod.
 
   logger:
     # -- Log level: `trace`, `debug`, `info`, `warn` or `error`, in any case. Any other
@@ -517,7 +534,15 @@ config:
           other:
             jwt-token: "*****"
 
-  # Status server of the API server and the housekeeper. `timeout` has no effect.
+  # ---------------------------------------------------------------------------
+  # status: status server for the probes, version and metrics. Read by: API server, housekeeper.
+  # ---------------------------------------------------------------------------
+
+  # A small HTTP server in the API server and the housekeeper. Kubernetes calls its probe
+  # endpoints to decide whether a pod is alive and ready, so it must stay enabled. It also
+  # serves the build version and, with Prometheus enabled, the metrics.
+
+  # `timeout` has no effect.
   status:
     # -- Serve the status endpoints: `/probe/liveness`, `/probe/readiness`, `/version`
     # (build information), and `/metrics` if Prometheus metrics are enabled (see
@@ -529,6 +554,16 @@ config:
     # authentication. Keep false in production; enable it only for troubleshooting.
     profiling: false
 
+  # ---------------------------------------------------------------------------
+  # http: HTTP server for the sign-in flow (login, callback, logout). Read by: API server.
+  # ---------------------------------------------------------------------------
+
+  # The browser side of the sign-in. The CMK UI sends a user to `/sm/auth`; Session Manager
+  # redirects the user to the identity provider of the tenant, which sends the user back to
+  # `/sm/callback`, where the session is created. `/sm/logout` ends the session, and the
+  # identity provider can end sessions through `/sm/bclogout`. Envoy Gateway publishes these
+  # endpoints.
+
   http:
     # -- Listen address of the `/sm/*` endpoints. Must match the `http` container port. TLS
     # is terminated by Envoy Gateway. `unix:///<path>` listens on a Unix socket instead.
@@ -538,6 +573,15 @@ config:
     # which Kubernetes sends to stop a pod, and stops at once.
     # Example:
     # shutdownTimeout: 5s
+
+  # ---------------------------------------------------------------------------
+  # grpc: gRPC server for ExtAuthZ and CMK, hosted by the gRPC app in `apps`. Read by: API
+  # server.
+  # ---------------------------------------------------------------------------
+
+  # ExtAuthZ and CMK call Session Manager over gRPC, through the services listed in `apps`.
+  # These settings configure that server: listen address, health and reflection services,
+  # message sizes and connection keepalive.
 
   grpc:
     # -- Listen address of the gRPC API (the gRPC server app in `apps`). Must match the
@@ -576,6 +620,15 @@ config:
     #   time: 120m
     #   timeout: 20s
 
+  # ---------------------------------------------------------------------------
+  # database: PostgreSQL with the tenant trust records. Read by: API server, housekeeper,
+  # migration job.
+  # ---------------------------------------------------------------------------
+
+  # Session Manager stores the trust records in PostgreSQL: for each tenant, which identity
+  # provider it trusts and how to reach it. The migration job creates and updates the tables
+  # before every install and upgrade.
+
   # PostgreSQL with the tenant trust records. There are no settings for TLS; the client
   # reads the `PGSSLMODE` and `PGSSLROOTCERT` environment variables (`extraEnvs`). By
   # default `PGSSLMODE` is not set, so the client uses `prefer`: it tries TLS without
@@ -609,6 +662,14 @@ config:
     # password:
     #   source: file
     #   file: { path: /etc/credentials/database/password, format: binary }
+
+  # ---------------------------------------------------------------------------
+  # valkey: Valkey with the pending sign-ins and the sessions. Read by: API server, housekeeper.
+  # ---------------------------------------------------------------------------
+
+  # Session Manager keeps the pending sign-ins and the sessions of the users, including their
+  # access and refresh tokens, in Valkey, shared by all API server and housekeeper pods. Without
+  # Valkey, nobody can sign in.
 
   # Valkey with the pending sign-ins and the sessions, including the users' access and
   # refresh tokens. Protect it accordingly. Used by the API server and the housekeeper.
@@ -655,6 +716,16 @@ config:
     # Example:
     # masterSet: mymaster
     # topologyRefreshInterval: 5s
+
+  # ---------------------------------------------------------------------------
+  # sessionManager: OIDC sign-in, sessions and cookies. Read by: API server, housekeeper; the
+  # migration job reads only `clientAuth.clientID`.
+  # ---------------------------------------------------------------------------
+
+  # The sign-in itself: how Session Manager authenticates to the identity providers of the
+  # tenants (`clientAuth`), where the identity provider sends the user back (`callbackURL`),
+  # which pages a user may return to after the sign-in, how long sessions last, and the cookies
+  # Session Manager sets in the browser.
 
   sessionManager:
     # -- **Required.** Absolute public URL of the callback endpoint, for example
@@ -770,7 +841,14 @@ config:
       # refuse `__Host-` cookies:
       # name: LoginCSRF
 
-  # Used by the housekeeper only.
+  # ---------------------------------------------------------------------------
+  # housekeeper: token refresh and cleanup of sessions. Read by: housekeeper.
+  # ---------------------------------------------------------------------------
+
+  # The housekeeper runs in its own Deployment and keeps the sessions usable: it refreshes
+  # access tokens shortly before they expire and deletes sessions that have been idle for longer
+  # than `sessionManager.idleSessionTimeout`.
+
   housekeeper:
     # -- How often housekeeping runs. It also runs once at startup.
     triggerInterval: 10m
@@ -780,24 +858,58 @@ config:
     # `triggerInterval`.
     tokenRefreshTriggerInterval: 15m
 
-  # Modules. Each section selects its implementation with `module`; the defaults are the
-  # only modules built into Session Manager.
+  # ---------------------------------------------------------------------------
+  # trust: module for the tenant trust records. Read by: API server, housekeeper.
+  # ---------------------------------------------------------------------------
+
+  # Selects the module that stores the trust records, which tell Session Manager which identity
+  # provider each tenant uses.
+
+  # Each module section selects its implementation with `module`; the defaults are the only
+  # modules built into Session Manager.
   trust:
     # -- Module for the tenant trust records: `trust.module.oidc`.
     module: trust.module.oidc
     # -- Database module used for the trust records: `database.module.pgxpool`, configured
     # in `database`.
     dbModule: database.module.pgxpool
+
+  # ---------------------------------------------------------------------------
+  # credentials: module for the client authentication towards the identity providers. Read by:
+  # API server, housekeeper.
+  # ---------------------------------------------------------------------------
+
+  # Selects the module with which Session Manager authenticates to the identity providers, with
+  # the client authentication in `sessionManager.clientAuth`.
+
   credentials:
     # -- Module for the client authentication configured in `sessionManager.clientAuth`:
     # `credentials.module.oauth2`.
     module: credentials.module.oauth2
+
+  # ---------------------------------------------------------------------------
+  # migrate: module for the database migrations. Read by: API server (schema check), migration
+  # job.
+  # ---------------------------------------------------------------------------
+
+  # Selects the module with the database migrations. The migration job runs them before every
+  # install and upgrade, and the API server checks at startup that the schema is up to date.
+
   migrate:
     # -- Module for the database migrations: `trust.migration.module.oidc`. The API server
     # also uses it to check the schema version at startup.
     module: trust.migration.module.oidc
     # -- Database module used by the migrations: `database.module.pgxpool`.
     dbModule: database.module.pgxpool
+
+  # ---------------------------------------------------------------------------
+  # apps: long-running components of the API server, such as the gRPC server. Read by: API
+  # server.
+  # ---------------------------------------------------------------------------
+
+  # The long-running components of the API server. The gRPC server app is what ExtAuthZ and CMK
+  # connect to; its services check sessions (`session`), manage the trust records
+  # (`trustmapping`) and map tenants to their identity providers (`oidcmapping`).
 
   # -- Long-running components of the API server, keyed by a name you choose. The only app
   # module is `app.module.grpcserver`: the gRPC server configured in `grpc`, which hosts
@@ -828,12 +940,27 @@ config:
           # Example:
           # trust: trust.module.oidc
 
+  # ---------------------------------------------------------------------------
+  # appsOrder: start order of the apps. Read by: API server.
+  # ---------------------------------------------------------------------------
+
+  # Only needed when several apps must start in a given order; with the single default app it
+  # has no effect.
+
   # `appsOrder` sets the start order of the apps, by their names in `apps`. Apps not listed
   # start after them. Apps stop in the reverse order. Startup fails if a name is not in
   # `apps`.
   # Example:
   # appsOrder:
   #   - grpc
+
+  # ---------------------------------------------------------------------------
+  # audit: audit events as OTLP/HTTP log records. Read by: API server, housekeeper.
+  # ---------------------------------------------------------------------------
+
+  # Sends audit events of successful and failed sign-ins to an OpenTelemetry collector, for an
+  # audit trail outside the cluster. Without it, sign-ins still work, but no audit events are
+  # delivered.
 
   # Audit events (OTLP/HTTP logs) for successful and failed sign-ins. Omitted by default:
   # sign-ins work, but the events are not delivered and each attempt logs an error.
@@ -881,6 +1008,15 @@ config:
   #       password:
   #         source: file
   #         file: { path: /etc/credentials/audit/password, format: binary }
+
+  # ---------------------------------------------------------------------------
+  # telemetry: OpenTelemetry export of traces, metrics and logs. Read by: API server,
+  # housekeeper.
+  # ---------------------------------------------------------------------------
+
+  # Exports traces, metrics and logs of the API server and the housekeeper to an OpenTelemetry
+  # collector, or serves the metrics for Prometheus. Without it, nothing is exported; the logs
+  # on standard output are not affected.
 
   # OpenTelemetry export by the API server and the housekeeper. Omitted by default: nothing
   # is exported. `traces`, `metrics` and `logs` each take:
