@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.20.2](https://github.com/openkcm/session-manager/compare/v0.20.1...v0.20.2) (2026-10-20)
+
+
+### Bug Fixes
+
+* add correct userID to audit logs ([#377](https://github.com/openkcm/session-manager/issues/377)) ([f7495aa](https://github.com/openkcm/session-manager/commit/f7495aa868065f161e0906f8f51446db42e4193a))
+* **chore:** upgrade dependencies ([#383](https://github.com/openkcm/session-manager/issues/383)) ([85d6571](https://github.com/openkcm/session-manager/commit/85d6571640db09dbf150f3905d26651b48c51557))
+* update the chart and documentation ([#382](https://github.com/openkcm/session-manager/issues/382)) ([b06cacf](https://github.com/openkcm/session-manager/commit/b06cacf32631b33e28a09ed427234e212212e185))
+
 ## [0.20.1](https://github.com/openkcm/session-manager/compare/v0.20.0...v0.20.1) (2026-10-14)
 
 
