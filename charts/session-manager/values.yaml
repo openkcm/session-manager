@@ -8,10 +8,31 @@
 #   - Migration (Job, Helm hook): creates and updates the database schema before every
 #     install and upgrade.
 #
-# Values marked **Required** must be set for a working installation. Settings of Session
-# Manager itself are under `config`, documented there with every key and an example of
-# every alternative, and in the configuration reference:
-# https://openkcm.io/components/cmk/security/session-manager-config
+# Layout of this file:
+#   1. Names and labels
+#   2. Image and service account
+#   3. API server: replicas, update strategy, resources, probes, autoscaling, placement
+#   4. Housekeeper
+#   5. Database migration
+#   6. Settings shared by all workloads: pod and container settings, node selection
+#   7. Networking: ports, service, network policy
+#   8. Extension points: extra containers, volumes and environment variables, configuration
+#      ConfigMap
+#   9. config: the Session Manager configuration, rendered into
+#      /etc/session-manager/config.yaml
+#
+# Values marked **Required** must be set for a working installation. Every key of Session
+# Manager itself is documented under `config`, with an example of every alternative. Full
+# reference of the Session Manager configuration:
+#   https://openkcm.io/components/cmk/security/session-manager-config
+#
+# Overview, upgrade notes and troubleshooting: README.md of this chart.
+#
+# Comments starting with "# --" document a value (helm-docs format).
+
+###############################################################################
+# 1. Names and labels
+###############################################################################
 
 # -- Override the chart name in resource names and in the `app.kubernetes.io/name` label.
 # The configuration is always mounted as `/etc/session-manager/config.yaml`.
@@ -27,6 +48,10 @@ namespace: ""
 
 # -- Labels added to all resources.
 commonLabels: {}
+
+###############################################################################
+# 2. Image and service account
+###############################################################################
 
 image:
   # -- Registry of the image.
@@ -63,116 +88,17 @@ serviceAccount:
   # with `create: false`: `default`.
   name: ""
 
-# =============================================================================
-# API server
-# =============================================================================
+###############################################################################
+# 3. API server
+###############################################################################
 
 # -- Number of API server replicas, when `autoscaling` is disabled. Use two or more in
 # production: every browser sign-in and every session check of ExtAuthZ calls the API
 # server. Sessions are stored in Valkey, so replicas need no affinity.
 replicaCount: 1
 
-# -- Old ReplicaSets kept for rollbacks (API server and housekeeper).
-revisionHistoryLimit: 10
-
 # -- Update strategy of the API server Deployment. Empty: Kubernetes' default rolling update.
 strategy: {}
-
-pod:
-  # -- Annotations for all pods, for example for a service mesh. The chart always adds
-  # `checksum/config`, which restarts the pods when the configuration changes.
-  annotations: {}
-
-  # -- Additional labels for all pods.
-  labels: {}
-
-  # -- Pod security context of all pods. The defaults run Session Manager as user and group
-  # 65532, the non-root user of the published image, with the runtime's default seccomp
-  # profile. `runAsUser` is set because Kubernetes enforces `runAsNonRoot` only for images
-  # with a numeric user. `fsGroup` gives group 65532 access to mounted volumes, so Secrets
-  # mounted with a restrictive `defaultMode` (for example `0400`) stay readable.
-  securityContext:
-    runAsNonRoot: true
-    runAsUser: 65532
-    runAsGroup: 65532
-    fsGroup: 65532
-    seccompProfile:
-      type: RuntimeDefault
-
-  # -- Inject environment variables for the Services of the namespace. Session Manager does
-  # not need them.
-  enableServiceLinks: false
-
-  # -- PriorityClass of the API server and housekeeper pods. Sign-in depends on the API
-  # server; consider a high priority class.
-  priorityClassName: ""
-
-  # -- Seconds a pod has to stop after SIGTERM. Null: the Kubernetes default (30).
-  terminationGracePeriodSeconds: null
-
-  disruptionBudget:
-    # -- Create a PodDisruptionBudget for the API server. Use it with two or more replicas.
-    enabled: false
-    # Set at most one of the following. If neither is set, `maxUnavailable: 1` is used.
-    # minAvailable: 1
-    # maxUnavailable: 1
-
-# -- Container security context of all Session Manager containers. The root filesystem is
-# read-only; `/tmp` is a writable `emptyDir` (see `tmpVolume`).
-securityContext:
-  allowPrivilegeEscalation: false
-  readOnlyRootFilesystem: true
-  capabilities:
-    drop:
-      - ALL
-
-tmpVolume:
-  # -- Mount a writable `emptyDir` at `/tmp` in all Session Manager containers.
-  enabled: true
-  # -- Size limit of the `/tmp` volume.
-  sizeLimit: 64Mi
-
-# -- Container ports of the API server. Each must match the listen address in `config`:
-# `http` = `config.http.address`, `grpc` = `config.grpc.address`, `http-status` =
-# `config.status.address`. The housekeeper exposes only `http-status`. The probes, the
-# Service and the NetworkPolicy refer to the ports by name.
-ports:
-  - name: http-status
-    containerPort: 8888
-    protocol: TCP
-  - name: http
-    containerPort: 8080
-    protocol: TCP
-  - name: grpc
-    containerPort: 9091
-    protocol: TCP
-
-service:
-  # -- Service type. Keep `ClusterIP`: Envoy Gateway publishes the `/sm/*` endpoints, and
-  # the gRPC API must only be reachable by ExtAuthZ and CMK.
-  type: ClusterIP
-  # -- Additional labels for the Service.
-  labels: {}
-  # -- Annotations for the Service.
-  annotations: {}
-  # -- Service ports. `http` (8080) is the target of Envoy Gateway's route for `/sm/*`;
-  # `grpc` (9091) is the address that ExtAuthZ (`sessionManager.address`) and CMK use;
-  # `http-status` (8888) serves metrics if enabled. Remove `http-status` if nothing
-  # scrapes it through the Service.
-  ports:
-    - name: http
-      port: 8080
-      protocol: TCP
-      targetPort: http
-    - name: http-status
-      port: 8888
-      protocol: TCP
-      targetPort: http-status
-    - name: grpc
-      port: 9091
-      protocol: TCP
-      targetPort: grpc
-      appProtocol: grpc
 
 # -- Resources of the API server container. The ephemeral-storage limit covers the
 # container's logs and the `/tmp` volume (`tmpVolume.sizeLimit`); a pod that exceeds it is
@@ -232,12 +158,6 @@ autoscaling:
   # -- Scaling behavior (`autoscaling/v2` `behavior`). Empty: the Kubernetes defaults.
   behavior: {}
 
-# -- Node labels for the pods of all workloads.
-nodeSelector: {}
-
-# -- Tolerations for the pods of all workloads.
-tolerations: []
-
 # -- Affinity of the API server pods. The housekeeper uses `housekeeper.affinity`.
 affinity: {}
 
@@ -245,9 +165,233 @@ affinity: {}
 # across zones.
 topologySpreadConstraints: []
 
-# =============================================================================
-# Shared by all workloads
-# =============================================================================
+###############################################################################
+# 4. Housekeeper
+###############################################################################
+
+housekeeper:
+  # -- Run the housekeeper. Without it, idle sessions are not deleted before
+  # `sessionDuration` and access tokens are not refreshed. Run exactly one per
+  # installation.
+  enabled: true
+  # -- Update strategy. A rolling update without surge stops the old pod before the new one
+  # starts, so two housekeepers never refresh the same tokens. Do not use `Recreate`: with
+  # server-side apply (Helm 4), a Deployment created by chart versions before 0.11.0 keeps
+  # its `rollingUpdate` settings, which Kubernetes rejects with `Recreate`, so the upgrade
+  # fails.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  # -- Resources of the housekeeper container, including ephemeral storage for its logs
+  # and `/tmp`.
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+      ephemeral-storage: 128Mi
+    limits:
+      memory: 256Mi
+      ephemeral-storage: 512Mi
+  # -- Liveness probe. Needs `config.status.enabled: true`.
+  livenessProbe:
+    httpGet:
+      path: /probe/liveness
+      port: http-status
+      scheme: HTTP
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+  # -- Readiness probe. Needs `config.status.enabled: true`.
+  readinessProbe:
+    httpGet:
+      path: /probe/readiness
+      port: http-status
+      scheme: HTTP
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+  # -- Affinity of the housekeeper pod.
+  affinity: {}
+
+###############################################################################
+# 5. Database migration
+###############################################################################
+
+migrate:
+  # -- Run the migration job as a Helm `pre-install` and `pre-upgrade` hook. If disabled,
+  # run `session-manager migrate` yourself before every upgrade: the API server does not
+  # start on an outdated schema.
+  enabled: true
+  # -- Retries before the job, and with it the install or upgrade, fails.
+  backoffLimit: 6
+  # -- Maximum run time of the job in seconds. Null: no limit; Helm's `--timeout` still
+  # applies.
+  activeDeadlineSeconds: null
+  # -- Seconds after which a finished job is deleted. Null: the job is kept until the
+  # next install or upgrade replaces it.
+  ttlSecondsAfterFinished: 300
+  # -- Annotations for the job's pod, added to `pod.annotations`. For example
+  # `sidecar.istio.io/inject: "false"`, if a service mesh sidecar would keep the job from
+  # completing.
+  podAnnotations: {}
+  # -- Resources of the migration container, including ephemeral storage for its logs and
+  # `/tmp`.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+      ephemeral-storage: 128Mi
+    limits:
+      memory: 256Mi
+      ephemeral-storage: 512Mi
+  # -- Additional containers of the job's pod. They must exit on their own, or the job
+  # never completes.
+  extraContainers: []
+
+###############################################################################
+# 6. Settings shared by all workloads
+###############################################################################
+
+# -- Old ReplicaSets kept for rollbacks (API server and housekeeper).
+revisionHistoryLimit: 10
+
+pod:
+  # -- Annotations for all pods, for example for a service mesh. The chart always adds
+  # `checksum/config`, which restarts the pods when the configuration changes.
+  annotations: {}
+
+  # -- Additional labels for all pods.
+  labels: {}
+
+  # -- Pod security context of all pods. The defaults run Session Manager as user and group
+  # 65532, the non-root user of the published image, with the runtime's default seccomp
+  # profile. `runAsUser` is set because Kubernetes enforces `runAsNonRoot` only for images
+  # with a numeric user. `fsGroup` gives group 65532 access to mounted volumes, so Secrets
+  # mounted with a restrictive `defaultMode` (for example `0400`) stay readable.
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    fsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+
+  # -- Inject environment variables for the Services of the namespace. Session Manager does
+  # not need them.
+  enableServiceLinks: false
+
+  # -- PriorityClass of the API server and housekeeper pods. Sign-in depends on the API
+  # server; consider a high priority class.
+  priorityClassName: ""
+
+  # -- Seconds a pod has to stop after SIGTERM. Null: the Kubernetes default (30).
+  terminationGracePeriodSeconds: null
+
+  disruptionBudget:
+    # -- Create a PodDisruptionBudget for the API server. Use it with two or more replicas.
+    enabled: false
+    # Set at most one of the following. If neither is set, `maxUnavailable: 1` is used.
+    # minAvailable: 1
+    # maxUnavailable: 1
+
+# -- Container security context of all Session Manager containers. The root filesystem is
+# read-only; `/tmp` is a writable `emptyDir` (see `tmpVolume`).
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+tmpVolume:
+  # -- Mount a writable `emptyDir` at `/tmp` in all Session Manager containers.
+  enabled: true
+  # -- Size limit of the `/tmp` volume.
+  sizeLimit: 64Mi
+
+# -- Node labels for the pods of all workloads.
+nodeSelector: {}
+
+# -- Tolerations for the pods of all workloads.
+tolerations: []
+
+###############################################################################
+# 7. Networking
+###############################################################################
+
+# -- Container ports of the API server. Each must match the listen address in `config`:
+# `http` = `config.http.address`, `grpc` = `config.grpc.address`, `http-status` =
+# `config.status.address`. The housekeeper exposes only `http-status`. The probes, the
+# Service and the NetworkPolicy refer to the ports by name.
+ports:
+  - name: http-status
+    containerPort: 8888
+    protocol: TCP
+  - name: http
+    containerPort: 8080
+    protocol: TCP
+  - name: grpc
+    containerPort: 9091
+    protocol: TCP
+
+service:
+  # -- Service type. Keep `ClusterIP`: Envoy Gateway publishes the `/sm/*` endpoints, and
+  # the gRPC API must only be reachable by ExtAuthZ and CMK.
+  type: ClusterIP
+  # -- Additional labels for the Service.
+  labels: {}
+  # -- Annotations for the Service.
+  annotations: {}
+  # -- Service ports. `http` (8080) is the target of Envoy Gateway's route for `/sm/*`;
+  # `grpc` (9091) is the address that ExtAuthZ (`sessionManager.address`) and CMK use;
+  # `http-status` (8888) serves metrics if enabled. Remove `http-status` if nothing
+  # scrapes it through the Service.
+  ports:
+    - name: http
+      port: 8080
+      protocol: TCP
+      targetPort: http
+    - name: http-status
+      port: 8888
+      protocol: TCP
+      targetPort: http-status
+    - name: grpc
+      port: 9091
+      protocol: TCP
+      targetPort: grpc
+      appProtocol: grpc
+
+networkPolicy:
+  # -- **Recommended.** Create a NetworkPolicy that allows ingress to the pods only from
+  # the peers below. The gRPC API has no authentication of its own and can change tenant
+  # trust records.
+  enabled: false
+  http:
+    # -- Peers allowed on the `http` port (`/sm/*`): Envoy Gateway. Empty: none.
+    from: []
+    # - namespaceSelector:
+    #     matchLabels: { kubernetes.io/metadata.name: envoy-gateway-system }
+  grpc:
+    # -- Peers allowed on the `grpc` port: ExtAuthZ and CMK. Empty: none.
+    from: []
+    # - namespaceSelector:
+    #     matchLabels: { kubernetes.io/metadata.name: envoy-gateway-system }
+    #   podSelector:
+    #     matchLabels: { app.kubernetes.io/name: extauthz }
+    # - podSelector:
+    #     matchLabels: { app.kubernetes.io/name: cmk }
+  status:
+    # -- Peers allowed on the `http-status` port, for example a metrics collector. Empty:
+    # none. Probes from the kubelet are not affected on most network plugins.
+    from: []
+  # -- Additional ingress rules, in NetworkPolicy syntax.
+  extraIngress: []
+
+###############################################################################
+# 8. Extension points
+###############################################################################
 
 # -- Additional init containers of all pods, including the migration job.
 extraInitContainers: []
@@ -326,125 +470,6 @@ extraEnvs: []
 # -- Additional `envFrom` sources of all Session Manager containers.
 extraEnvsFrom: []
 
-# =============================================================================
-# Housekeeper
-# =============================================================================
-
-housekeeper:
-  # -- Run the housekeeper. Without it, idle sessions are not deleted before
-  # `sessionDuration` and access tokens are not refreshed. Run exactly one per
-  # installation.
-  enabled: true
-  # -- Update strategy. A rolling update without surge stops the old pod before the new one
-  # starts, so two housekeepers never refresh the same tokens. Do not use `Recreate`: with
-  # server-side apply (Helm 4), a Deployment created by chart versions before 0.11.0 keeps
-  # its `rollingUpdate` settings, which Kubernetes rejects with `Recreate`, so the upgrade
-  # fails.
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 0
-      maxUnavailable: 1
-  # -- Resources of the housekeeper container, including ephemeral storage for its logs
-  # and `/tmp`.
-  resources:
-    requests:
-      cpu: 50m
-      memory: 64Mi
-      ephemeral-storage: 128Mi
-    limits:
-      memory: 256Mi
-      ephemeral-storage: 512Mi
-  # -- Liveness probe. Needs `config.status.enabled: true`.
-  livenessProbe:
-    httpGet:
-      path: /probe/liveness
-      port: http-status
-      scheme: HTTP
-    periodSeconds: 10
-    timeoutSeconds: 2
-    failureThreshold: 3
-  # -- Readiness probe. Needs `config.status.enabled: true`.
-  readinessProbe:
-    httpGet:
-      path: /probe/readiness
-      port: http-status
-      scheme: HTTP
-    periodSeconds: 10
-    timeoutSeconds: 2
-    failureThreshold: 3
-  # -- Affinity of the housekeeper pod.
-  affinity: {}
-
-# =============================================================================
-# Database migration
-# =============================================================================
-
-migrate:
-  # -- Run the migration job as a Helm `pre-install` and `pre-upgrade` hook. If disabled,
-  # run `session-manager migrate` yourself before every upgrade: the API server does not
-  # start on an outdated schema.
-  enabled: true
-  # -- Retries before the job, and with it the install or upgrade, fails.
-  backoffLimit: 6
-  # -- Maximum run time of the job in seconds. Null: no limit; Helm's `--timeout` still
-  # applies.
-  activeDeadlineSeconds: null
-  # -- Seconds after which a finished job is deleted. Null: the job is kept until the
-  # next install or upgrade replaces it.
-  ttlSecondsAfterFinished: 300
-  # -- Annotations for the job's pod, added to `pod.annotations`. For example
-  # `sidecar.istio.io/inject: "false"`, if a service mesh sidecar would keep the job from
-  # completing.
-  podAnnotations: {}
-  # -- Resources of the migration container, including ephemeral storage for its logs and
-  # `/tmp`.
-  resources:
-    requests:
-      cpu: 100m
-      memory: 64Mi
-      ephemeral-storage: 128Mi
-    limits:
-      memory: 256Mi
-      ephemeral-storage: 512Mi
-  # -- Additional containers of the job's pod. They must exit on their own, or the job
-  # never completes.
-  extraContainers: []
-
-# =============================================================================
-# Network policy
-# =============================================================================
-
-networkPolicy:
-  # -- **Recommended.** Create a NetworkPolicy that allows ingress to the pods only from
-  # the peers below. The gRPC API has no authentication of its own and can change tenant
-  # trust records.
-  enabled: false
-  http:
-    # -- Peers allowed on the `http` port (`/sm/*`): Envoy Gateway. Empty: none.
-    from: []
-    # - namespaceSelector:
-    #     matchLabels: { kubernetes.io/metadata.name: envoy-gateway-system }
-  grpc:
-    # -- Peers allowed on the `grpc` port: ExtAuthZ and CMK. Empty: none.
-    from: []
-    # - namespaceSelector:
-    #     matchLabels: { kubernetes.io/metadata.name: envoy-gateway-system }
-    #   podSelector:
-    #     matchLabels: { app.kubernetes.io/name: extauthz }
-    # - podSelector:
-    #     matchLabels: { app.kubernetes.io/name: cmk }
-  status:
-    # -- Peers allowed on the `http-status` port, for example a metrics collector. Empty:
-    # none. Probes from the kubelet are not affected on most network plugins.
-    from: []
-  # -- Additional ingress rules, in NetworkPolicy syntax.
-  extraIngress: []
-
-# =============================================================================
-# Configuration
-# =============================================================================
-
 configMap:
   # -- Make the configuration ConfigMap immutable. Its name then contains a hash of the
   # content, so every change creates a new ConfigMap.
@@ -452,6 +477,9 @@ configMap:
   # -- Annotations for the configuration ConfigMap.
   annotations: {}
 
+###############################################################################
+# 9. Session Manager configuration
+#
 # Session Manager configuration, written to `config.yaml` and mounted as
 # `/etc/session-manager/config.yaml` in all workloads (helper session-manager.config in
 # templates/_helpers.tpl, used by templates/configmap.yaml and, for the migration job,
@@ -538,6 +566,7 @@ configMap:
 #   -----BEGIN CERTIFICATE-----
 #   …
 #   -----END CERTIFICATE-----
+###############################################################################
 config:
   # ---------------------------------------------------------------------------
   # application: environment, labels and name of Session Manager in its logs, traces and
@@ -854,8 +883,8 @@ config:
     # -- Accept identity providers (issuer and signing keys) served over plain `http`. For
     # local development only. The gRPC `session` service has its own setting (see `apps`).
     allowHttpScheme: false
-    # -- **Required. & IMPORTANT** CSRF secret; value reference. At least 32 bytes, or the API server
-    # does not start. **Must contain exactly the same bytes as ExtAuthZ's `csrfSecret`**;
+    # -- **Required. & IMPORTANT** CSRF secret; value reference. At least 32 bytes, or the API
+    # server does not start. **Must contain exactly the same bytes as ExtAuthZ's `csrfSecret`**;
     # otherwise every API call from the CMK UI fails with `401`. Use `source: file` with the
     # Secret shared with ExtAuthZ.
     csrfSecret:
