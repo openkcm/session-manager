@@ -1,0 +1,57 @@
+# The commented examples of the `config` section of values.yaml that are alternatives to
+# the ones in values-all-config.yaml and cannot be in the same file, so that
+# TestRenderedConfigLoadsStrictly checks them too. The values are rendered on top of the
+# chart's defaults.
+config:
+  database:
+    # The JSON file of "Value references" in values.yaml.
+    password:
+      source: file
+      file: { path: /etc/credentials/db.json, format: json, jsonPath: "$.password" }
+
+  valkey:
+    # Several addresses, without masterSet: the nodes of a Valkey cluster.
+    host: { value: "valkey-0.valkey:6379,valkey-1.valkey:6379,valkey-2.valkey:6379" }
+
+  sessionManager:
+    clientAuth:
+      type: client_secret_post
+      clientID: cmk-session-manager
+      clientSecret:
+        source: file
+        file: { path: /etc/credentials/client-auth.json, format: json, jsonPath: "$.secret" }
+      # Deprecated, but still read: values.yaml mentions it.
+      allowTLSRenegotiationOnce: false
+    loginCSRFCookieTemplate:
+      name: LoginCSRF
+
+  audit:
+    endpoint: https://otel-collector.observability.svc:4318/v1/logs
+    httpClient:
+      basicAuth:
+        username: { source: env, env: AUDIT_USER }
+        password:
+          source: file
+          file: { path: /etc/credentials/audit/password, format: binary }
+
+  telemetry:
+    dynatraceOneAgent: true
+    traces:
+      enabled: true
+      protocol: http
+      host: { value: otel-collector.observability.svc:4318 }
+      url: /v1/traces
+      secretRef:
+        type: api-token
+        apiToken: { source: file, file: { path: /etc/credentials/otel/token, format: binary } }
+    metrics:
+      enabled: true
+      protocol: grpc
+      host: { value: otel-collector.observability.svc:4317 }
+      secretRef:
+        type: basic
+        basic:
+          username: { source: env, env: OTEL_USER }
+          password:
+            source: file
+            file: { path: /etc/credentials/otel/password, format: binary }

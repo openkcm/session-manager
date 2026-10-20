@@ -131,7 +131,7 @@ func (istat *infraStat) PrepareConfig(t *testing.T) {
 
 func (istat *infraStat) Close(ctx context.Context) {
 	// Note: Procdir cleanup is handled by t.TempDir()
-	for _, close := range istat.closeFuncs {
-		close(ctx)
+	for _, closeFn := range istat.closeFuncs {
+		closeFn(ctx)
 	}
 }

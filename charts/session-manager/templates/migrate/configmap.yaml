@@ -1,0 +1,23 @@
+{{- if .Values.migrate.enabled }}
+---
+# Copy of the configuration for the migration job. The job runs as a Helm hook before the
+# release's own resources are created, so its configuration is a hook as well. Helm deletes
+# it only to create it again at the next install or upgrade (before-hook-creation): it is
+# kept for troubleshooting, and a Deployment rolled back to chart version 0.10.x, which
+# mounts a ConfigMap of this name, finds it. helm uninstall does not delete it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "session-manager.migrateConfigMapName" . }}
+  namespace: {{ include "session-manager.namespace" . }}
+  labels:
+    {{- include "session-manager.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrate
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-1"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
+  config.yaml: |-
+    {{- include "session-manager.config" . | nindent 4 }}
+{{- end }}

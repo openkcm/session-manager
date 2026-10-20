@@ -1,0 +1,101 @@
+OpenKCM Session Manager is deployed as {{ include "session-manager.fullname" . }} in namespace {{ include "session-manager.namespace" . }}.
+{{- $svc := printf "%s.%s.svc" (include "session-manager.fullname" .) (include "session-manager.namespace" .) }}
+{{- range .Values.service.ports }}
+{{- if eq (toString .name) "http" }}
+Sign-in endpoints (/sm/*, route them through Envoy Gateway):  {{ $svc }}:{{ .port }}
+{{- else if eq (toString .name) "grpc" }}
+gRPC API (for ExtAuthZ and CMK):                              {{ $svc }}:{{ .port }}
+{{- end }}
+{{- end }}
+Configuration:                                                ConfigMap {{ include "session-manager.configMapName" . }}
+
+Check the pods:
+  kubectl --namespace {{ include "session-manager.namespace" . }} get pods -l app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/name={{ include "session-manager.name" . }}
+{{- $cfg := .Values.config }}
+{{- $sm := $cfg.sessionManager | default dict }}
+{{- $clientAuth := $sm.clientAuth | default dict }}
+{{- $warnings := list }}
+{{- if not .Values.networkPolicy.enabled }}
+{{- $warnings = append $warnings "networkPolicy.enabled is false: the gRPC API has no authentication of its own and can change tenant trust records. Allow only ExtAuthZ and CMK to call it, with a NetworkPolicy or service mesh policy." }}
+{{- end }}
+{{- if not (hasPrefix "https://" (toString $sm.callbackURL)) }}
+{{- $warnings = append $warnings "config.sessionManager.callbackURL is not an https:// URL. Set it to the public URL of /sm/callback, for example https://api.example.com/sm/callback." }}
+{{- end }}
+{{- if not $sm.allowedRedirectBaseURLs }}
+{{- $warnings = append $warnings "config.sessionManager.allowedRedirectBaseURLs is empty: every sign-in and logout fails with 400. Add the URL of the CMK UI, ending with /." }}
+{{- end }}
+{{- if not $clientAuth.clientID }}
+{{- $warnings = append $warnings "config.sessionManager.clientAuth.clientID is empty: the database migration of a new installation fails." }}
+{{- end }}
+{{- if $sm.allowHttpScheme }}
+{{- $warnings = append $warnings "config.sessionManager.allowHttpScheme is true: identity providers over plain http are accepted. For local development only." }}
+{{- end }}
+{{- range $appName, $app := $cfg.apps }}
+{{- range $i, $service := (($app | default dict).services | default list) }}
+{{- if ($service | default dict).allowHttpScheme }}
+{{- $warnings = append $warnings (printf "config.apps.%s.services[%d].allowHttpScheme is true: token introspection endpoints over plain http are accepted. For local development only." $appName $i) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- /* Value references: required ones that are empty, and secrets stored in the ConfigMap. */}}
+{{- $refs := list
+  (list "config.database.host" (($cfg.database | default dict).host) true false)
+  (list "config.database.user" (($cfg.database | default dict).user) true false)
+  (list "config.database.password" (($cfg.database | default dict).password) false true)
+  (list "config.valkey.host" (($cfg.valkey | default dict).host) true false)
+  (list "config.valkey.password" (($cfg.valkey | default dict).password) false true)
+  (list "config.sessionManager.csrfSecret" $sm.csrfSecret true true)
+  (list "config.sessionManager.clientAuth.clientSecret" $clientAuth.clientSecret false true) }}
+{{- $missing := list }}
+{{- $embedded := list }}
+{{- range $refs }}
+{{- $name := index . 0 }}{{- $ref := index . 1 | default dict }}{{- $required := index . 2 }}{{- $secret := index . 3 }}
+{{- if or (not $ref.source) (eq (toString $ref.source) "embedded") }}
+{{- if and $required (not $ref.value) }}
+{{- $missing = append $missing $name }}
+{{- else if and $secret $ref.value }}
+{{- $embedded = append $embedded $name }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if $missing }}
+{{- $warnings = append $warnings (printf "Not set: %s. Session Manager does not start without them." (join ", " $missing)) }}
+{{- end }}
+{{- if $embedded }}
+{{- $warnings = append $warnings (printf "Stored in plain text in the ConfigMap: %s. Mount Secrets with extraVolumes and use source: file." (join ", " $embedded)) }}
+{{- end }}
+{{- with $cfg.valkey }}
+{{- if ne (toString (.secretRef | default dict).type) "mtls" }}
+{{- $warnings = append $warnings "config.valkey.secretRef.type is not mtls: the connection to Valkey, which holds the users' tokens, is not encrypted. Use mtls unless a service mesh encrypts the traffic." }}
+{{- end }}
+{{- end }}
+{{- if not (and $cfg.audit $cfg.audit.endpoint) }}
+{{- $warnings = append $warnings "config.audit.endpoint is not set: audit events for sign-ins are not delivered." }}
+{{- end }}
+{{- if and $cfg.grpc $cfg.grpc.flags $cfg.grpc.flags.reflection }}
+{{- $warnings = append $warnings "config.grpc.flags.reflection is true. Switch it off in production." }}
+{{- end }}
+{{- if and $cfg.status $cfg.status.profiling }}
+{{- $warnings = append $warnings "config.status.profiling is true: profiling endpoints are served without authentication. Switch it off in production." }}
+{{- end }}
+{{- if and $cfg.logger (eq (toString $cfg.logger.level) "debug") }}
+{{- $warnings = append $warnings "config.logger.level is debug. Use info in production." }}
+{{- end }}
+{{- if not .Values.housekeeper.enabled }}
+{{- $warnings = append $warnings "housekeeper.enabled is false: idle sessions are not deleted and access tokens are not refreshed. Run exactly one housekeeper." }}
+{{- end }}
+{{- if not .Values.migrate.enabled }}
+{{- $warnings = append $warnings "migrate.enabled is false: run session-manager migrate before every upgrade, or the API server does not start." }}
+{{- end }}
+{{- if and (not .Values.autoscaling.enabled) (lt (int .Values.replicaCount) 2) }}
+{{- $warnings = append $warnings "replicaCount is 1: sign-in and session checks stop while the pod restarts. Use two or more replicas in production." }}
+{{- end }}
+{{- if $warnings }}
+
+WARNINGS:
+{{- range $warnings }}
+  - {{ . }}
+{{- end }}
+{{- end }}
+
+Documentation: https://openkcm.io/components/cmk/security/session-manager-config

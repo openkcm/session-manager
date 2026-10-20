@@ -12,6 +12,34 @@ This directory contains unit tests for the session-manager Helm chart.
 - **TestChartValidation**: Validates chart syntax and structure
 - **TestLabelsAndAnnotations**: Verifies standard Kubernetes labels are applied
 
+### configload_test.go
+- **TestRenderedConfigLoadsStrictly**: Loads the rendered `config.yaml` (default values,
+  `values-dev.yaml`, every documented setting in `testdata/values-all-config.yaml`, the
+  documented alternatives that cannot be combined with them in
+  `testdata/values-config-alternatives.yaml`, and `clientAuth.type: insecure`) with Session
+  Manager's configuration loader and modules, and fails on keys that Session Manager does
+  not read and on values of the wrong type
+- **TestStrictConfigCheckFindsUnknownKeys**: Checks that the strict check reports misspelled keys
+- **TestConfigMapsHaveSameConfig**: The ConfigMap and the migration job's hook copy contain the same `config.yaml`
+- **TestConfigChecksum**: `checksum/config` changes with the configuration, and only then
+- **TestImmutableConfigMapName**: The name of an immutable ConfigMap changes with the configuration, and only then
+
+### configfiles_test.go
+The files that the configuration refers to, in the formats that `values.yaml` documents.
+Certificates and keys are generated at test time; no key material is stored.
+- **TestDocumentedFileContents**: Reads every example file content of `values.yaml`
+  ("Example content of <path>:") through the documented value references to it, with the
+  value reference loader of common-sdk, including the JSON files with `jsonPath`
+- **TestValueFileFormats**: `format: binary` and `format: json` files, as described under
+  "Files of value references"
+- **TestDocumentedMTLSFiles**: Loads every documented mTLS setting with PEM files (the
+  client certificate with its intermediate CA; PKCS #8, PKCS #1 and SEC 1 keys) and
+  completes a TLS handshake with a server that requires the client certificate
+- **TestClientAuthMTLSFiles**: Provisions the credentials module with `clientAuth` of type
+  `mtls` and fetches the OpenID configuration of an identity provider over mTLS
+- **TestPostgresTLSFiles**: Parses the PostgreSQL settings with `PGSSLMODE`,
+  `PGSSLROOTCERT`, `PGSSLCERT` and `PGSSLKEY` and completes a TLS handshake
+
 ### configmap_test.go
 - **TestConfigMapRendering**: Tests ConfigMap template rendering
 
@@ -28,6 +56,11 @@ This directory contains unit tests for the session-manager Helm chart.
 
 ### job_test.go
 - **TestMigrateJobRendering**: Tests database migration job rendering
+- **TestMigrateConfigMapRendering**: Tests the migration job's hook copy of the configuration
+- **TestMigrationHookDeletePolicy**: The migration hooks are deleted only before they are created again
+
+### networkpolicy_test.go
+- **TestNetworkPolicyRendering**: Tests NetworkPolicy rendering when enabled
 
 ### pdb_test.go
 - **TestPDBRendering**: Tests PodDisruptionBudget rendering (skips if template doesn't exist)
@@ -48,7 +81,7 @@ This directory contains unit tests for the session-manager Helm chart.
 ### Prerequisites
 
 - Go installed (see go.mod for version)
-- Helm 3.x installed and available in PATH
+- Helm 3 or later installed and available in PATH
 - Tests use the `helmtests` build tag
 
 Run all tests:

@@ -12,23 +12,42 @@ import (
 func TestConfigMapRendering(t *testing.T) {
 	ctx := t.Context()
 	tests := []struct {
-		name     string
-		values   string
-		expected []string
+		name       string
+		values     string
+		expected   []string
+		unexpected []string
 	}{
 		{
 			name:   "default configmap",
 			values: "",
 			expected: []string{
 				"kind: ConfigMap",
-				"name: session-manager-config",
-				"immutable: false",
-				"helm.sh/hook: pre-install,pre-upgrade",
-				"helm.sh/weight: \"-1\"",
-				"helm.sh/hook-delete-policy: before-hook-creation",
+				"name: session-manager\n",
+				"namespace: default",
 				"application:",
 				"name: session-manager",
 				"environment: production",
+				"reflection: false",
+			},
+			// The ConfigMap is a regular release resource, not a Helm hook. Secrets have no
+			// default values.
+			unexpected: []string{
+				"helm.sh/hook",
+				"immutable:",
+				"session-manager-config",
+				"my-csrf-secret",
+				// No audit section, so no comment about it either.
+				"Audit events",
+			},
+		},
+		{
+			// Annotation values are always rendered as strings.
+			name:   "configmap annotations",
+			values: "--set configMap.annotations.example\\.com/revision=3 --set configMap.annotations.example\\.com/reviewed=true",
+			expected: []string{
+				"annotations:",
+				`example.com/revision: "3"`,
+				`example.com/reviewed: "true"`,
 			},
 		},
 		{
@@ -37,6 +56,52 @@ func TestConfigMapRendering(t *testing.T) {
 			expected: []string{
 				"kind: ConfigMap",
 				"immutable: true",
+			},
+			// Chart-only keys are not written to config.yaml.
+			unexpected: []string{
+				"isImmutable",
+			},
+		},
+		{
+			name:   "immutable configmap with configMap.immutable",
+			values: "--set configMap.immutable=true",
+			expected: []string{
+				"immutable: true",
+				"name: session-manager-",
+			},
+		},
+		{
+			name:   "optional configuration sections are written when set",
+			values: "--set config.audit.endpoint=http://collector:4318/v1/logs --set config.appsOrder[0]=grpc --set config.sessionManager.allowedRedirectBaseURLs[0]=https://ui.example.com/",
+			expected: []string{
+				"audit:",
+				"endpoint: http://collector:4318/v1/logs",
+				"appsOrder:",
+				"- https://ui.example.com/",
+			},
+		},
+		{
+			// Every key under config is passed through; Session Manager ignores keys it does
+			// not know.
+			name:   "all configuration sections are passed through",
+			values: "--set config.featureFlags.enabled=true --set config.unknown=x",
+			expected: []string{
+				"featureFlags:",
+				"unknown: x",
+			},
+		},
+		{
+			name:   "application block is built from the chart values",
+			values: "--set config.environment=staging --set config.application.name=sm-eu10",
+			expected: []string{
+				"application:",
+				"environment: staging",
+				"name: sm-eu10",
+			},
+			// The flat chart keys are not written at the top level.
+			unexpected: []string{
+				"\n    environment:",
+				"\n    labels:",
 			},
 		},
 		{
@@ -186,6 +251,11 @@ func TestConfigMapRendering(t *testing.T) {
 			for _, expected := range tt.expected {
 				if !strings.Contains(output, expected) {
 					t.Errorf("expected output to contain %q, but it didn't.\nOutput: %s", expected, output)
+				}
+			}
+			for _, unexpected := range tt.unexpected {
+				if strings.Contains(output, unexpected) {
+					t.Errorf("expected output NOT to contain %q, but it did.\nOutput: %s", unexpected, output)
 				}
 			}
 		})

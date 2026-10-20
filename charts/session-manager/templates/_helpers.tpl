@@ -24,15 +24,11 @@ If release name contains chart name it will be used as a full name.
 {{- end }}
 
 {{/*
-Namespace for all resources to be installed into
-If not defined in values file then the helm release namespace is used
-By default this is not set so the helm release namespace will be used
-
-This gets around an problem within helm discussed here
-https://github.com/helm/helm/issues/5358
+Namespace for all resources. Defaults to the release namespace.
+See https://github.com/helm/helm/issues/5358
 */}}
 {{- define "session-manager.namespace" -}}
-    {{ .Values.namespace | default .Release.Namespace }}
+{{- .Values.namespace | default .Release.Namespace }}
 {{- end -}}
 
 {{/*
@@ -43,19 +39,31 @@ Create chart name and version as used by the chart label.
 {{- end }}
 
 {{/*
-Common labels
+Version of the deployed application: the image tag if set, else the chart's appVersion.
+*/}}
+{{- define "session-manager.version" -}}
+{{- (.Values.image.tag | default .Chart.AppVersion) | toString | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Common labels. Each workload adds its app.kubernetes.io/component label.
 */}}
 {{- define "session-manager.labels" -}}
 helm.sh/chart: {{ include "session-manager.chart" . }}
 {{ include "session-manager.selectorLabels" . }}
-{{- if .Chart.AppVersion }}
-app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- with include "session-manager.version" . }}
+app.kubernetes.io/version: {{ . | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- with .Values.commonLabels }}
+{{ toYaml . }}
+{{- end }}
 {{- end }}
 
 {{/*
-Selector labels
+Selector labels, shared by all workloads of the release. Each workload's selector adds
+app.kubernetes.io/component. Do not change them: a Deployment's selector cannot be changed
+on upgrade.
 */}}
 {{- define "session-manager.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "session-manager.name" . }}
@@ -63,7 +71,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-Create the name of the service account to use
+Name of the service account to use.
 */}}
 {{- define "session-manager.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
@@ -74,13 +82,77 @@ Create the name of the service account to use
 {{- end }}
 
 {{/*
-Util function for generating the image URL based on the provided options.
-Either image.tag or image.digest must be set explicitly; no fallback to appVersion.
+Image reference: registry and repository, then the digest if set, else the tag. The tag
+defaults to the chart's appVersion, the image version this chart release is made for.
+Call it with (tuple .Values.image .Chart.AppVersion).
 */}}
 {{- define "session-manager.image" -}}
-{{- with index . 0 -}}
-{{- if not (or .digest .tag) -}}{{ fail "Either image.tag or image.digest must be set" }}{{- end -}}
-{{- if .registry -}}{{ printf "%s/%s" .registry .repository }}{{- else -}}{{- .repository -}}{{- end -}}
-{{- if .digest -}}{{ printf "@%s" .digest }}{{- else -}}{{ printf ":%s" .tag }}{{- end -}}
+{{- $image := index . 0 -}}
+{{- $appVersion := index . 1 -}}
+{{- $repository := $image.repository -}}
+{{- if $image.registry -}}{{- $repository = printf "%s/%s" $image.registry $image.repository -}}{{- end -}}
+{{- if $image.digest -}}
+{{- printf "%s@%s" $repository (toString $image.digest) -}}
+{{- else -}}
+{{- printf "%s:%s" $repository (toString ($image.tag | default $appVersion)) -}}
+{{- end -}}
 {{- end }}
+
+{{/*
+Annotations with every value rendered as a string. Values given with --set can be numbers
+or booleans, which Kubernetes rejects in annotations.
+*/}}
+{{- define "session-manager.annotations" -}}
+{{- range $key, $value := . }}
+{{ $key }}: {{ $value | toString | quote }}
+{{- end }}
+{{- end }}
+
+{{/*
+Whether the configuration ConfigMap is immutable. configMap.immutable is preferred;
+config.isImmutable is still honoured for compatibility with older values files.
+*/}}
+{{- define "session-manager.configImmutable" -}}
+{{- if or .Values.configMap.immutable (and (kindIs "map" .Values.config) .Values.config.isImmutable) -}}
+true
+{{- end -}}
+{{- end }}
+
+{{/*
+The Session Manager configuration as rendered into config.yaml, for the API server, the
+housekeeper and the migration job.
+- application: built from config.environment and config.labels (the chart's flat values),
+  with the chart name as application name; config.application overrides single fields.
+- Everything else under config is passed through. Chart-only keys are removed.
+*/}}
+{{- define "session-manager.config" -}}
+{{- $application := dict "name" (include "session-manager.name" .) }}
+{{- with .Values.config.environment }}{{- $_ := set $application "environment" . }}{{- end }}
+{{- with .Values.config.labels }}{{- $_ := set $application "labels" . }}{{- end }}
+{{- with .Values.config.application }}{{- $application = mergeOverwrite $application (deepCopy .) }}{{- end }}
+{{- $rest := omit .Values.config "environment" "labels" "isImmutable" "application" }}
+{{- toYaml (merge (dict "application" $application) $rest) }}
+{{- end }}
+
+{{/*
+Name of the configuration ConfigMap of the API server and the housekeeper. An immutable
+ConfigMap gets a hash of the configuration in its name, so that a changed configuration
+creates a new ConfigMap instead of failing the upgrade.
+The name differs from "<fullname>-config", which chart versions before 0.11.0 created as a
+Helm hook: Helm cannot adopt that object, so reusing the name would fail the upgrade.
+*/}}
+{{- define "session-manager.configMapName" -}}
+{{- if include "session-manager.configImmutable" . -}}
+{{- printf "%s-%s" (include "session-manager.fullname" . | trunc 52 | trimSuffix "-") (include "session-manager.config" . | sha256sum | trunc 10) }}
+{{- else -}}
+{{- include "session-manager.fullname" . }}
+{{- end -}}
+{{- end }}
+
+{{/*
+Name of the ConfigMap of the migration job. The job runs as a Helm hook before the
+release's own resources exist, so it gets its own copy of the configuration, also as a hook.
+*/}}
+{{- define "session-manager.migrateConfigMapName" -}}
+{{- printf "%s-config" (include "session-manager.fullname" . | trunc 56 | trimSuffix "-") }}
 {{- end }}

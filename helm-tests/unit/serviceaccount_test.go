@@ -12,9 +12,10 @@ import (
 func TestServiceAccountRendering(t *testing.T) {
 	ctx := t.Context()
 	tests := []struct {
-		name     string
-		values   string
-		expected []string
+		name       string
+		values     string
+		expected   []string
+		unexpected []string
 	}{
 		{
 			name:   "default service account",
@@ -37,31 +38,34 @@ func TestServiceAccountRendering(t *testing.T) {
 			values: "--set serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn=arn:aws:iam::123456789:role/my-role",
 			expected: []string{
 				"annotations:",
-				"eks.amazonaws.com/role-arn: arn:aws:iam::123456789:role/my-role",
+				`eks.amazonaws.com/role-arn: "arn:aws:iam::123456789:role/my-role"`,
 			},
 		},
 		{
-			name:   "with Role created",
-			values: "",
+			// Annotation values are always rendered as strings.
+			name:   "with numeric service account annotation",
+			values: "--set serviceAccount.annotations.example\\.com/revision=2",
 			expected: []string{
-				"kind: Role",
-				"name: session-manager",
-				"namespace: default",
-				"rules: []",
+				`example.com/revision: "2"`,
 			},
 		},
 		{
-			name:   "with RoleBinding created",
+			// Session Manager does not call the Kubernetes API.
+			name:   "without Role and RoleBinding",
 			values: "",
 			expected: []string{
-				"kind: RoleBinding",
-				"name: session-manager",
 				"namespace: default",
-				"subjects:",
-				"kind: ServiceAccount",
-				"roleRef:",
+			},
+			unexpected: []string{
 				"kind: Role",
-				"apiGroup: rbac.authorization.k8s.io",
+				"rbac.authorization.k8s.io",
+			},
+		},
+		{
+			name:   "with automount",
+			values: "--set serviceAccount.automount=true",
+			expected: []string{
+				"automountServiceAccountToken: true",
 			},
 		},
 		{
@@ -99,6 +103,11 @@ func TestServiceAccountRendering(t *testing.T) {
 			for _, expected := range tt.expected {
 				if !strings.Contains(output, expected) {
 					t.Errorf("expected output to contain %q, but it didn't.\nOutput: %s", expected, output)
+				}
+			}
+			for _, unexpected := range tt.unexpected {
+				if strings.Contains(output, unexpected) {
+					t.Errorf("expected output NOT to contain %q, but it did.\nOutput: %s", unexpected, output)
 				}
 			}
 		})

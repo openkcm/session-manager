@@ -24,14 +24,14 @@ func TestFullChartRendering(t *testing.T) {
 				"kind: Deployment":     2, // session-manager and housekeeper
 				"kind: Service":        1,
 				"kind: ServiceAccount": 1,
-				"kind: Role":           1,
-				"kind: RoleBinding":    1,
-				"kind: ConfigMap":      1,
+				"kind: ConfigMap":      2, // configuration, and its hook copy for the migrate job
 				"kind: Job":            1, // migrate job
 			},
 			shouldNotContain: []string{
 				"kind: HorizontalPodAutoscaler", // HPA disabled by default
 				"kind: PodDisruptionBudget",     // PDB disabled by default
+				"kind: NetworkPolicy",           // NetworkPolicy disabled by default
+				"kind: Role",                    // no Role or RoleBinding
 			},
 		},
 		{
@@ -81,12 +81,23 @@ func TestFullChartRendering(t *testing.T) {
 				"kind: Deployment":              2,
 				"kind: Service":                 1,
 				"kind: ServiceAccount":          1,
-				"kind: Role":                    1,
-				"kind: RoleBinding":             1,
-				"kind: ConfigMap":               1,
+				"kind: ConfigMap":               2,
 				"kind: Job":                     1,
 				"kind: HorizontalPodAutoscaler": 1,
 				"kind: PodDisruptionBudget":     1,
+			},
+		},
+		{
+			name:   "with housekeeper and migration disabled",
+			values: "--set housekeeper.enabled=false --set migrate.enabled=false",
+			expectedCount: map[string]int{
+				"kind: Deployment": 1,
+				"kind: ConfigMap":  1,
+			},
+			shouldNotContain: []string{
+				"kind: Job",
+				"session-manager-housekeeper",
+				"session-manager-config",
 			},
 		},
 	}
@@ -147,6 +158,18 @@ func TestChartValidation(t *testing.T) {
 			name:       "valid with custom values",
 			values:     "--set replicaCount=3 --set image.tag=v1.0.0",
 			shouldFail: false,
+		},
+		{
+			name:        "autoscaling needs a target",
+			values:      "--set autoscaling.enabled=true --set autoscaling.targetCPUUtilizationPercentage=null --set autoscaling.targetMemoryUtilizationPercentage=null",
+			shouldFail:  true,
+			errorString: "autoscaling.enabled requires",
+		},
+		{
+			name:        "PodDisruptionBudget takes minAvailable or maxUnavailable",
+			values:      "--set pod.disruptionBudget.enabled=true --set pod.disruptionBudget.minAvailable=1 --set pod.disruptionBudget.maxUnavailable=1",
+			shouldFail:  true,
+			errorString: "You can only set one of minAvailable or maxUnavailable",
 		},
 	}
 

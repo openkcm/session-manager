@@ -21,3 +21,6 @@
 .idea/
 *.tmproj
 .vscode/
+
+# Not part of the published chart: values for local development (`make start`).
+values-dev.yaml

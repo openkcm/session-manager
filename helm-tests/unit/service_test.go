@@ -56,6 +56,7 @@ func TestServiceRendering(t *testing.T) {
 				"name: grpc",
 				"port: 9091",
 				"targetPort: grpc",
+				"appProtocol: grpc",
 			},
 		},
 		{
@@ -72,8 +73,9 @@ func TestServiceRendering(t *testing.T) {
 			values: "--set service.annotations.prometheus\\.io/scrape=true --set service.annotations.prometheus\\.io/port=8080",
 			expected: []string{
 				"annotations:",
-				"prometheus.io/port: 8080",
-				"prometheus.io/scrape: true",
+				// Annotation values are always rendered as strings.
+				`prometheus.io/port: "8080"`,
+				`prometheus.io/scrape: "true"`,
 			},
 		},
 		{

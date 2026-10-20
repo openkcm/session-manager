@@ -1,66 +1,20 @@
+---
+# Configuration of the API server and the housekeeper, mounted as
+# /etc/session-manager/config.yaml.
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "session-manager.fullname" . }}-config
+  name: {{ include "session-manager.configMapName" . }}
+  namespace: {{ include "session-manager.namespace" . }}
   labels:
     {{- include "session-manager.labels" . | nindent 4 }}
+  {{- with .Values.configMap.annotations }}
   annotations:
-    helm.sh/hook: pre-install,pre-upgrade
-    helm.sh/weight: "-1"
-    helm.sh/hook-delete-policy: before-hook-creation
-immutable: {{ .Values.config.isImmutable | default false }}
+    {{- include "session-manager.annotations" . | trim | nindent 4 }}
+  {{- end }}
+{{- if include "session-manager.configImmutable" . }}
+immutable: true
+{{- end }}
 data:
   config.yaml: |-
-    # Based on github.com/openkcm/common-sdk/pkg/commoncfg
-    application:
-      name: {{ .Chart.Name }}
-    {{- with .Values.config }}
-      environment: {{ .environment }}
-      {{- with .labels }}
-      labels:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-
-    audit:
-      {{- toYaml .audit | nindent 6 }}
-
-    http:
-      {{- toYaml .http | nindent 6 }}
-
-    grpc:
-      {{- toYaml .grpc | nindent 6 }}
-
-    status:
-      {{- toYaml .status | nindent 6 }}
-
-    logger:
-      {{- toYaml .logger | nindent 6 }}
-
-    telemetry:
-      {{- toYaml .telemetry | nindent 6 }}
-
-    # Based on github.com/openkcm/session-manager/pkg/config
-    database:
-      {{- toYaml .database | nindent 6 }}
-
-    trust:
-      {{- toYaml .trust | nindent 6 }}
-
-    credentials:
-      {{- toYaml .credentials | nindent 6 }}
-
-    valkey:
-      {{- toYaml .valkey | nindent 6 }}
-
-    sessionManager:
-      {{- toYaml .sessionManager | nindent 6 }}
-
-    migrate:
-      {{- toYaml .migrate | nindent 6 }}
-
-    housekeeper:
-      {{- toYaml .housekeeper | nindent 6 }}
-
-    apps:
-      {{- toYaml .apps | nindent 6 }}
-    {{- end }}
+    {{- include "session-manager.config" . | nindent 4 }}

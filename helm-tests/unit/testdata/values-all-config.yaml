@@ -1,0 +1,159 @@
+# Every optional configuration setting that values.yaml and README.md document, with the
+# required ones, so that TestRenderedConfigLoadsStrictly checks their names, nesting and
+# types against Session Manager. It contains every commented example of the `config`
+# section of values.yaml. Examples that are alternatives to the ones here are in
+# values-config-alternatives.yaml. Add new documented settings here.
+config:
+  application:
+    name: session-manager-eu10
+  environment: staging
+  labels:
+    region: eu10
+
+  logger:
+    source: true
+    formatter:
+      time:
+        type: unix
+        precision: 1ms
+
+  http:
+    shutdownTimeout: 5s
+
+  grpc:
+    shutdownTimeout: 5s
+    # No effect in Session Manager, but read: values.yaml mentions it.
+    maxSendMsgSize: 2147483647
+    maxRecvMsgSize: 125829120
+    efPolMinTime: 180s
+    efPolPermitWithoutStream: false
+    attributes:
+      maxConnectionIdle: 1800s
+      maxConnectionAge: 1800s
+      maxConnectionAgeGrace: 300s
+      time: 120m
+      timeout: 20s
+
+  database:
+    host: { source: embedded, value: postgresql.services.svc.cluster.local }
+    user: { source: env, env: DATABASE_USER }
+    password:
+      source: file
+      file: { path: /etc/credentials/database/password, format: binary }
+
+  valkey:
+    host: { value: valkey-primary.storage.svc.cluster.local:6379 }
+    user: { value: session-manager }
+    password:
+      source: file
+      file: { path: /etc/credentials/valkey/password, format: binary }
+    masterSet: mymaster
+    topologyRefreshInterval: 5s
+    secretRef:
+      type: mtls
+      mtls:
+        cert: { source: file, file: { path: /etc/credentials/valkey/tls.crt, format: binary } }
+        certKey: { source: file, file: { path: /etc/credentials/valkey/tls.key, format: binary } }
+        serverCa: { source: file, file: { path: /etc/credentials/valkey/ca.crt, format: binary } }
+        attributes:
+          serverName: valkey.storage.svc.cluster.local
+
+  sessionManager:
+    callbackURL: https://api.example.com/sm/callback
+    allowedRedirectBaseURLs:
+      - https://ui.example.com/
+    csrfSecret:
+      source: file
+      file: { path: /etc/credentials/csrf-secret/csrf_secret, format: binary }
+    clientAuth:
+      type: mtls
+      clientID: cmk-session-manager
+      mTLS:
+        cert:
+          source: file
+          file: { path: /etc/credentials/client-auth/tls.crt, format: binary }
+        certKey:
+          source: file
+          file: { path: /etc/credentials/client-auth/tls.key, format: binary }
+        serverCa:
+          source: file
+          file: { path: /etc/credentials/client-auth/ca.crt, format: binary }
+        # The other settings of an mTLS block ("mTLS settings" in values.yaml).
+        rootCAs:
+          - source: file
+            file: { path: /etc/credentials/client-auth/root-ca.crt, format: binary }
+        attributes:
+          serverName: idp.example.com
+          sessionTicketsDisabled: true
+          allowTLSRenegotiationOnce: true
+    sessionCookieTemplate:
+      domain: ""
+      maxAge: 0
+    csrfCookieTemplate:
+      domain: example.com
+      httpOnly: false
+      maxAge: 0
+    loginCSRFCookieTemplate:
+      name: __Host-LoginCSRF
+      domain: ""
+      maxAge: 0
+
+  audit:
+    endpoint: https://otel-collector.observability.svc:4318/v1/logs
+    httpClient:
+      timeout: 10s
+      apiToken: { source: file, file: { path: /etc/credentials/audit/token, format: binary } }
+      mtls:
+        cert: { source: file, file: { path: /etc/credentials/audit/tls.crt, format: binary } }
+        certKey: { source: file, file: { path: /etc/credentials/audit/tls.key, format: binary } }
+      transportAttributes:
+        tlsHandshakeTimeout: 10s
+        responseHeaderTimeout: 10s
+        expectContinueTimeout: 1s
+        idleConnTimeout: 90s
+        maxIdleConns: 100
+        maxIdleConnsPerHost: 10
+        maxConnsPerHost: 0
+        disableKeepAlives: false
+        disableCompression: false
+    additionalProperties: |
+      appID: session-manager
+
+  telemetry:
+    traces:
+      enabled: true
+      protocol: grpc
+      host: { source: env, env: OTEL_COLLECTOR_HOST }
+      secretRef: { type: insecure }
+    metrics:
+      enabled: true
+      prometheus: { enabled: true }
+    logs:
+      enabled: true
+      protocol: http
+      host: { value: otel-collector.observability.svc:4318 }
+      url: /v1/logs
+      secretRef:
+        type: mtls
+        mtls:
+          cert: { source: file, file: { path: /etc/credentials/otel/tls.crt, format: binary } }
+          certKey: { source: file, file: { path: /etc/credentials/otel/tls.key, format: binary } }
+          serverCa: { source: file, file: { path: /etc/credentials/otel/ca.crt, format: binary } }
+
+  apps:
+    grpc:
+      services:
+        - module: service.module.grpc.session
+          allowHttpScheme: false
+          trust: trust.module.oidc
+          sessionStore: sessionstore.module.valkey
+          credentials: credentials.module.oauth2
+        - module: service.module.grpc.trustmapping
+          trust: trust.module.oidc
+        - module: service.module.grpc.oidcmapping
+          trust: trust.module.oidc
+  appsOrder:
+    - grpc
+
+  # A chart setting (replaced by configMap.immutable); not written to config.yaml.
+  isImmutable: false
