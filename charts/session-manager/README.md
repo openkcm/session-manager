@@ -93,7 +93,7 @@ networkPolicy:
     from:
       - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: envoy-gateway-system } }
         podSelector: { matchLabels: { app.kubernetes.io/name: extauthz } }
-      - podSelector: { matchLabels: { app.kubernetes.io/name: cmk } }
+      - podSelector: { matchLabels: { app.kubernetes.io/part-of: cmk } }
 
 extraEnvs:
   - { name: PGSSLMODE, value: verify-full }

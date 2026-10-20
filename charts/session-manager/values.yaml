@@ -381,7 +381,7 @@ networkPolicy:
     #   podSelector:
     #     matchLabels: { app.kubernetes.io/name: extauthz }
     # - podSelector:
-    #     matchLabels: { app.kubernetes.io/name: cmk }
+    #     matchLabels: { app.kubernetes.io/part-of: cmk }
   status:
     # -- Peers allowed on the `http-status` port, for example a metrics collector. Empty:
     # none. Probes from the kubelet are not affected on most network plugins.
@@ -1068,7 +1068,8 @@ config:
 
   # -- Long-running components of the API server, keyed by a name you choose. The only app
   # module is `app.module.grpcserver`: the gRPC server configured in `grpc`, which hosts
-  # the services that ExtAuthZ (`session`) and CMK (`oidcmapping`) call. It can be used
+  # the services that ExtAuthZ (`session`) and CMK (`trustmapping`; older CMK releases:
+  # `oidcmapping`) call. It can be used
   # once and needs at least one service; each service can be listed once. Without it,
   # ExtAuthZ and CMK cannot reach Session Manager, and the readiness probe of the API
   # server fails.
