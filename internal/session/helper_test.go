@@ -85,14 +85,15 @@ func StartOIDCServer(t *testing.T, fail bool, algs ...string) *httptest.Server {
 		case "/oauth2/token":
 			now := time.Now()
 			idToken, err := jwt.Signed(signer).Claims(map[string]any{
-				"iss":     server.URL,
-				"sub":     "jwt-test",
-				"sid":     "provider-session-id",
-				"aud":     testClientID,
-				"iat":     now.Unix(),
-				"nbf":     now.Unix(),
-				"exp":     now.Add(time.Hour).Unix(),
-				"at_hash": atHashRS256(oidcAccessToken),
+				"iss":       server.URL,
+				"sub":       "jwt-test",
+				"sid":       "provider-session-id",
+				"aud":       testClientID,
+				"iat":       now.Unix(),
+				"nbf":       now.Unix(),
+				"exp":       now.Add(time.Hour).Unix(),
+				"at_hash":   atHashRS256(oidcAccessToken),
+				"user_uuid": "test-user-uuid",
 			}).Serialize()
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
