@@ -1188,8 +1188,8 @@ config:
   #              the container output
   #   protocol   `grpc` (OTLP/gRPC) or `http` (OTLP/HTTP)
   #   host       value reference: `host:port` of the collector, without scheme
-  #   url        for `protocol: http`: path of the endpoint, usually `/v1/traces`,
-  #              `/v1/metrics` or `/v1/logs`. There is no default: set it
+  #   url        for `protocol: http`: path of the endpoint. Empty: `/v1/traces` and
+  #              `/v1/metrics`; for logs, set `/v1/logs`
   #   secretRef  connection security:
   #                { type: insecure }                           no TLS
   #                { type: mtls, mtls: { … } }                  TLS with a client certificate

@@ -35,7 +35,7 @@ func appVersion(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, line := range strings.Split(string(chart), "\n") {
+	for line := range strings.SplitSeq(string(chart), "\n") {
 		if value, ok := strings.CutPrefix(line, "appVersion:"); ok {
 			// The line ends with the release-please marker comment.
 			value, _, _ = strings.Cut(value, "#")
