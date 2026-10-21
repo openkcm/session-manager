@@ -492,7 +492,7 @@ func TestManager_Logout(t *testing.T) {
 			wantURL: postLogoutURL,
 		},
 		{
-			name: "Error - session not found",
+			name: "Session not found - redirect to postLogoutURL",
 			cfg: &config.SessionManager{
 				CSRFSecretParsed: []byte(testCSRFSecret),
 				ClientAuth: config.ClientAuth{
@@ -504,10 +504,10 @@ func TestManager_Logout(t *testing.T) {
 				return mocktrust.NewInMemRepository()
 			},
 			setupSession: func(repo *sessionmock.Repository) {
-				// Don't store session - will cause error
+				// Don't store session - logout is idempotent and redirects to the post logout URL
 			},
-			wantErr:        true,
-			wantErrMessage: "getting session id",
+			wantErr: false,
+			wantURL: postLogoutURL,
 		},
 	}
 
