@@ -379,16 +379,63 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (
 }
 
 func (m *Manager) Logout(ctx context.Context, sessionID, postLogoutRedirectURL string) (string, error) {
+	// The post logout redirect URL is handed back to the browser (and sent to the provider as
+	// post_logout_redirect_uri), so reject a disallowed scheme up front, before touching any state:
+	// it is a configuration error, and failing early lets an operator fix it and the user retry.
+	if err := validation.SecureScheme(postLogoutRedirectURL, m.allowHttpScheme); err != nil {
+		slogctx.Error(ctx, "the post logout redirect URL uses a disallowed scheme", "error", err)
+		return "", fmt.Errorf("validating post logout redirect URL: %w", err)
+	}
+
 	session, err := m.sessions.LoadSession(ctx, sessionID)
 	if err != nil {
+		if errors.Is(err, serviceerr.ErrNotFound) {
+			// There is no such session (already logged out, expired, or a stale cookie). Logout is
+			// idempotent, so redirect the user to the post logout URL; the handler still clears the
+			// cookies on this path.
+			slogctx.Warn(ctx, "logout attempt: session not found; redirecting the user to the post logout URL", "error", err)
+			return postLogoutRedirectURL, nil
+		}
+
 		slogctx.Warn(ctx, "failed to get session by id", "error", err)
 		return "", fmt.Errorf("getting session id: %w", err)
 	}
 
 	ctx = slogctx.With(ctx, "tenantId", session.TenantID)
 
+	// Resolve where to send the user: the provider's RP-initiated logout URL when possible, or the
+	// post logout URL otherwise. A configuration error is surfaced without logging the user out, so
+	// it can be fixed and the logout retried.
+	logoutURL, err := m.resolveLogoutURL(ctx, session, postLogoutRedirectURL)
+	if err != nil {
+		return "", err
+	}
+
+	// The user is being logged out: delete the local session, then redirect. A failed delete is not
+	// fatal (the session expires on its own), but we fall back to the post logout URL rather than
+	// bounce the user through the provider's end session endpoint with the session still present.
+	if err := m.sessions.DeleteSession(ctx, session); err != nil && !errors.Is(err, serviceerr.ErrNotFound) {
+		slogctx.Error(ctx, "failed to delete a session; redirecting the user to the post logout URL", "error", err)
+		return postLogoutRedirectURL, nil
+	}
+
+	return logoutURL, nil
+}
+
+// resolveLogoutURL returns the URL to redirect the user to in order to complete logout: the
+// provider's RP-initiated logout URL when one can be built, or postLogoutRedirectURL when
+// RP-initiated logout is not possible but the user should still be logged out locally (trust
+// removed, provider unreachable, no usable end session endpoint). It returns an error only for a
+// configuration or infrastructure problem the caller must surface without logging the user out.
+func (m *Manager) resolveLogoutURL(ctx context.Context, session Session, postLogoutRedirectURL string) (string, error) {
 	trust, err := m.trust.Get(ctx, session.TenantID)
 	if err != nil {
+		if errors.Is(err, serviceerr.ErrNotFound) {
+			slogctx.Warn(ctx, "logout attempt: trust configuration does not exist; logging out locally", "error", err)
+			return postLogoutRedirectURL, nil
+		}
+
+		// A transient failure reading the trust config: keep the session so the user can retry.
 		slogctx.Error(ctx, "failed to get trust for a tenant", "error", err)
 		return "", fmt.Errorf("getting trust: %w", err)
 	}
@@ -396,26 +443,38 @@ func (m *Manager) Logout(ctx context.Context, sessionID, postLogoutRedirectURL s
 	oidc := trust.GetOidc()
 	ctx = slogctx.With(ctx, "issuer", oidc.GetIssuer())
 
-	oidcConf, err := m.getOpenIDConfig(ctx, oidc.GetIssuer())
-	if err != nil {
-		slogctx.Warn(ctx, "failed to get oidc configuration", "error", err)
-		return "", fmt.Errorf("getting oidc configuration: %w", err)
+	// A disallowed issuer scheme is a configuration error (the same check guards login and refresh),
+	// so fail early without logging the user out: once the configuration is fixed the user can retry
+	// and get a complete logout, including at the provider.
+	if err := validation.SecureScheme(oidc.GetIssuer(), m.allowHttpScheme); err != nil {
+		slogctx.Error(ctx, "the issuer uses a disallowed scheme", "error", err)
+		return "", fmt.Errorf("validating issuer: %w", err)
 	}
 
-	if err := m.sessions.DeleteSession(ctx, session); err != nil {
-		slogctx.Error(ctx, "failed to delete a session", "error", err)
-		return "", fmt.Errorf("deleting session: %w", err)
+	oidcConf, err := m.getOpenIDConfig(ctx, oidc.GetIssuer())
+	if err != nil {
+		// The issuer scheme is already validated, so this is a transient discovery failure: log the
+		// user out locally rather than blocking logout on provider availability.
+		slogctx.Warn(ctx, "failed to get oidc configuration; logging out locally", "error", err)
+		return postLogoutRedirectURL, nil
 	}
 
 	if oidcConf.EndSessionEndpoint == "" {
-		slogctx.Warn(ctx, "the provider does not support RP-Initiated Logout")
+		slogctx.Warn(ctx, "the provider does not support RP-Initiated Logout; logging out locally")
+		return postLogoutRedirectURL, nil
+	}
+
+	// The end session endpoint is discovered dynamically, so its scheme can only be checked here; an
+	// insecure or unparseable endpoint is unusable, so fall back to a local logout.
+	if err := validation.SecureScheme(oidcConf.EndSessionEndpoint, m.allowHttpScheme); err != nil {
+		slogctx.Warn(ctx, "the end session endpoint uses a disallowed scheme; logging out locally", "error", err)
 		return postLogoutRedirectURL, nil
 	}
 
 	redirectURL, err := url.Parse(oidcConf.EndSessionEndpoint)
 	if err != nil {
-		slogctx.Warn(ctx, "failed to parse oidc session endpont", "error", err)
-		return "", serviceerr.ErrInvalidOIDCProvider
+		slogctx.Warn(ctx, "failed to parse the end session endpoint; logging out locally", "error", err)
+		return postLogoutRedirectURL, nil
 	}
 
 	vals := make(url.Values, 2)
@@ -428,7 +487,6 @@ func (m *Manager) Logout(ctx context.Context, sessionID, postLogoutRedirectURL s
 	}
 
 	redirectURL.RawQuery = vals.Encode()
-
 	return redirectURL.String(), nil
 }
 

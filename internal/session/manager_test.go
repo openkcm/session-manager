@@ -34,6 +34,7 @@ import (
 	sessionmock "github.com/openkcm/session-manager/internal/session/mock"
 	"github.com/openkcm/session-manager/modules/oidctrust"
 	mocktrust "github.com/openkcm/session-manager/modules/oidctrust/mocks"
+	"github.com/openkcm/session-manager/pkg/serviceerr"
 )
 
 const (
@@ -522,6 +523,8 @@ func TestManager_LogoutEdgeCases(t *testing.T) {
 		errAssert assert.ErrorAssertionFunc
 	}{
 		{
+			// A missing session makes logout a no-op: it redirects to the post logout URL
+			// (cookies are cleared by the handler) instead of returning an error.
 			name:      "Session not found",
 			sessionID: "non-existent",
 			setupMock: func(oidcs *mocktrust.Repository, sessions *sessionmock.Repository) {
@@ -530,9 +533,11 @@ func TestManager_LogoutEdgeCases(t *testing.T) {
 					TenantID: tenantID,
 				})
 			},
-			errAssert: assert.Error,
+			errAssert: assert.NoError,
 		},
 		{
+			// When the trust configuration is gone, logout still deletes the local session and
+			// redirects the user to the post logout URL rather than returning an error.
 			name:      "Trust not found",
 			sessionID: sessionID,
 			setupMock: func(oidcs *mocktrust.Repository, sessions *sessionmock.Repository) {
@@ -541,7 +546,7 @@ func TestManager_LogoutEdgeCases(t *testing.T) {
 					TenantID: tenantID,
 				})
 			},
-			errAssert: assert.Error,
+			errAssert: assert.NoError,
 		},
 	}
 
@@ -956,9 +961,15 @@ func TestManager_Logout_RejectsInsecureIssuerScheme(t *testing.T) {
 	}, oidctrust.NewModule(oidcMock), sessions, auditLogger)
 	require.NoError(t, err)
 
-	_, err = m.Logout(ctx, sessionID, "http://app.example.com/logged-out")
+	// A secure post logout redirect URL so the scheme error can only originate from the issuer.
+	_, err = m.Logout(ctx, sessionID, "https://app.example.com/logged-out")
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "scheme is not allowed")
+
+	// An issuer scheme error is a configuration problem: logout fails early and keeps the session so
+	// the user can retry after the configuration is fixed.
+	_, err = sessions.LoadSession(ctx, sessionID)
+	require.NoError(t, err)
 }
 
 func TestManager_Logout_AllowsInsecureIssuerWhenEnabled(t *testing.T) {
@@ -1016,4 +1027,310 @@ func TestManager_Logout_AllowsInsecureIssuerWhenEnabled(t *testing.T) {
 	redirectURL, err := m.Logout(ctx, sessionID, postLogoutURL)
 	require.NoError(t, err)
 	assert.Equal(t, postLogoutURL, redirectURL)
+}
+
+// fixedDiscoveryProvider is a credentials.Provider that returns a canned discovery
+// configuration (or error), letting tests control the discovery step of logout.
+type fixedDiscoveryProvider struct {
+	conf *zitadeloidc.DiscoveryConfiguration
+	err  error
+}
+
+func (fixedDiscoveryProvider) ResourceServer(context.Context, string, string) (rs.ResourceServer, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (fixedDiscoveryProvider) RelyingParty(context.Context, *oidcv1.OIDC, string) (rp.RelyingParty, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p fixedDiscoveryProvider) GetDiscoveryConfig(context.Context, string) (*zitadeloidc.DiscoveryConfiguration, error) {
+	return p.conf, p.err
+}
+
+func TestManager_Logout_RejectsInsecurePostLogoutRedirectURL(t *testing.T) {
+	const (
+		tenantID  = "tenant-id"
+		sessionID = "session-id"
+	)
+	ctx := t.Context()
+
+	auditServer := StartAuditServer(t)
+	defer auditServer.Close()
+
+	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	require.NoError(t, err)
+
+	issuer := "https://issuer.example.com"
+	blocked := false
+	tid := tenantID
+	clientID := "client-id"
+	trust := trustv1.Trust_builder{
+		TenantId: &tid,
+		Blocked:  &blocked,
+		Oidc: oidcv1.OIDC_builder{
+			Issuer:   &issuer,
+			ClientId: &clientID,
+		}.Build(),
+	}.Build()
+
+	oidcMock := mocktrust.NewInMemRepository(mocktrust.WithTrust(trust))
+	sessions := sessionmock.NewInMemRepository(sessionmock.WithSession(session.Session{
+		ID:       sessionID,
+		TenantID: tenantID,
+		Issuer:   issuer,
+	}))
+
+	// allowHttpScheme defaults to false (WithAllowHttpScheme not set).
+	m, err := session.NewManager(ctx, &config.SessionManager{
+		SessionDuration:  time.Hour,
+		CallbackURL:      "https://sm.example.com/sm/callback",
+		CSRFSecretParsed: []byte(testCSRFSecret),
+	}, oidctrust.NewModule(oidcMock), sessions, auditLogger)
+	require.NoError(t, err)
+
+	_, err = m.Logout(ctx, sessionID, "http://app.example.com/logged-out")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "scheme is not allowed")
+
+	// The request is rejected up front, so the session must not have been deleted.
+	_, err = sessions.LoadSession(ctx, sessionID)
+	require.NoError(t, err)
+}
+
+func TestManager_Logout_RedirectsOnInsecureEndSessionEndpoint(t *testing.T) {
+	const (
+		tenantID      = "tenant-id"
+		sessionID     = "session-id"
+		postLogoutURL = "https://app.example.com/logged-out"
+	)
+	ctx := t.Context()
+
+	auditServer := StartAuditServer(t)
+	defer auditServer.Close()
+
+	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	require.NoError(t, err)
+
+	issuer := "https://issuer.example.com"
+	blocked := false
+	tid := tenantID
+	clientID := "client-id"
+	trust := trustv1.Trust_builder{
+		TenantId: &tid,
+		Blocked:  &blocked,
+		Oidc: oidcv1.OIDC_builder{
+			Issuer:   &issuer,
+			ClientId: &clientID,
+		}.Build(),
+	}.Build()
+
+	oidcMock := mocktrust.NewInMemRepository(mocktrust.WithTrust(trust))
+	sessions := sessionmock.NewInMemRepository(sessionmock.WithSession(session.Session{
+		ID:       sessionID,
+		TenantID: tenantID,
+		Issuer:   issuer,
+	}))
+
+	// A secure issuer that advertises an insecure end session endpoint: the endpoint is unusable, so
+	// logout falls back to a local logout and redirects to the post logout URL instead of erroring.
+	provider := fixedDiscoveryProvider{conf: &zitadeloidc.DiscoveryConfiguration{
+		Issuer:             issuer,
+		EndSessionEndpoint: "http://issuer.example.com/logout",
+	}}
+
+	// allowHttpScheme defaults to false (WithAllowHttpScheme not set).
+	m, err := session.NewManager(ctx, &config.SessionManager{
+		SessionDuration:  time.Hour,
+		CallbackURL:      "https://sm.example.com/sm/callback",
+		CSRFSecretParsed: []byte(testCSRFSecret),
+	}, oidctrust.NewModule(oidcMock), sessions, auditLogger, session.WithCredentialsProvider(provider))
+	require.NoError(t, err)
+
+	redirectURL, err := m.Logout(ctx, sessionID, postLogoutURL)
+	require.NoError(t, err)
+	assert.Equal(t, postLogoutURL, redirectURL)
+
+	// The user is still logged out locally.
+	_, err = sessions.LoadSession(ctx, sessionID)
+	require.ErrorIs(t, err, serviceerr.ErrNotFound)
+}
+
+func TestManager_Logout_RedirectsWhenDeleteSessionFails(t *testing.T) {
+	const (
+		tenantID      = "tenant-id"
+		sessionID     = "session-id"
+		postLogoutURL = "https://app.example.com/logged-out"
+	)
+	ctx := t.Context()
+
+	auditServer := StartAuditServer(t)
+	defer auditServer.Close()
+
+	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	require.NoError(t, err)
+
+	oidcMock := mocktrust.NewInMemRepository()
+	// DeleteSession fails for a reason other than the session not existing; logout should log the
+	// error and still redirect the user to the post logout URL.
+	sessions := sessionmock.NewInMemRepository(
+		sessionmock.WithSession(session.Session{ID: sessionID, TenantID: tenantID}),
+		sessionmock.WithDeleteSessionError(errors.New("valkey unavailable")),
+	)
+
+	m, err := session.NewManager(ctx, &config.SessionManager{
+		SessionDuration:  time.Hour,
+		CallbackURL:      "https://sm.example.com/sm/callback",
+		CSRFSecretParsed: []byte(testCSRFSecret),
+	}, oidctrust.NewModule(oidcMock), sessions, auditLogger)
+	require.NoError(t, err)
+
+	redirectURL, err := m.Logout(ctx, sessionID, postLogoutURL)
+	require.NoError(t, err)
+	assert.Equal(t, postLogoutURL, redirectURL)
+}
+
+func TestManager_Logout_RedirectsWhenDiscoveryFails(t *testing.T) {
+	const (
+		tenantID      = "tenant-id"
+		sessionID     = "session-id"
+		postLogoutURL = "https://app.example.com/logged-out"
+	)
+	ctx := t.Context()
+
+	auditServer := StartAuditServer(t)
+	defer auditServer.Close()
+
+	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	require.NoError(t, err)
+
+	issuer := "https://issuer.example.com"
+	blocked := false
+	tid := tenantID
+	clientID := "client-id"
+	trust := trustv1.Trust_builder{
+		TenantId: &tid,
+		Blocked:  &blocked,
+		Oidc: oidcv1.OIDC_builder{
+			Issuer:   &issuer,
+			ClientId: &clientID,
+		}.Build(),
+	}.Build()
+
+	oidcMock := mocktrust.NewInMemRepository(mocktrust.WithTrust(trust))
+	sessions := sessionmock.NewInMemRepository(sessionmock.WithSession(session.Session{
+		ID:       sessionID,
+		TenantID: tenantID,
+		Issuer:   issuer,
+	}))
+
+	// The issuer scheme is allowed, but fetching its discovery document fails (not a scheme error);
+	// logout should fall back to redirecting the user to the post logout URL.
+	provider := fixedDiscoveryProvider{err: errors.New("issuer unreachable")}
+
+	m, err := session.NewManager(ctx, &config.SessionManager{
+		SessionDuration:  time.Hour,
+		CallbackURL:      "https://sm.example.com/sm/callback",
+		CSRFSecretParsed: []byte(testCSRFSecret),
+	}, oidctrust.NewModule(oidcMock), sessions, auditLogger, session.WithCredentialsProvider(provider))
+	require.NoError(t, err)
+
+	redirectURL, err := m.Logout(ctx, sessionID, postLogoutURL)
+	require.NoError(t, err)
+	assert.Equal(t, postLogoutURL, redirectURL)
+}
+
+func TestManager_Logout_ErrorsWhenTrustGetFails(t *testing.T) {
+	const (
+		tenantID      = "tenant-id"
+		sessionID     = "session-id"
+		postLogoutURL = "https://app.example.com/logged-out"
+	)
+	ctx := t.Context()
+
+	auditServer := StartAuditServer(t)
+	defer auditServer.Close()
+
+	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	require.NoError(t, err)
+
+	// Reading the trust config fails for a reason other than it not existing: logout must surface the
+	// error and keep the session so the user can retry once the problem is resolved.
+	oidcMock := mocktrust.NewInMemRepository(mocktrust.WithGetError(errors.New("trust store unavailable")))
+	sessions := sessionmock.NewInMemRepository(sessionmock.WithSession(session.Session{
+		ID:       sessionID,
+		TenantID: tenantID,
+	}))
+
+	m, err := session.NewManager(ctx, &config.SessionManager{
+		SessionDuration:  time.Hour,
+		CallbackURL:      "https://sm.example.com/sm/callback",
+		CSRFSecretParsed: []byte(testCSRFSecret),
+	}, oidctrust.NewModule(oidcMock), sessions, auditLogger)
+	require.NoError(t, err)
+
+	_, err = m.Logout(ctx, sessionID, postLogoutURL)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "getting trust")
+
+	// The session is kept so the user can retry.
+	_, err = sessions.LoadSession(ctx, sessionID)
+	require.NoError(t, err)
+}
+
+func TestManager_Logout_RedirectsWhenEndSessionEndpointUnparseable(t *testing.T) {
+	const (
+		tenantID      = "tenant-id"
+		sessionID     = "session-id"
+		postLogoutURL = "https://app.example.com/logged-out"
+	)
+	ctx := t.Context()
+
+	auditServer := StartAuditServer(t)
+	defer auditServer.Close()
+
+	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	require.NoError(t, err)
+
+	issuer := "https://issuer.example.com"
+	blocked := false
+	tid := tenantID
+	clientID := "client-id"
+	trust := trustv1.Trust_builder{
+		TenantId: &tid,
+		Blocked:  &blocked,
+		Oidc: oidcv1.OIDC_builder{
+			Issuer:   &issuer,
+			ClientId: &clientID,
+		}.Build(),
+	}.Build()
+
+	oidcMock := mocktrust.NewInMemRepository(mocktrust.WithTrust(trust))
+	sessions := sessionmock.NewInMemRepository(sessionmock.WithSession(session.Session{
+		ID:       sessionID,
+		TenantID: tenantID,
+		Issuer:   issuer,
+	}))
+
+	// An end session endpoint that passes the scheme check but is unparseable (unclosed IPv6
+	// bracket): the endpoint is unusable, so logout falls back to a local logout.
+	provider := fixedDiscoveryProvider{conf: &zitadeloidc.DiscoveryConfiguration{
+		Issuer:             issuer,
+		EndSessionEndpoint: "https://[::1",
+	}}
+
+	m, err := session.NewManager(ctx, &config.SessionManager{
+		SessionDuration:  time.Hour,
+		CallbackURL:      "https://sm.example.com/sm/callback",
+		CSRFSecretParsed: []byte(testCSRFSecret),
+	}, oidctrust.NewModule(oidcMock), sessions, auditLogger, session.WithCredentialsProvider(provider))
+	require.NoError(t, err)
+
+	redirectURL, err := m.Logout(ctx, sessionID, postLogoutURL)
+	require.NoError(t, err)
+	assert.Equal(t, postLogoutURL, redirectURL)
+
+	// The user is still logged out locally.
+	_, err = sessions.LoadSession(ctx, sessionID)
+	require.ErrorIs(t, err, serviceerr.ErrNotFound)
 }
