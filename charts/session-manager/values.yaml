@@ -883,6 +883,10 @@ config:
     # -- Accept identity providers (issuer and signing keys) served over plain `http`. For
     # local development only. The gRPC `session` service has its own setting (see `apps`).
     allowHttpScheme: false
+    # -- Configures which ID Token claims are used as a global user ID in multitenancy setup.
+    # First match wins. If there are no matches, or the list is empty, "sub" claim is used.
+    # Default value is ["user_uuid", "sub"].
+    globalUserIDClaimKeys: [user_uuid, sub]
     # -- **Required. & IMPORTANT** CSRF secret; value reference. At least 32 bytes, or the API
     # server does not start. **Must contain exactly the same bytes as ExtAuthZ's `csrfSecret`**;
     # otherwise every API call from the CMK UI fails with `401`. Use `source: file` with the

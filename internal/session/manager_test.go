@@ -384,6 +384,253 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 	}
 }
 
+// loginStateID is the stateID seeded by newFinaliseLoginManager.
+const loginStateID = "login-state-id"
+
+// newAuditLogger returns an AuditLogger whose events are POSTed to a test server
+// that always replies with the given status code. A non-2xx status makes
+// SendEvent fail, which lets tests exercise the audit send-failure branches.
+func newAuditLogger(t *testing.T, status int) *otlpaudit.AuditLogger {
+	t.Helper()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(status)
+	}))
+	t.Cleanup(srv.Close)
+
+	logger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: srv.URL})
+	require.NoError(t, err)
+	return logger
+}
+
+// newFinaliseLoginManager wires a Manager for a single tenant against an OIDC
+// test server whose issued ID token carries the given claim overrides, and
+// returns the manager alongside the seeded session repository. The seeded state
+// uses loginStateID; callers can override it or inject repository errors through
+// sessionOpts (applied after the default state). A nil auditLogger is allowed.
+func newFinaliseLoginManager(
+	t *testing.T,
+	auditLogger *otlpaudit.AuditLogger,
+	claimsOverride map[string]any,
+	sessionOpts []sessionmock.RepositoryOption,
+	opts ...session.ManagerOption,
+) (*session.Manager, *sessionmock.Repository) {
+	t.Helper()
+
+	const (
+		requestURI   = "http://cmk.example.com/ui"
+		callbackURL  = "http://sm.example.com/sm/callback"
+		tenantID     = "tenant-id"
+		pkceVerifier = "test-verifier"
+	)
+
+	oidcServer := StartOIDCServerWithClaims(t, claimsOverride)
+	t.Cleanup(oidcServer.Close)
+
+	jwksURI, err := url.JoinPath(oidcServer.URL, "/.well-known/jwks.json")
+	require.NoError(t, err)
+
+	trust := mocktrust.NewInMemRepository()
+	trust.TAdd(trustv1.Trust_builder{
+		TenantId: new(tenantID),
+		Blocked:  new(false),
+		Oidc: oidcv1.OIDC_builder{
+			Issuer:    new(oidcServer.URL),
+			JwksUri:   new(jwksURI),
+			Audiences: []string{requestURI},
+			ClientId:  new(testClientID),
+		}.Build(),
+	}.Build())
+
+	repoOpts := append([]sessionmock.RepositoryOption{
+		sessionmock.WithState(session.State{
+			ID:           loginStateID,
+			TenantID:     tenantID,
+			PKCEVerifier: pkceVerifier,
+			RequestURI:   requestURI,
+			Expiry:       time.Now().Add(time.Hour),
+		}),
+	}, sessionOpts...)
+	sessions := sessionmock.NewInMemRepository(repoOpts...)
+
+	managerOpts := append([]session.ManagerOption{session.WithAllowHttpScheme(true)}, opts...)
+	m, err := session.NewManager(
+		t.Context(),
+		&config.SessionManager{
+			SessionDuration:  time.Hour,
+			CallbackURL:      callbackURL,
+			CSRFSecretParsed: []byte(testCSRFSecret),
+		},
+		oidctrust.NewModule(trust),
+		sessions,
+		auditLogger,
+		managerOpts...,
+	)
+	require.NoError(t, err)
+
+	return m, sessions
+}
+
+// TestManager_FinaliseOIDCLogin_GlobalUserIDClaim covers the configurable
+// GlobalUserIDClaimKeys: the resolved global user ID is read from the first
+// configured ID-token claim that is present, falling back to the standard "sub"
+// claim when none match (or the list is empty).
+func TestManager_FinaliseOIDCLogin_GlobalUserIDClaim(t *testing.T) {
+	tests := []struct {
+		name           string
+		opts           []session.ManagerOption
+		claimsOverride map[string]any
+		wantUserID     string
+	}{
+		{
+			name:       "default prefers user_uuid over sub",
+			wantUserID: "test-user-uuid",
+		},
+		{
+			name:           "default falls back to sub when user_uuid is absent",
+			claimsOverride: map[string]any{"user_uuid": nil},
+			wantUserID:     "jwt-test",
+		},
+		{
+			name:       "single custom claim key resolves to its value",
+			opts:       []session.ManagerOption{session.WithGlobalUserIDClaimKeys([]string{"user_uuid"})},
+			wantUserID: "test-user-uuid",
+		},
+		{
+			name:       "first present claim key wins",
+			opts:       []session.ManagerOption{session.WithGlobalUserIDClaimKeys([]string{"user_uuid", "sub"})},
+			wantUserID: "test-user-uuid",
+		},
+		{
+			name:       "falls through to the next present claim key",
+			opts:       []session.ManagerOption{session.WithGlobalUserIDClaimKeys([]string{"missing_claim", "user_uuid"})},
+			wantUserID: "test-user-uuid",
+		},
+		{
+			name:       "no configured key matches falls back to sub",
+			opts:       []session.ManagerOption{session.WithGlobalUserIDClaimKeys([]string{"missing_claim"})},
+			wantUserID: "jwt-test",
+		},
+		{
+			name:       "empty list falls back to sub",
+			opts:       []session.ManagerOption{session.WithGlobalUserIDClaimKeys([]string{})},
+			wantUserID: "jwt-test",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, sessions := newFinaliseLoginManager(t, newAuditLogger(t, http.StatusOK), tt.claimsOverride, nil, tt.opts...)
+
+			result, err := m.FinaliseOIDCLogin(context.Background(), loginStateID, "auth-code")
+			require.NoError(t, err)
+
+			sess, err := sessions.LoadSession(context.Background(), result.SessionID)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantUserID, sess.Claims.UserUUID)
+		})
+	}
+}
+
+// TestManager_FinaliseOIDCLogin_SuccessAuditNonFatal verifies that a failure to
+// create the user-login-success audit event does not fail the login: the
+// session is already established at that point. The configured global-user-id
+// claim resolves to an empty string, which makes NewUserLoginSuccessEvent reject
+// the event (empty userInitiatorID). Before the fix this error was returned and
+// aborted the callback even though the session had been stored.
+func TestManager_FinaliseOIDCLogin_SuccessAuditNonFatal(t *testing.T) {
+	m, sessions := newFinaliseLoginManager(t,
+		newAuditLogger(t, http.StatusOK),
+		map[string]any{"empty_claim": ""},
+		nil,
+		session.WithGlobalUserIDClaimKeys([]string{"empty_claim"}),
+	)
+
+	result, err := m.FinaliseOIDCLogin(context.Background(), loginStateID, "auth-code")
+	require.NoError(t, err, "a failed success-audit event must not fail the login")
+	require.NotEmpty(t, result.SessionID)
+
+	sess, err := sessions.LoadSession(context.Background(), result.SessionID)
+	require.NoError(t, err, "the session must still be persisted")
+	assert.Empty(t, sess.Claims.UserUUID)
+}
+
+// TestManager_FinaliseOIDCLogin_SuccessAuditNilLogger verifies that a nil audit
+// logger is tolerated: the success audit is skipped and the login still
+// succeeds.
+func TestManager_FinaliseOIDCLogin_SuccessAuditNilLogger(t *testing.T) {
+	m, sessions := newFinaliseLoginManager(t, nil, nil, nil)
+
+	result, err := m.FinaliseOIDCLogin(context.Background(), loginStateID, "auth-code")
+	require.NoError(t, err)
+	require.NotEmpty(t, result.SessionID)
+
+	_, err = sessions.LoadSession(context.Background(), result.SessionID)
+	require.NoError(t, err)
+}
+
+// TestManager_FinaliseOIDCLogin_SuccessAuditSendFailure verifies that a failure
+// to send the success audit event (the audit endpoint rejects it) does not fail
+// the login.
+func TestManager_FinaliseOIDCLogin_SuccessAuditSendFailure(t *testing.T) {
+	m, sessions := newFinaliseLoginManager(t, newAuditLogger(t, http.StatusInternalServerError), nil, nil)
+
+	result, err := m.FinaliseOIDCLogin(context.Background(), loginStateID, "auth-code")
+	require.NoError(t, err)
+	require.NotEmpty(t, result.SessionID)
+
+	_, err = sessions.LoadSession(context.Background(), result.SessionID)
+	require.NoError(t, err)
+}
+
+// TestManager_FinaliseOIDCLogin_FailureAudit exercises the user-login-failure
+// audit helper on the failure paths: a nil logger is skipped, and an audit event
+// that cannot be created (empty global user ID) is handled without masking the
+// original login error.
+func TestManager_FinaliseOIDCLogin_FailureAudit(t *testing.T) {
+	expiredState := session.State{
+		ID:           loginStateID,
+		TenantID:     "tenant-id",
+		PKCEVerifier: "test-verifier",
+		RequestURI:   "http://cmk.example.com/ui",
+		Expiry:       time.Now().Add(-time.Hour),
+	}
+
+	t.Run("nil logger on failure path is skipped", func(t *testing.T) {
+		m, _ := newFinaliseLoginManager(t, nil, nil,
+			[]sessionmock.RepositoryOption{sessionmock.WithState(expiredState)},
+		)
+
+		_, err := m.FinaliseOIDCLogin(context.Background(), loginStateID, "auth-code")
+		require.ErrorIs(t, err, serviceerr.ErrStateExpired)
+	})
+
+	t.Run("send failure on failure path does not mask the login error", func(t *testing.T) {
+		m, _ := newFinaliseLoginManager(t, newAuditLogger(t, http.StatusInternalServerError), nil,
+			[]sessionmock.RepositoryOption{sessionmock.WithState(expiredState)},
+		)
+
+		_, err := m.FinaliseOIDCLogin(context.Background(), loginStateID, "auth-code")
+		require.ErrorIs(t, err, serviceerr.ErrStateExpired)
+	})
+
+	t.Run("event creation failure does not mask the login error", func(t *testing.T) {
+		storeErr := errors.New("store boom")
+		// An empty global-user-id claim leaves userInitiatorID empty, so the
+		// failure audit event cannot be created; the original store error must
+		// still surface.
+		m, _ := newFinaliseLoginManager(t,
+			newAuditLogger(t, http.StatusOK),
+			map[string]any{"empty_claim": ""},
+			[]sessionmock.RepositoryOption{sessionmock.WithStoreSessionError(storeErr)},
+			session.WithGlobalUserIDClaimKeys([]string{"empty_claim"}),
+		)
+
+		_, err := m.FinaliseOIDCLogin(context.Background(), loginStateID, "auth-code")
+		require.ErrorIs(t, err, storeErr)
+	})
+}
+
 func TestManager_BCLogout(t *testing.T) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {

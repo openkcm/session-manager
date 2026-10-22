@@ -45,6 +45,7 @@ func InitSessionManager(ctx *sessionmanager.Context, cfg *config.Config, trust s
 		auditLogger,
 		session.WithAllowHttpScheme(cfg.SessionManager.AllowHttpScheme),
 		session.WithCredentialsProvider(cProvider),
+		session.WithGlobalUserIDClaimKeys(cfg.SessionManager.GlobalUserIDClaimKeys),
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create session manager: %w", err)

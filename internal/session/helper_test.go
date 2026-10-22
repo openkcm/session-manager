@@ -29,6 +29,20 @@ func atHashRS256(accessToken string) string {
 
 func StartOIDCServer(t *testing.T, fail bool, algs ...string) *httptest.Server {
 	t.Helper()
+	return startOIDCServer(t, fail, nil, algs...)
+}
+
+// StartOIDCServerWithClaims behaves like StartOIDCServer but lets the caller
+// override the claims embedded in the issued ID token. Keys in claimsOverride
+// replace the default claim values; mapping a key to nil deletes that default
+// claim from the token.
+func StartOIDCServerWithClaims(t *testing.T, claimsOverride map[string]any, algs ...string) *httptest.Server {
+	t.Helper()
+	return startOIDCServer(t, false, claimsOverride, algs...)
+}
+
+func startOIDCServer(t *testing.T, fail bool, claimsOverride map[string]any, algs ...string) *httptest.Server {
+	t.Helper()
 
 	// Sign ID tokens with a freshly generated key whose public half is exposed
 	// via the JWKS endpoint, so tokens verify against the advertised keys.
@@ -84,7 +98,7 @@ func StartOIDCServer(t *testing.T, fail bool, algs ...string) *httptest.Server {
 			}}})
 		case "/oauth2/token":
 			now := time.Now()
-			idToken, err := jwt.Signed(signer).Claims(map[string]any{
+			claims := map[string]any{
 				"iss":       server.URL,
 				"sub":       "jwt-test",
 				"sid":       "provider-session-id",
@@ -94,7 +108,15 @@ func StartOIDCServer(t *testing.T, fail bool, algs ...string) *httptest.Server {
 				"exp":       now.Add(time.Hour).Unix(),
 				"at_hash":   atHashRS256(oidcAccessToken),
 				"user_uuid": "test-user-uuid",
-			}).Serialize()
+			}
+			for k, v := range claimsOverride {
+				if v == nil {
+					delete(claims, k)
+					continue
+				}
+				claims[k] = v
+			}
+			idToken, err := jwt.Signed(signer).Claims(claims).Serialize()
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return

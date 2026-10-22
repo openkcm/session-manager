@@ -50,11 +50,12 @@ const (
 )
 
 type Manager struct {
-	trust     sessionmanager.Trust
-	sessions  Repository
-	pkce      pkce.Source
-	audit     *otlpaudit.AuditLogger
-	cProvider credentials.Provider
+	trust                 sessionmanager.Trust
+	sessions              Repository
+	pkce                  pkce.Source
+	audit                 *otlpaudit.AuditLogger
+	cProvider             credentials.Provider
+	globalUserIDClaimKeys []string
 
 	sessionDuration    time.Duration
 	idleSessionTimeout time.Duration
@@ -98,6 +99,7 @@ func NewManager(
 		cProvider:               credentials.InsecureProvider{},
 		csrfSecret:              cfg.CSRFSecretParsed,
 		allowedRedirectBaseURLs: parseURLs(cfg.AllowedRedirectBaseURLs),
+		globalUserIDClaimKeys:   []string{"user_uuid", "sub"},
 	}
 
 	for _, opt := range opts {
@@ -269,7 +271,6 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (
 
 	type CustomClaims struct {
 		SID        string   `json:"sid"`
-		UserUUID   string   `json:"user_uuid"`
 		GivenName  string   `json:"given_name"`
 		FamilyName string   `json:"family_name"`
 		Email      string   `json:"email"`
@@ -283,12 +284,14 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (
 	var standardClaims jwt.Claims
 	var customClaims CustomClaims
 	var extraClaims ExtraClaims
-	if err := token.Claims(keyset, &standardClaims, &customClaims, &extraClaims); err != nil {
+	var restClaims map[string]any
+	if err := token.Claims(keyset, &standardClaims, &customClaims, &extraClaims, &restClaims); err != nil {
 		m.sendUserLoginFailureAudit(ctx, metadata, state.TenantID, "identity provider returned an invalid token", otlpaudit.FAILREASON_TOKENINVALID)
 		return OIDCSessionData{}, fmt.Errorf("getting JWT claims: %w", err)
 	}
 
-	metadata[otlpaudit.UserInitiatorIDKey] = customClaims.UserUUID
+	globalUserID := m.resolveGlobalUserID(restClaims, standardClaims.Subject)
+	metadata[otlpaudit.UserInitiatorIDKey] = globalUserID
 
 	if err := standardClaims.Validate(jwt.Expected{
 		Issuer:      oidc.GetIssuer(),
@@ -325,7 +328,7 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (
 		Issuer:     oidc.GetIssuer(),
 		Claims: Claims{
 			Subject:    standardClaims.Subject,
-			UserUUID:   customClaims.UserUUID,
+			UserUUID:   globalUserID,
 			GivenName:  customClaims.GivenName,
 			FamilyName: customClaims.FamilyName,
 			Email:      customClaims.Email,
@@ -354,17 +357,9 @@ func (m *Manager) FinaliseOIDCLogin(ctx context.Context, stateID, code string) (
 		return OIDCSessionData{}, fmt.Errorf("deleting state: %w", err)
 	}
 
-	// audit userLoginSuccess
-	event, err := otlpaudit.NewUserLoginSuccessEvent(metadata, state.TenantID, otlpaudit.LOGINMETHOD_OPENIDCONNECT, otlpaudit.MFATYPE_NONE, otlpaudit.USERTYPE_BUSINESS, state.TenantID)
-	if err != nil {
-		return OIDCSessionData{}, fmt.Errorf("creating audit log: %w", err)
-	}
-	otlpauditErr := m.audit.SendEvent(ctx, event)
-	if otlpauditErr != nil {
-		slogctx.Error(ctx, "Failed to send audit log for user login success", "error", otlpauditErr)
-	}
-
-	slogctx.Debug(ctx, "sent audit log for user login success")
+	// audit userLoginSuccess. A failure to create or send the audit event must
+	// not fail the login: the session has already been established at this point.
+	m.sendUserLoginSuccessAudit(ctx, metadata, state.TenantID)
 
 	userHash := fmt.Sprintf("%x", sha256.Sum256([]byte(standardClaims.Subject)))
 	m.userLastSeenGauge.Record(ctx, time.Now().Unix(), metric.WithAttributes(attribute.String("user.hash", userHash)))
@@ -645,13 +640,13 @@ func checkCookie(ctx context.Context, csrfCookie *http.Cookie) {
 // does not propagate them to the caller.
 func (m *Manager) sendUserLoginFailureAudit(ctx context.Context, metadata otlpaudit.EventMetadata, objectID, payload string, reason otlpaudit.FailReason) {
 	if m.audit == nil {
-		slogctx.Warn(ctx, "audit logger is nil; skipping user login failure event")
+		slogctx.Warn(ctx, "Audit logger is not configured; skipping user login failure event")
 		return
 	}
 
 	event, err := otlpaudit.NewUserLoginFailureEvent(metadata, objectID, otlpaudit.LOGINMETHOD_OPENIDCONNECT, reason, payload)
 	if err != nil {
-		slogctx.Error(ctx, "creating audit log", "error", err)
+		slogctx.Error(ctx, "Failed to create user login failure event", "error", err)
 		return
 	}
 
@@ -659,7 +654,30 @@ func (m *Manager) sendUserLoginFailureAudit(ctx context.Context, metadata otlpau
 	if err != nil {
 		slogctx.Error(ctx, "Failed to send audit log for user login failure", "error", err)
 	}
-	slogctx.Debug(ctx, "sent audit log for user login failure")
+	slogctx.Debug(ctx, "Audit log for user login failure has been sent")
+}
+
+// sendUserLoginSuccessAudit creates the user-login-success audit event and sends it.
+// The function logs any errors encountered while creating or sending the event but
+// does not propagate them to the caller: the session is already established by the
+// time it is called, so a failed audit event must not fail the login.
+func (m *Manager) sendUserLoginSuccessAudit(ctx context.Context, metadata otlpaudit.EventMetadata, objectID string) {
+	if m.audit == nil {
+		slogctx.Warn(ctx, "Audit logger is not configured; skipping user login success event")
+		return
+	}
+
+	event, err := otlpaudit.NewUserLoginSuccessEvent(metadata, objectID, otlpaudit.LOGINMETHOD_OPENIDCONNECT, otlpaudit.MFATYPE_NONE, otlpaudit.USERTYPE_BUSINESS, objectID)
+	if err != nil {
+		slogctx.Error(ctx, "Failed to create user login success event", "error", err)
+		return
+	}
+
+	if err := m.audit.SendEvent(ctx, event); err != nil {
+		slogctx.Error(ctx, "Failed to send audit log for user login success", "error", err)
+		return
+	}
+	slogctx.Debug(ctx, "Audit log for user login success has been sent")
 }
 
 func (m *Manager) verifyAccessToken(accessToken, atHash string, idToken *jwt.JSONWebToken) error {
@@ -747,4 +765,16 @@ func (m *Manager) exchangeCode(ctx context.Context, code, codeVerifier string, o
 
 func (m *Manager) ValidateCSRFToken(token, sessionID string) bool {
 	return csrf.Validate(token, sessionID, m.csrfSecret)
+}
+
+func (m *Manager) resolveGlobalUserID(claims map[string]any, fallback string) string {
+	for _, key := range m.globalUserIDClaimKeys {
+		if claim, ok := claims[key]; ok {
+			if val, ok := claim.(string); ok {
+				return val
+			}
+		}
+	}
+
+	return fallback
 }
