@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.4](https://github.com/openkcm/session-manager/compare/v0.20.3...v0.20.4) (2026-10-23)
+
+
+### Bug Fixes
+
+* use asynchronous audit client ([#388](https://github.com/openkcm/session-manager/issues/388)) ([ec0101d](https://github.com/openkcm/session-manager/commit/ec0101d35f53cc954567e125a59fa047a53e6c54))
+
 ## [0.20.3](https://github.com/openkcm/session-manager/compare/v0.20.2...v0.20.3) (2026-10-23)
 
 
