@@ -15,3 +15,9 @@ func WithCredentialsProvider(p credentials.Provider) ManagerOption {
 		m.cProvider = p
 	}
 }
+
+func WithGlobalUserIDClaimKeys(keys []string) ManagerOption {
+	return func(m *Manager) {
+		m.globalUserIDClaimKeys = keys
+	}
+}

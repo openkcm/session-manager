@@ -229,6 +229,11 @@ type SessionManager struct {
 	// mock IdP such as Dex during development). Defaults to false so production
 	// only trusts https:// issuers.
 	AllowHttpScheme bool `yaml:"allowHttpScheme" default:"false"`
+
+	// GlobalUserIDClaimKeys configures which ID Token claim is used as a global user ID in multitenancy setup.
+	// First match wins. If there are no matches, or the list is empty, "sub" claim is used.
+	// Defaults to ["user_uuid", "sub"] for backward compatibility: "user_uuid" was used before this setting existed.
+	GlobalUserIDClaimKeys []string `yaml:"globalUserIDClaimKeys" default:"[\"user_uuid\",\"sub\"]"`
 }
 
 type CookieSameSiteValue string

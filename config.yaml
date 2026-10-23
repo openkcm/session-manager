@@ -168,6 +168,10 @@ sessionManager:
     # Allow plain-http OIDC issuers (e.g. a local Dex mock IdP). Keep false on real
     # environments so only https:// issuers are trusted.
     allowHttpScheme: true
+    # Configures which ID Token claims are used as a global user ID in multitenancy setup.
+    # First match wins. If there are no matches, or the list is empty, "sub" claim is used.
+    # Default value is ["user_uuid", "sub"].
+    globalUserIDClaimKeys: [user_uuid, sub]
     # On a real environment the callback is the externally reachable HTTPS URL.
     # allowedRedirectBaseURLs restricts the redirect targets accepted during the
     # authorization flow and after logout. Requests whose redirect does not match
