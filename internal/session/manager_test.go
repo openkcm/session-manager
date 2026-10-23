@@ -141,7 +141,7 @@ func TestManager_Auth(t *testing.T) {
 				kParamAuth1          = "paramAuth1"
 			)
 
-			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+			auditLogger, err := newQueuedAuditLogger(t, &commoncfg.Audit{Endpoint: auditServer.URL})
 			require.NoError(t, err)
 
 			m, err := session.NewManager(ctx,
@@ -319,7 +319,7 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 			auditServer := StartAuditServer(t)
 			defer auditServer.Close()
 
-			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+			auditLogger, err := newQueuedAuditLogger(t, &commoncfg.Audit{Endpoint: auditServer.URL})
 			require.NoError(t, err)
 
 			jwksURI, err := url.JoinPath(oidcServer.URL, "/.well-known/jwks.json")
@@ -387,10 +387,11 @@ func TestManager_FinaliseOIDCLogin(t *testing.T) {
 // loginStateID is the stateID seeded by newFinaliseLoginManager.
 const loginStateID = "login-state-id"
 
-// newAuditLogger returns an AuditLogger whose events are POSTed to a test server
-// that always replies with the given status code. A non-2xx status makes
-// SendEvent fail, which lets tests exercise the audit send-failure branches.
-func newAuditLogger(t *testing.T, status int) *otlpaudit.AuditLogger {
+// newAuditLogger returns a queued AuditLogger whose events are POSTed to a test
+// server that always replies with the given status code. A non-2xx status makes
+// the underlying delivery fail, which lets tests exercise the audit
+// send-failure branches (the queued logger absorbs the failure asynchronously).
+func newAuditLogger(t *testing.T, status int) *otlpaudit.QueuedAuditLogger {
 	t.Helper()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -398,9 +399,26 @@ func newAuditLogger(t *testing.T, status int) *otlpaudit.AuditLogger {
 	}))
 	t.Cleanup(srv.Close)
 
-	logger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: srv.URL})
+	logger, err := newQueuedAuditLogger(t, &commoncfg.Audit{Endpoint: srv.URL})
 	require.NoError(t, err)
 	return logger
+}
+
+// newQueuedAuditLogger builds a non-blocking QueuedAuditLogger around a
+// synchronous AuditLogger for the given config and ensures it is drained when
+// the test finishes.
+func newQueuedAuditLogger(t *testing.T, cfg *commoncfg.Audit) (*otlpaudit.QueuedAuditLogger, error) {
+	t.Helper()
+
+	logger, err := otlpaudit.NewLogger(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	queued := otlpaudit.NewQueuedLogger(logger, otlpaudit.QueuedOptions{})
+	t.Cleanup(func() { _ = queued.Close(context.Background()) })
+
+	return queued, nil
 }
 
 // newFinaliseLoginManager wires a Manager for a single tenant against an OIDC
@@ -410,7 +428,7 @@ func newAuditLogger(t *testing.T, status int) *otlpaudit.AuditLogger {
 // sessionOpts (applied after the default state). A nil auditLogger is allowed.
 func newFinaliseLoginManager(
 	t *testing.T,
-	auditLogger *otlpaudit.AuditLogger,
+	auditLogger *otlpaudit.QueuedAuditLogger,
 	claimsOverride map[string]any,
 	sessionOpts []sessionmock.RepositoryOption,
 	opts ...session.ManagerOption,
@@ -720,7 +738,7 @@ func TestManager_BCLogout(t *testing.T) {
 			auditServer := StartAuditServer(t)
 			defer auditServer.Close()
 
-			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+			auditLogger, err := newQueuedAuditLogger(t, &commoncfg.Audit{Endpoint: auditServer.URL})
 			require.NoError(t, err)
 
 			oidcMock := mocktrust.NewInMemRepository()
@@ -810,7 +828,7 @@ func TestManager_LogoutEdgeCases(t *testing.T) {
 			auditServer := StartAuditServer(t)
 			defer auditServer.Close()
 
-			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+			auditLogger, err := newQueuedAuditLogger(t, &commoncfg.Audit{Endpoint: auditServer.URL})
 			require.NoError(t, err)
 
 			oidcMock := mocktrust.NewInMemRepository()
@@ -928,7 +946,7 @@ func TestManager_BCLogout_ErrorCases(t *testing.T) {
 			auditServer := StartAuditServer(t)
 			defer auditServer.Close()
 
-			auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+			auditLogger, err := newQueuedAuditLogger(t, &commoncfg.Audit{Endpoint: auditServer.URL})
 			require.NoError(t, err)
 
 			oidcMock := mocktrust.NewInMemRepository()
@@ -965,7 +983,7 @@ func TestManager_NewManager_Error(t *testing.T) {
 	auditServer := StartAuditServer(t)
 	defer auditServer.Close()
 
-	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	auditLogger, err := newQueuedAuditLogger(t, &commoncfg.Audit{Endpoint: auditServer.URL})
 	require.NoError(t, err)
 
 	cfg := &config.SessionManager{
@@ -1097,7 +1115,7 @@ func newTestManager(t *testing.T, allowedRedirectBaseURLs []string) *session.Man
 	t.Helper()
 	auditServer := StartAuditServer(t)
 	t.Cleanup(auditServer.Close)
-	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	auditLogger, err := newQueuedAuditLogger(t, &commoncfg.Audit{Endpoint: auditServer.URL})
 	require.NoError(t, err)
 	m, err := session.NewManager(
 		t.Context(),
@@ -1128,7 +1146,7 @@ func TestManager_FinaliseOIDCLogin_InvalidAudience(t *testing.T) {
 	auditServer := StartAuditServer(t)
 	defer auditServer.Close()
 
-	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	auditLogger, err := newQueuedAuditLogger(t, &commoncfg.Audit{Endpoint: auditServer.URL})
 	require.NoError(t, err)
 
 	jwksURI, err := url.JoinPath(oidcServer.URL, "/.well-known/jwks.json")
@@ -1181,7 +1199,7 @@ func TestManager_Logout_RejectsInsecureIssuerScheme(t *testing.T) {
 	auditServer := StartAuditServer(t)
 	defer auditServer.Close()
 
-	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	auditLogger, err := newQueuedAuditLogger(t, &commoncfg.Audit{Endpoint: auditServer.URL})
 	require.NoError(t, err)
 
 	// An unreachable host: if the http scheme is rejected before discovery, the
@@ -1246,7 +1264,7 @@ func TestManager_Logout_AllowsInsecureIssuerWhenEnabled(t *testing.T) {
 	auditServer := StartAuditServer(t)
 	defer auditServer.Close()
 
-	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	auditLogger, err := newQueuedAuditLogger(t, &commoncfg.Audit{Endpoint: auditServer.URL})
 	require.NoError(t, err)
 
 	issuer := oidcServer.URL
@@ -1311,7 +1329,7 @@ func TestManager_Logout_RejectsInsecurePostLogoutRedirectURL(t *testing.T) {
 	auditServer := StartAuditServer(t)
 	defer auditServer.Close()
 
-	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	auditLogger, err := newQueuedAuditLogger(t, &commoncfg.Audit{Endpoint: auditServer.URL})
 	require.NoError(t, err)
 
 	issuer := "https://issuer.example.com"
@@ -1362,7 +1380,7 @@ func TestManager_Logout_RedirectsOnInsecureEndSessionEndpoint(t *testing.T) {
 	auditServer := StartAuditServer(t)
 	defer auditServer.Close()
 
-	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	auditLogger, err := newQueuedAuditLogger(t, &commoncfg.Audit{Endpoint: auditServer.URL})
 	require.NoError(t, err)
 
 	issuer := "https://issuer.example.com"
@@ -1420,7 +1438,7 @@ func TestManager_Logout_RedirectsWhenDeleteSessionFails(t *testing.T) {
 	auditServer := StartAuditServer(t)
 	defer auditServer.Close()
 
-	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	auditLogger, err := newQueuedAuditLogger(t, &commoncfg.Audit{Endpoint: auditServer.URL})
 	require.NoError(t, err)
 
 	oidcMock := mocktrust.NewInMemRepository()
@@ -1454,7 +1472,7 @@ func TestManager_Logout_RedirectsWhenDiscoveryFails(t *testing.T) {
 	auditServer := StartAuditServer(t)
 	defer auditServer.Close()
 
-	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	auditLogger, err := newQueuedAuditLogger(t, &commoncfg.Audit{Endpoint: auditServer.URL})
 	require.NoError(t, err)
 
 	issuer := "https://issuer.example.com"
@@ -1504,7 +1522,7 @@ func TestManager_Logout_ErrorsWhenTrustGetFails(t *testing.T) {
 	auditServer := StartAuditServer(t)
 	defer auditServer.Close()
 
-	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	auditLogger, err := newQueuedAuditLogger(t, &commoncfg.Audit{Endpoint: auditServer.URL})
 	require.NoError(t, err)
 
 	// Reading the trust config fails for a reason other than it not existing: logout must surface the
@@ -1542,7 +1560,7 @@ func TestManager_Logout_RedirectsWhenEndSessionEndpointUnparseable(t *testing.T)
 	auditServer := StartAuditServer(t)
 	defer auditServer.Close()
 
-	auditLogger, err := otlpaudit.NewLogger(&commoncfg.Audit{Endpoint: auditServer.URL})
+	auditLogger, err := newQueuedAuditLogger(t, &commoncfg.Audit{Endpoint: auditServer.URL})
 	require.NoError(t, err)
 
 	issuer := "https://issuer.example.com"

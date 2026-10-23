@@ -8,6 +8,10 @@ package sessionwiring
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"time"
+
+	"github.com/openkcm/common-sdk/pkg/commoncfg"
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 
@@ -16,6 +20,44 @@ import (
 	"github.com/openkcm/session-manager/internal/credentials"
 	"github.com/openkcm/session-manager/internal/session"
 )
+
+func makeAuditLogger(conf *commoncfg.Audit) (*otlpaudit.QueuedAuditLogger, error) {
+	if conf.Endpoint == "" {
+		//nolint:nilnil
+		return nil, nil
+	}
+
+	auditLogger, err := otlpaudit.NewLogger(conf)
+	if err != nil {
+		return nil, fmt.Errorf("creating audit logger: %w", err)
+	}
+
+	return otlpaudit.NewQueuedLogger(auditLogger, otlpaudit.QueuedOptions{
+		OnError: logAuditDeliveryError,
+	}), nil
+}
+
+// logAuditDeliveryError is the QueuedAuditLogger OnError handler: it reports
+// events dropped after the background workers exhausted their retries.
+func logAuditDeliveryError(err error) {
+	slog.Error("audit event delivery failed", "error", err)
+}
+
+// closeAuditLogger drains a queued audit logger on shutdown, giving in-flight
+// and buffered events a bounded window to flush. A nil logger (auditing
+// disabled because no endpoint was configured) is a no-op.
+func closeAuditLogger(auditLogger *otlpaudit.QueuedAuditLogger) {
+	if auditLogger == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := auditLogger.Close(ctx); err != nil {
+		slog.Error("audit logger did not drain cleanly on shutdown", "error", err)
+	}
+}
 
 // InitSessionManager builds a session.Manager from the supplied config and
 // trust module, using session repository and credential modules already loaded
@@ -28,9 +70,9 @@ func InitSessionManager(ctx *sessionmanager.Context, cfg *config.Config, trust s
 		return nil, nil, fmt.Errorf("getting session repository: %w", err)
 	}
 
-	auditLogger, err := otlpaudit.NewLogger(&cfg.Audit)
+	auditLogger, err := makeAuditLogger(&cfg.Audit)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create audit logger: %w", err)
+		return nil, nil, fmt.Errorf("making audit logger: %w", err)
 	}
 
 	cProvider, err := sessionmanager.GetModuleAs[credentials.Provider](ctx, cfg.Credentials.Module())
@@ -51,7 +93,7 @@ func InitSessionManager(ctx *sessionmanager.Context, cfg *config.Config, trust s
 		return nil, nil, fmt.Errorf("failed to create session manager: %w", err)
 	}
 
-	return sessManager, func() {}, nil
+	return sessManager, func() { closeAuditLogger(auditLogger) }, nil
 }
 
 // SessionRepository resolves the session repository module loaded under the
@@ -63,7 +105,3 @@ func SessionRepository(ctx *sessionmanager.Context, cfg *config.Config) (session
 	}
 	return repo, nil
 }
-
-// Reference to context.Context to keep imports stable for callers using
-// (ctx context.Context) signatures.
-var _ context.Context = (*sessionmanager.Context)(nil)

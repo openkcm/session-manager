@@ -1,6 +1,6 @@
 module github.com/openkcm/session-manager
 
-go 1.27.1
+go 1.27.3
 
 tool (
 	github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
@@ -20,9 +20,9 @@ require (
 	github.com/knadh/koanf/providers/file v1.2.1
 	github.com/knadh/koanf/v2 v2.4.1
 	github.com/moby/moby/api v1.56.1
-	github.com/oapi-codegen/runtime v1.7.0
+	github.com/oapi-codegen/runtime v1.8.0
 	github.com/openkcm/api-sdk v0.23.0
-	github.com/openkcm/common-sdk v1.20.0
+	github.com/openkcm/common-sdk v1.21.0
 	github.com/pressly/goose/v3 v3.29.0
 	github.com/samber/oops v1.23.2
 	github.com/spf13/cobra v1.10.2
