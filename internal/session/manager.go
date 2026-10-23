@@ -53,7 +53,7 @@ type Manager struct {
 	trust                 sessionmanager.Trust
 	sessions              Repository
 	pkce                  pkce.Source
-	audit                 *otlpaudit.AuditLogger
+	audit                 *otlpaudit.QueuedAuditLogger
 	cProvider             credentials.Provider
 	globalUserIDClaimKeys []string
 
@@ -78,7 +78,7 @@ func NewManager(
 	cfg *config.SessionManager,
 	trust sessionmanager.Trust,
 	sessionsRepo Repository,
-	auditLogger *otlpaudit.AuditLogger,
+	auditLogger *otlpaudit.QueuedAuditLogger,
 	opts ...ManagerOption,
 ) (*Manager, error) {
 	callbackURL, err := url.Parse(cfg.CallbackURL)
@@ -650,7 +650,7 @@ func (m *Manager) sendUserLoginFailureAudit(ctx context.Context, metadata otlpau
 		return
 	}
 
-	err = m.audit.SendEvent(ctx, event)
+	err = m.audit.SendEvent(event)
 	if err != nil {
 		slogctx.Error(ctx, "Failed to send audit log for user login failure", "error", err)
 	}
@@ -673,7 +673,7 @@ func (m *Manager) sendUserLoginSuccessAudit(ctx context.Context, metadata otlpau
 		return
 	}
 
-	if err := m.audit.SendEvent(ctx, event); err != nil {
+	if err := m.audit.SendEvent(event); err != nil {
 		slogctx.Error(ctx, "Failed to send audit log for user login success", "error", err)
 		return
 	}
