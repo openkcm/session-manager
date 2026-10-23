@@ -770,7 +770,7 @@ func (m *Manager) ValidateCSRFToken(token, sessionID string) bool {
 func (m *Manager) resolveGlobalUserID(claims map[string]any, fallback string) string {
 	for _, key := range m.globalUserIDClaimKeys {
 		if claim, ok := claims[key]; ok {
-			if val, ok := claim.(string); ok {
+			if val, ok := claim.(string); ok && len(strings.TrimSpace(val)) > 0 {
 				return val
 			}
 		}
