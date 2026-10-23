@@ -492,6 +492,11 @@ func TestManager_FinaliseOIDCLogin_GlobalUserIDClaim(t *testing.T) {
 			wantUserID:     "jwt-test",
 		},
 		{
+			name:           "default falls back to sub when user_uuid is blank",
+			claimsOverride: map[string]any{"user_uuid": "  "},
+			wantUserID:     "jwt-test",
+		},
+		{
 			name:       "single custom claim key resolves to its value",
 			opts:       []session.ManagerOption{session.WithGlobalUserIDClaimKeys([]string{"user_uuid"})},
 			wantUserID: "test-user-uuid",
@@ -535,13 +540,14 @@ func TestManager_FinaliseOIDCLogin_GlobalUserIDClaim(t *testing.T) {
 // TestManager_FinaliseOIDCLogin_SuccessAuditNonFatal verifies that a failure to
 // create the user-login-success audit event does not fail the login: the
 // session is already established at that point. The configured global-user-id
-// claim resolves to an empty string, which makes NewUserLoginSuccessEvent reject
-// the event (empty userInitiatorID). Before the fix this error was returned and
+// claim is blank and the "sub" fallback is absent, so the global user ID
+// resolves to an empty string, which makes NewUserLoginSuccessEvent reject the
+// event (empty userInitiatorID). Before the fix this error was returned and
 // aborted the callback even though the session had been stored.
 func TestManager_FinaliseOIDCLogin_SuccessAuditNonFatal(t *testing.T) {
 	m, sessions := newFinaliseLoginManager(t,
 		newAuditLogger(t, http.StatusOK),
-		map[string]any{"empty_claim": ""},
+		map[string]any{"empty_claim": "", "sub": nil},
 		nil,
 		session.WithGlobalUserIDClaimKeys([]string{"empty_claim"}),
 	)
@@ -616,12 +622,12 @@ func TestManager_FinaliseOIDCLogin_FailureAudit(t *testing.T) {
 
 	t.Run("event creation failure does not mask the login error", func(t *testing.T) {
 		storeErr := errors.New("store boom")
-		// An empty global-user-id claim leaves userInitiatorID empty, so the
-		// failure audit event cannot be created; the original store error must
-		// still surface.
+		// A blank global-user-id claim with no "sub" fallback leaves
+		// userInitiatorID empty, so the failure audit event cannot be created;
+		// the original store error must still surface.
 		m, _ := newFinaliseLoginManager(t,
 			newAuditLogger(t, http.StatusOK),
-			map[string]any{"empty_claim": ""},
+			map[string]any{"empty_claim": "", "sub": nil},
 			[]sessionmock.RepositoryOption{sessionmock.WithStoreSessionError(storeErr)},
 			session.WithGlobalUserIDClaimKeys([]string{"empty_claim"}),
 		)
