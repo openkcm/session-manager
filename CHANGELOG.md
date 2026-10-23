@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.20.3](https://github.com/openkcm/session-manager/compare/v0.20.2...v0.20.3) (2026-10-23)
+
+
+### Bug Fixes
+
+* **logout:** make logout idempotent to missing config ([#385](https://github.com/openkcm/session-manager/issues/385)) ([2d2cb3b](https://github.com/openkcm/session-manager/commit/2d2cb3b7303f516db5c5c51655f8ea82697460b7))
+* make user id claim key configurable ([#386](https://github.com/openkcm/session-manager/issues/386)) ([5125074](https://github.com/openkcm/session-manager/commit/51250744c6139f8889222411a5aad55f54b7d8b0))
+
 ## [0.20.2](https://github.com/openkcm/session-manager/compare/v0.20.1...v0.20.2) (2026-10-20)
 
 
