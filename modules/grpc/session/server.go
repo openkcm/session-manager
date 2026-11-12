@@ -139,9 +139,11 @@ func (s *Server) GetSession(ctx context.Context, req *sessionv1.GetSessionReques
 	}
 
 	response := &sessionv1.GetSessionResponse{
-		Valid:       true,
-		Issuer:      sess.Issuer,
-		Subject:     sess.Claims.Subject,
+		Valid:  true,
+		Issuer: sess.Issuer,
+		// We return a uniqe user ID here, which is based on the claims configured in GlobalUserIDClaimKeys.
+		// If there are no custom claims configured, the value from the `sub` claim is used.
+		Subject:     sess.Claims.UserUUID,
 		GivenName:   sess.Claims.GivenName,
 		FamilyName:  sess.Claims.FamilyName,
 		Email:       sess.Claims.Email,

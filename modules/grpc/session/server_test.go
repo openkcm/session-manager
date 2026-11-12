@@ -102,6 +102,7 @@ func TestGetSession(t *testing.T) {
 			AccessToken: "access-token-123",
 			Claims: internalsession.Claims{
 				Subject:    "user-123",
+				UserUUID:   "user-123",
 				GivenName:  "John",
 				FamilyName: "Doe",
 				Email:      "john.doe@example.com",
@@ -147,6 +148,146 @@ func TestGetSession(t *testing.T) {
 		assert.Equal(t, "john.doe@example.com", resp.GetEmail())
 		assert.Equal(t, []string{"group1", "group2"}, resp.GetGroups())
 		assert.Equal(t, map[string]string{"key": "value"}, resp.GetAuthContext())
+	})
+
+	t.Run("success - returns UserUUID in Subject when different from OIDC sub", func(t *testing.T) {
+		// Setup test server for OIDC endpoints
+		var testServer *httptest.Server
+		testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/.well-known/openid-configuration":
+				_ = json.NewEncoder(w).Encode(oidc.Configuration{
+					Issuer:                testServer.URL,
+					IntrospectionEndpoint: testServer.URL + "/introspect",
+				})
+			case "/introspect":
+				_ = json.NewEncoder(w).Encode(oidc.Introspection{
+					Active: true,
+				})
+			default:
+				w.WriteHeader(http.StatusNotFound)
+			}
+		}))
+		defer testServer.Close()
+
+		// Session where UserUUID (from user_uuid claim) differs from Subject (from sub claim)
+		sess := internalsession.Session{
+			ID:          "session-uuid-diff",
+			TenantID:    "tenant-uuid-diff",
+			Issuer:      testServer.URL,
+			AccessToken: "access-token-uuid-diff",
+			Claims: internalsession.Claims{
+				Subject:    "oidc-sub-12345",      // The raw OIDC sub claim
+				UserUUID:   "sap-user-uuid-67890", // The resolved global user ID (e.g., from user_uuid claim)
+				GivenName:  "Jane",
+				FamilyName: "Smith",
+				Email:      "jane.smith@example.com",
+			},
+		}
+
+		trustData := trustv1.Trust_builder{
+			TenantId: new(sess.TenantID),
+			Blocked:  new(false),
+			Oidc: oidcv1.OIDC_builder{
+				Issuer:   new(testServer.URL),
+				ClientId: new("test-client-id"),
+			}.Build(),
+		}.Build()
+
+		sessionRepo := sessionmock.NewInMemRepository(
+			sessionmock.WithSession(sess),
+		)
+		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
+
+		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
+		trust := oidctrust.NewModule(trustRepo)
+		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute,
+			session.WithAllowHttpScheme(true),
+		)
+
+		req := &sessionv1.GetSessionRequest{
+			SessionId: "session-uuid-diff",
+			TenantId:  "tenant-uuid-diff",
+		}
+
+		resp, err := server.GetSession(ctx, req)
+
+		require.NoError(t, err)
+		assert.NotNil(t, resp)
+		assert.True(t, resp.GetValid())
+		// Subject field should return the UserUUID, not the raw OIDC sub
+		assert.Equal(t, "sap-user-uuid-67890", resp.GetSubject())
+		assert.NotEqual(t, sess.Claims.Subject, resp.GetSubject(), "Subject should be UserUUID, not the raw OIDC sub claim")
+		assert.Equal(t, "Jane", resp.GetGivenName())
+		assert.Equal(t, "Smith", resp.GetFamilyName())
+		assert.Equal(t, "jane.smith@example.com", resp.GetEmail())
+	})
+
+	t.Run("success - returns UserUUID in Subject when UserUUID equals OIDC sub (fallback case)", func(t *testing.T) {
+		// Setup test server for OIDC endpoints
+		var testServer *httptest.Server
+		testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/.well-known/openid-configuration":
+				_ = json.NewEncoder(w).Encode(oidc.Configuration{
+					Issuer:                testServer.URL,
+					IntrospectionEndpoint: testServer.URL + "/introspect",
+				})
+			case "/introspect":
+				_ = json.NewEncoder(w).Encode(oidc.Introspection{
+					Active: true,
+				})
+			default:
+				w.WriteHeader(http.StatusNotFound)
+			}
+		}))
+		defer testServer.Close()
+
+		// Session where UserUUID fell back to sub (no user_uuid claim present)
+		sess := internalsession.Session{
+			ID:          "session-uuid-fallback",
+			TenantID:    "tenant-uuid-fallback",
+			Issuer:      testServer.URL,
+			AccessToken: "access-token-uuid-fallback",
+			Claims: internalsession.Claims{
+				Subject:  "same-user-id", // The raw OIDC sub claim
+				UserUUID: "same-user-id", // UserUUID fell back to sub (no user_uuid claim)
+			},
+		}
+
+		trustData := trustv1.Trust_builder{
+			TenantId: new(sess.TenantID),
+			Blocked:  new(false),
+			Oidc: oidcv1.OIDC_builder{
+				Issuer:   new(testServer.URL),
+				ClientId: new("test-client-id"),
+			}.Build(),
+		}.Build()
+
+		sessionRepo := sessionmock.NewInMemRepository(
+			sessionmock.WithSession(sess),
+		)
+		_ = sessionRepo.BumpActive(ctx, sess.ID, 1*time.Hour)
+
+		trustRepo := mocktrust.NewInMemRepository(mocktrust.WithTrust(trustData))
+		trust := oidctrust.NewModule(trustRepo)
+		server := session.NewServer(ctx, sessionRepo, trust, 90*time.Minute,
+			session.WithAllowHttpScheme(true),
+		)
+
+		req := &sessionv1.GetSessionRequest{
+			SessionId: "session-uuid-fallback",
+			TenantId:  "tenant-uuid-fallback",
+		}
+
+		resp, err := server.GetSession(ctx, req)
+
+		require.NoError(t, err)
+		assert.NotNil(t, resp)
+		assert.True(t, resp.GetValid())
+		// When UserUUID equals Subject (fallback case), both should be the same value
+		assert.Equal(t, "same-user-id", resp.GetSubject())
+		assert.Equal(t, sess.Claims.Subject, resp.GetSubject(), "When UserUUID falls back to sub, they should match")
 	})
 
 	t.Run("success - introspection returns groups overriding session groups", func(t *testing.T) {
